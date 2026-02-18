@@ -4486,20 +4486,16 @@ def situacao_academica():
 # ==========================
 # ADICIONE ESTA FUNÇÃO PARA VERIFICAR DISPONIBILIDADE
 # ==========================
-
 @app.route("/validar-documento/<codigo>")
-def validar_documento_por_codigo(codigo):
-    """
-    Valida um documento específico pelo código (versão completa)
-    VERSÃO CORRIGIDA - NOMES DE COLUNAS CORRETOS
-    """
+def ver_resultado_validacao(codigo):
+    """Mostra o resultado da validação de um documento específico"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 👇 USANDO data_geracao (nome correto da coluna)
+        # Buscar documento pelo código
         cursor.execute("""
-            SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento, metadados
+            SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento
             FROM documentos_autenticados 
             WHERE codigo = ?
         """, (codigo.upper(),))
@@ -4508,13 +4504,9 @@ def validar_documento_por_codigo(codigo):
         conn.close()
         
         if documento:
-            # Converter para dicionário
             doc_dict = dict(documento)
             
-            # 👇 CRIAR ALIAS PARA COMPATIBILIDADE COM O TEMPLATE
-            doc_dict['data_emissao'] = doc_dict.get('data_geracao', '')
-            
-            # Calcular status de validade
+            # Verificar validade
             from datetime import datetime
             hoje = datetime.now()
             
@@ -4525,12 +4517,12 @@ def validar_documento_por_codigo(codigo):
                 except:
                     status = "válido"
             else:
-                status = "válido"  # Se não tiver data, considerar válido
+                status = "válido"
             
             return render_template(
                 "resultado_validacao_completo.html",
                 valido=True,
-                codigo=codigo,
+                codigo=codigo.upper(),
                 documento=doc_dict,
                 status=status
             )
@@ -4538,8 +4530,8 @@ def validar_documento_por_codigo(codigo):
             return render_template(
                 "resultado_validacao.html",
                 valido=False,
-                codigo=codigo,
-                mensagem="Documento não encontrado ou código inválido."
+                codigo=codigo.upper(),
+                mensagem="Documento não encontrado no sistema."
             )
             
     except Exception as e:
@@ -4548,9 +4540,8 @@ def validar_documento_por_codigo(codigo):
             "resultado_validacao.html",
             valido=False,
             codigo=codigo,
-            mensagem=f"Erro na validação: {str(e)}"
+            mensagem="Erro ao validar documento."
         )
-        
         
 @app.route("/mew/deletar-documento/<codigo>")
 def mew_deletar_documento(codigo):
@@ -7948,6 +7939,51 @@ def obter_configuracao_ano():
 @app.route("/suporte")
 def pagina_whatsapp():
     return render_template("suporte.html")
+
+
+@app.route("/api/validar-codigo", methods=["POST"])
+def api_validar_codigo():
+    """API simples para validar código - chamada pelo formulário"""
+    try:
+        data = request.get_json()
+        codigo = data.get('codigo', '').strip().upper()
+        
+        if not codigo:
+            return jsonify({"success": False, "message": "Código não fornecido"})
+        
+        # Conectar ao banco
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Buscar o código na tabela documentos_autenticados
+        cursor.execute("""
+            SELECT id, codigo 
+            FROM documentos_autenticados 
+            WHERE codigo = ?
+        """, (codigo,))
+        
+        documento = cursor.fetchone()
+        conn.close()
+        
+        if documento:
+            # Código encontrado!
+            return jsonify({
+                "success": True,
+                "url": f"/validar-documento/{codigo}"  # Redireciona para a página do documento
+            })
+        else:
+            # Código não encontrado
+            return jsonify({
+                "success": False,
+                "message": "❌ Código não encontrado. Verifique e tente novamente."
+            })
+            
+    except Exception as e:
+        print(f"Erro na API de validação: {e}")
+        return jsonify({
+            "success": False,
+            "message": "Erro ao validar. Tente novamente."
+        })
 
 @app.route('/mew/gerar-declaracao-conclusao', methods=['POST'])
 def gerar_declaracao_conclusao_route():
