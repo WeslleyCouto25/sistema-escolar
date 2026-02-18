@@ -5940,18 +5940,28 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     # Obter ano configurável
     ano_historico = ano_manual if ano_manual else obter_configuracao_ano()
     
-    # Calcular IRA
+    # ===== CORREÇÃO COMPLETA AQUI =====
+    # Buscar IRA do banco de dados
     cursor.execute("""
-                SELECT ira_ponderado 
-    FROM ira_aluno 
-    WHERE aluno_id = ?
-""", (aluno_id,))
+        SELECT ira_ponderado, total_disciplinas_concluidas 
+        FROM ira_aluno 
+        WHERE aluno_id = ?
+    """, (aluno_id,))
 
-    ira_row = cursor.fetchone()    
+    ira_row = cursor.fetchone()
+    
+    # Inicializar variáveis com valores padrão
+    ira_display = "N/I"
+    ira_info = {
+        'disciplinas_aprovadas': 0,
+        'carga_total_aprovada': carga_total_aprovada
+    }
+    
+    # Se encontrou IRA no banco, usar os dados reais
     if ira_row and ira_row['ira_ponderado']:
         ira_display = f"{ira_row['ira_ponderado']:.2f}"
-    else:
-        ira_display = "N/I"
+        ira_info['disciplinas_aprovadas'] = ira_row['total_disciplinas_concluidas']
+    # ===================================
     
     # Buscar dados adicionais do aluno
     cursor.execute("""
@@ -6078,7 +6088,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         """
     
     # Gerar link de validação
-    base_url = "https://campusvirtualfacop.com.br"  # Ajuste conforme necessário
+    base_url = "https://campusvirtualfacop.com.br"
     link_validacao = f"{base_url}/validar-documento/{codigo}"
     data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
     data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
@@ -7108,79 +7118,6 @@ body {{
     
     conn.close()
     return html
-  
-
-def salvar_documento_simples_db(codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html):
-    """Salva documento no banco de dados - VERSÃO CORRETA PARA SUA ESTRUTURA"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Data atual formatada
-        data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
-        # INSERIR COM OS NOMES DE COLUNAS CORRETOS que existem na sua tabela
-        cursor.execute('''
-            INSERT INTO documentos_autenticados 
-            (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao))
-        
-        conn.commit()
-        conn.close()
-        return True
-        
-    except Exception as e:
-        print(f"ERRO ao salvar documento: {e}")
-        # Tentar um fallback ainda mais simples
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            data_geracao = datetime.now().strftime("%d/%m/%Y %H:%M")
-            
-            # Tentar sem aluno_id (não existe na tabela)
-            cursor.execute('''
-                INSERT INTO documentos_autenticados 
-                (codigo, aluno_nome, aluno_ra, conteudo_html, data_geracao)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (codigo, aluno_nome, aluno_ra, conteudo_html, data_geracao))
-            
-            conn.commit()
-            conn.close()
-            return True
-        except Exception as e2:
-            print(f"ERRO no fallback também: {e2}")
-            return False
-
-def buscar_documento_db(codigo):
-    """Busca documento no banco - VERSÃO CORRETA para sua estrutura de tabela"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Buscar pelo código (conforme sua tabela documentos_autenticados)
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo,))
-        
-        documento = cursor.fetchone()
-        conn.close()
-        
-        if documento:
-            # Converter para dicionário usando os nomes das colunas
-            # Sua tabela tem: id, codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao
-            return {
-                'id': documento['id'],
-                'codigo': documento['codigo'],
-                'aluno_nome': documento['aluno_nome'],
-                'aluno_ra': documento['aluno_ra'],
-                'tipo': documento['tipo'],
-                'conteudo_html': documento['conteudo_html'],
-                'data_geracao': documento['data_geracao']
-            }
-        return None
-        
-    except Exception as e:
-        print(f"Erro ao buscar documento: {e}")
-        return None
 
 # ==========================
 # ROTA PARA GERAR HISTÓRICO (SIMPLES)
