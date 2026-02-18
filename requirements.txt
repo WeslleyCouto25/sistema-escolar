@@ -1,7 +1,7 @@
-Flask
-gunicorn
-mercadopago
-Werkzeug
+Flask==3.0.3
+gunicorn==21.2.0
+mercadopago==2.2.0
+Werkzeug==3.0.3
 python-dotenv==1.0.1
-qrcode[pil]
-
+qrcode[pil]==7.4.2
+Pillow==10.4.0
