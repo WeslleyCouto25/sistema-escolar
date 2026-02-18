@@ -138,52 +138,41 @@
             background: #f0f2f5;
         }
         
-        .separator {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            margin: 20px 0;
-            color: #999;
-        }
-        
-        .separator::before,
-        .separator::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .separator::before {
-            margin-right: 10px;
-        }
-        
-        .separator::after {
-            margin-left: 10px;
-        }
-        
-        .qr-scanner {
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .qr-placeholder {
-            background: #f8f9fa;
-            border: 2px dashed #ddd;
+        .message-box {
+            padding: 15px;
             border-radius: 10px;
-            padding: 30px;
-            cursor: pointer;
-            transition: all 0.3s;
+            margin-top: 20px;
+            display: none;
         }
         
-        .qr-placeholder:hover {
-            border-color: #1a237e;
-            background: #f0f2f5;
+        .message-box.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
         }
         
-        .qr-placeholder i {
-            font-size: 50px;
-            color: #999;
-            margin-bottom: 10px;
+        .message-box.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1a237e;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+            display: none;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
         .footer {
@@ -226,33 +215,26 @@
                 <div class="info-box">
                     <div class="info-box-title">✓ Documentos Oficiais</div>
                     <div class="info-box-text">
-                        Valide históricos escolares, declarações e certificados emitidos pelo sistema SiGEu.
-                        Escaneie o QR Code ou digite o código de autenticação.
+                        Digite o código de autenticação do seu documento.
+                        Exemplos: <strong>DECL-88365055-8-20260218182514-444F0001</strong> ou <strong>HIST-88365055-20260218182839-CB1258FC</strong>
                     </div>
                 </div>
                 
-                <div class="qr-scanner">
-                    <div class="qr-placeholder" onclick="simularLeituraQR()">
-                        <i class="fas fa-qrcode"></i>
-                        <p><strong>📱 Escanear QR Code</strong></p>
-                        <p style="font-size: 12px; color: #999;">Clique para simular leitura (demo)</p>
-                    </div>
-                </div>
-                
-                <div class="separator">ou</div>
-                
-                <form action="/validar-documento" method="GET" id="formValidar">
+                <form id="formValidar" method="POST" action="/validar-documento">
                     <div class="form-group">
-                        <label for="codigo">Digite o Código de Autenticação</label>
+                        <label for="codigo">Código de Autenticação</label>
                         <input type="text" 
                                id="codigo" 
                                name="codigo" 
-                               placeholder="Ex: HIST-12345678-2024-ABCD" 
+                               placeholder="Digite o código completo" 
                                value="{{ request.args.get('codigo', '') }}"
                                required>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary">
+                    <div class="loader" id="loader"></div>
+                    <div id="messageBox" class="message-box"></div>
+                    
+                    <button type="submit" class="btn btn-primary" id="btnSubmit">
                         🔍 Validar Documento
                     </button>
                     
@@ -286,26 +268,61 @@
     
     <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
     <script>
-        function simularLeituraQR() {
-            // Simular códigos para demonstração
-            const codigosDemo = [
-                'HIST-12345678-2024-A1B2',
-                'HIST-87654321-2024-C3D4',
-                'HIST-11223344-2024-E5F6'
-            ];
+        document.getElementById('formValidar').addEventListener('submit', function(e) {
+            e.preventDefault();
             
-            const codigoAleatorio = codigosDemo[Math.floor(Math.random() * codigosDemo.length)];
-            document.getElementById('codigo').value = codigoAleatorio;
+            const codigo = document.getElementById('codigo').value.trim();
+            const btn = document.getElementById('btnSubmit');
+            const loader = document.getElementById('loader');
+            const messageBox = document.getElementById('messageBox');
             
-            // Animação
-            const btn = document.querySelector('.qr-placeholder');
-            btn.style.backgroundColor = '#e8f5e8';
-            btn.style.borderColor = '#28a745';
+            if (!codigo) {
+                messageBox.className = 'message-box error';
+                messageBox.innerHTML = 'Por favor, digite um código de autenticação.';
+                return;
+            }
             
-            setTimeout(() => {
-                document.getElementById('formValidar').submit();
-            }, 500);
-        }
+            // Mostrar loader e desabilitar botão
+            btn.disabled = true;
+            loader.style.display = 'block';
+            messageBox.style.display = 'none';
+            
+            // Fazer a requisição AJAX para validar o código
+            fetch('/api/validar-codigo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ codigo: codigo })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Código válido - redirecionar para a página do documento
+                    messageBox.className = 'message-box success';
+                    messageBox.innerHTML = '✓ Documento encontrado! Redirecionando...';
+                    
+                    setTimeout(() => {
+                        window.location.href = data.url;
+                    }, 1000);
+                } else {
+                    // Código inválido
+                    messageBox.className = 'message-box error';
+                    messageBox.innerHTML = data.message || 'Código não encontrado. Verifique e tente novamente.';
+                    
+                    // Reabilitar botão e esconder loader
+                    btn.disabled = false;
+                    loader.style.display = 'none';
+                }
+            })
+            .catch(error => {
+                messageBox.className = 'message-box error';
+                messageBox.innerHTML = 'Erro ao validar. Tente novamente.';
+                
+                btn.disabled = false;
+                loader.style.display = 'none';
+            });
+        });
         
         // Se tiver código na URL, validar automaticamente
         window.onload = function() {
@@ -315,7 +332,7 @@
             if (codigo && codigo.length > 0) {
                 document.getElementById('codigo').value = codigo;
                 setTimeout(() => {
-                    document.getElementById('formValidar').submit();
+                    document.getElementById('formValidar').dispatchEvent(new Event('submit'));
                 }, 500);
             }
         }

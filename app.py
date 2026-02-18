@@ -4572,11 +4572,41 @@ def mew_deletar_documento(codigo):
 # VALIDAÇÃO PÚBLICA DE DOCUMENTOS
 # ==========================
 
-@app.route("/validar-documento")
+@app.route("/validar-documento", methods=["GET", "POST"])
 def validar_documento_publico():
-    """Página pública para validação de documentos"""
+    """Página pública para validação de documentos - SIMPLIFICADA"""
+    
+    # Se for POST, processar a validação via AJAX
+    if request.method == "POST":
+        data = request.get_json()
+        codigo = data.get('codigo', '').strip().upper()
+        
+        if not codigo:
+            return jsonify({"success": False, "message": "Código não fornecido"})
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verificar se o código existe na tabela documentos_autenticados
+        cursor.execute("SELECT id FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+        documento = cursor.fetchone()
+        conn.close()
+        
+        if documento:
+            # Código válido - retornar URL de redirecionamento
+            return jsonify({
+                "success": True,
+                "url": f"/ver-documento/{codigo}"
+            })
+        else:
+            # Código inválido
+            return jsonify({
+                "success": False,
+                "message": "Código não encontrado. Verifique se digitou corretamente."
+            })
+    
+    # Se for GET, mostrar a página de validação
     return render_template("validar_documento.html")
-
 
 def buscar_documento_db(codigo):
     """Busca documento no banco - VERSÃO CORRETA para sua estrutura de tabela"""
