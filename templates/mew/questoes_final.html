@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Questões da Prova Final</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .questao-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid var(--primary-color);
+        }
+
+        .questao-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .questao-number {
+            background: var(--primary-color);
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .opcoes-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .opcao-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .opcao-correta {
+            background: #d4edda;
+            border-color: #28a745;
+            font-weight: bold;
+        }
+
+        .form-questao {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .count-badge {
+            background: var(--primary-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .count-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .count-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .json-tabs {
+            margin-bottom: 20px;
+        }
+        
+        .json-tabs button {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-bottom: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .json-tabs button.active {
+            background: white;
+            border-color: #007bff;
+            color: #007bff;
+        }
+        
+        .json-content {
+            display: none;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0 5px 5px 5px;
+            padding: 20px;
+        }
+        
+        .json-content.active {
+            display: block;
+        }
+        
+        pre.json-output {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Questões da Prova Final</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/avaliacao-final" class="logout-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="max-width: 1000px; margin: auto; padding: 20px;">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">
+                        <i class="fas fa-question-circle"></i>
+                        Questões - {{ disciplina['nome'] }}
+                    </h1>
+                    <p class="page-subtitle">
+                        Adicione 30 questões para a prova final desta disciplina
+                    </p>
+                </div>
+                <div style="text-align: right;">
+                    <div
+                        class="count-badge {% if questoes|length >= 30 %}count-success{% elif questoes|length >= 20 %}count-warning{% endif %}">
+                        {{ questoes|length }}/30 questões
+                    </div>
+                    <p style="font-size: 14px; color: var(--medium-gray); margin-top: 5px;">
+                        {% if questoes|length >= 30 %}
+                        ✅ Prova completa
+                        {% elif questoes|length >= 20 %}
+                        ⚠️ Quase lá
+                        {% else %}
+                        ❌ Preencha mais questões
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}" style="margin-bottom: 20px;">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <!-- Formulário para adicionar questão individual -->
+            <div class="form-questao">
+                <h3><i class="fas fa-plus-circle"></i> Adicionar Nova Questão</h3>
+
+                <form method="post" action="/mew/adicionar-questao">
+                    <input type="hidden" name="disciplina_id" value="{{ disciplina['id'] }}">
+
+                    <div class="form-group">
+                        <label>Pergunta:</label>
+                        <textarea name="pergunta" rows="3" class="form-control" required
+                            placeholder="Digite a pergunta da questão..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Opção A:</label>
+                            <input type="text" name="opcao_a" class="form-control" required
+                                placeholder="Texto da opção A">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Opção B:</label>
+                            <input type="text" name="opcao_b" class="form-control" required
+                                placeholder="Texto da opção B">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Opção C:</label>
+                            <input type="text" name="opcao_c" class="form-control" required
+                                placeholder="Texto da opção C">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Opção D:</label>
+                            <input type="text" name="opcao_d" class="form-control" required
+                                placeholder="Texto da opção D">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Resposta Correta:</label>
+                        <select name="resposta_correta" class="form-control" required>
+                            <option value="">Selecione a resposta correta</option>
+                            <option value="A">Opção A</option>
+                            <option value="B">Opção B</option>
+                            <option value="C">Opção C</option>
+                            <option value="D">Opção D</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Questão
+                    </button>
+
+                    {% if request.args.get('add') == '10' %}
+                    <a href="/mew/gerar-questoes/{{ disciplina['id'] }}/10" class="btn btn-secondary">
+                        <i class="fas fa-bolt"></i> Gerar 10 Questões Automáticas
+                    </a>
+                    {% endif %}
+                </form>
+            </div>
+
+            <!-- SISTEMA DE IMPORTAR VIA JSON -->
+            <div class="form-questao" style="margin-top: 30px;">
+                <h3><i class="fas fa-file-import"></i> Importar Questões via JSON</h3>
+                <p>Cole um JSON completo com 30 questões no formato correto:</p>
+                
+                <!-- Tabs para diferentes formatos -->
+                <div class="json-tabs">
+                    <button class="active" onclick="showTab('tab-formato')">Formato</button>
+                    <button onclick="showTab('tab-exportar')">Exportar Atual</button>
+                </div>
+                
+                <!-- Formato JSON -->
+                <div id="tab-formato" class="json-content active">
+                    <form id="importarJsonForm" onsubmit="importarJson(event)">
+                        <div class="form-group">
+                            <label>JSON das Questões:</label>
+                            <textarea class="form-control" id="questoesJson" rows="10" 
+                                     placeholder='[
+  {
+    "pergunta": "Qual é a capital do Brasil?",
+    "opcao_a": "São Paulo",
+    "opcao_b": "Rio de Janeiro", 
+    "opcao_c": "Brasília",
+    "opcao_d": "Salvador",
+    "resposta_correta": "C"
+  },
+  // ... mais 29 questões
+]'></textarea>
+                            <small class="form-text text-muted">
+                                <strong>Formato:</strong> lista de objetos com: pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta
+                            </small>
+                        </div>
+                        
+                        <div class="form-row">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Importar JSON
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="gerarModeloVazio()">
+                                <i class="fas fa-file-code"></i> Gerar Modelo Vazio
+                            </button>
+                            <button type="button" class="btn btn-info" onclick="gerarModeloExemplo()">
+                                <i class="fas fa-eye"></i> Ver Exemplo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Exportar JSON Atual -->
+                <div id="tab-exportar" class="json-content">
+                    <div class="form-group">
+                        <label>Exportar questões atuais como JSON:</label>
+                        <pre class="json-output" id="jsonExport"></pre>
+                    </div>
+                    <div class="form-row">
+                        <button type="button" class="btn btn-success" onclick="exportarQuestoesAtuais()">
+                            <i class="fas fa-download"></i> Carregar Questões Atuais
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="copiarJSON()">
+                            <i class="fas fa-copy"></i> Copiar para Área de Transferência
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultado da Importação -->
+                <div id="jsonResult" style="display: none; margin-top: 20px;"></div>
+            </div>
+
+            <!-- Lista de questões existentes -->
+            <h3 style="margin-bottom: 20px;">
+                <i class="fas fa-list"></i> Questões Cadastradas ({{ questoes|length }})
+                {% if questoes %}
+                <a href="javascript:void(0)" onclick="exportarQuestoesAtuais()" class="btn btn-sm btn-success" style="float: right;">
+                    <i class="fas fa-download"></i> Exportar como JSON
+                </a>
+                {% endif %}
+            </h3>
+
+            {% if questoes %}
+            {% for q in questoes %}
+            <div class="questao-card">
+                <div class="questao-header">
+                    <div class="questao-number">{{ loop.index }}</div>
+                    <div>
+                        <span class="badge-success">
+                            Resposta: {{ q['resposta_correta'] }}
+                        </span>
+                        <a href="/mew/deletar-questao/{{ q['id'] }}" 
+                           class="btn btn-sm btn-danger" 
+                           onclick="return confirm('Tem certeza que deseja excluir esta questão?')"
+                           style="margin-left: 10px;">
+                            <i class="fas fa-trash"></i> Excluir
+                        </a>
+                    </div>
+                </div>
+
+                <p><strong>{{ q['pergunta'] }}</strong></p>
+
+                <div class="opcoes-container">
+                    <div class="opcao-item {% if q['resposta_correta'] == 'A' %}opcao-correta{% endif %}">
+                        <strong>A)</strong> {{ q['opcao_a'] }}
+                    </div>
+
+                    <div class="opcao-item {% if q['resposta_correta'] == 'B' %}opcao-correta{% endif %}">
+                        <strong>B)</strong> {{ q['opcao_b'] }}
+                    </div>
+
+                    <div class="opcao-item {% if q['resposta_correta'] == 'C' %}opcao-correta{% endif %}">
+                        <strong>C)</strong> {{ q['opcao_c'] }}
+                    </div>
+
+                    <div class="opcao-item {% if q['resposta_correta'] == 'D' %}opcao-correta{% endif %}">
+                        <strong>D)</strong> {{ q['opcao_d'] }}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div style="text-align: center; padding: 40px; background: white; border-radius: 10px;">
+                <i class="fas fa-question" style="font-size: 48px; color: var(--light-gray);"></i>
+                <h3>Nenhuma questão cadastrada</h3>
+                <p>Adicione a primeira questão usando o formulário acima.</p>
+                <p style="color: var(--medium-gray); font-size: 14px; margin-top: 10px;">
+                    <i class="fas fa-info-circle"></i> Você precisa de 30 questões para liberar a prova final
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Botão de retorno -->
+            <div
+                style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--light-gray);">
+                <a href="/mew/avaliacao-final" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Voltar para o Painel
+                </a>
+
+                {% if questoes|length >= 30 %}
+                <div style="margin-top: 15px; color: var(--success-color); font-weight: bold;">
+                    <i class="fas fa-check-circle"></i> Prova final está pronta para ser liberada!
+                </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Funções para tabs
+        function showTab(tabId) {
+            // Esconder todas as tabs
+            document.querySelectorAll('.json-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remover classe active de todos os botões
+            document.querySelectorAll('.json-tabs button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Mostrar tab selecionada
+            document.getElementById(tabId).classList.add('active');
+            
+            // Ativar botão clicado
+            event.target.classList.add('active');
+            
+            // Se for a tab de exportar, carregar automaticamente
+            if (tabId === 'tab-exportar') {
+                exportarQuestoesAtuais();
+            }
+        }
+        
+        // Importar via JSON
+        function importarJson(event) {
+            event.preventDefault();
+            
+            const jsonText = document.getElementById('questoesJson').value;
+            const disciplinaId = {{ disciplina.id }};
+            
+            if (!jsonText.trim()) {
+                alert('Por favor, cole um JSON válido');
+                return;
+            }
+            
+            // Validar JSON básico
+            try {
+                JSON.parse(jsonText);
+            } catch (e) {
+                alert('JSON inválido: ' + e.message);
+                return;
+            }
+            
+            // Enviar via AJAX
+            const formData = new FormData();
+            formData.append('questoes_json', jsonText);
+            
+            fetch(`/mew/importar-questoes-json/${disciplinaId}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById('jsonResult');
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle"></i> ${data.message}
+                            <p>Total: ${data.count} questões importadas</p>
+                            <a href="?sucesso=Questões+importadas" class="btn btn-sm btn-success">
+                                <i class="fas fa-redo"></i> Recarregar página
+                            </a>
+                        </div>
+                    `;
+                    // Recarregar a página após 2 segundos
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle"></i> ${data.message}
+                        </div>
+                    `;
+                }
+                resultDiv.style.display = 'block';
+            })
+            .catch(error => {
+                document.getElementById('jsonResult').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i> Erro ao importar: ${error}
+                    </div>
+                `;
+                document.getElementById('jsonResult').style.display = 'block';
+            });
+        }
+        
+        // Gerar modelo vazio
+        function gerarModeloVazio() {
+            const questoes = [];
+            for (let i = 1; i <= 30; i++) {
+                questoes.push({
+                    "pergunta": `Pergunta ${i} da prova final (${document.title})`,
+                    "opcao_a": "Alternativa A para esta questão",
+                    "opcao_b": "Alternativa B para esta questão",
+                    "opcao_c": "Alternativa C para esta questão",
+                    "opcao_d": "Alternativa D para esta questão",
+                    "resposta_correta": "A"
+                });
+            }
+            
+            document.getElementById('questoesJson').value = JSON.stringify(questoes, null, 2);
+            alert('Modelo vazio gerado! Preencha com suas 30 questões.');
+        }
+        
+        // Gerar exemplo
+        function gerarModeloExemplo() {
+            const exemplo = [
+                {
+                    "pergunta": "Qual é a capital do Brasil?",
+                    "opcao_a": "São Paulo",
+                    "opcao_b": "Rio de Janeiro",
+                    "opcao_c": "Brasília",
+                    "opcao_d": "Salvador",
+                    "resposta_correta": "C"
+                },
+                {
+                    "pergunta": "Quantos estados tem o Brasil?",
+                    "opcao_a": "26",
+                    "opcao_b": "27",
+                    "opcao_c": "25",
+                    "opcao_d": "28",
+                    "resposta_correta": "B"
+                },
+                {
+                    "pergunta": "Qual oceano banha o litoral brasileiro?",
+                    "opcao_a": "Oceano Pacífico",
+                    "opcao_b": "Oceano Índico",
+                    "opcao_c": "Oceano Atlântico",
+                    "opcao_d": "Oceano Ártico",
+                    "resposta_correta": "C"
+                }
+            ];
+            
+            document.getElementById('questoesJson').value = JSON.stringify(exemplo, null, 2);
+            alert('Exemplo gerado! Veja o formato e complete com mais 27 questões.');
+        }
+        
+        // Exportar questões atuais
+        async function exportarQuestoesAtuais() {
+            try {
+                const response = await fetch(`/mew/exportar-questoes-json/{{ disciplina.id }}`);
+                const data = await response.json();
+                
+                if (data.questoes && data.questoes.length > 0) {
+                    const jsonExport = document.getElementById('jsonExport');
+                    jsonExport.textContent = JSON.stringify(data.questoes, null, 2);
+                } else {
+                    document.getElementById('jsonExport').textContent = '// Nenhuma questão encontrada para exportar';
+                }
+            } catch (error) {
+                console.error('Erro ao exportar:', error);
+                document.getElementById('jsonExport').textContent = '// Erro ao carregar questões';
+            }
+        }
+        
+        // Copiar JSON para área de transferência
+        function copiarJSON() {
+            const jsonText = document.getElementById('jsonExport').textContent;
+            
+            navigator.clipboard.writeText(jsonText)
+                .then(() => {
+                    alert('JSON copiado para a área de transferência!');
+                })
+                .catch(err => {
+                    console.error('Erro ao copiar:', err);
+                    alert('Erro ao copiar. Tente selecionar e copiar manualmente.');
+                });
+        }
+        
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar se há mensagem de sucesso na URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('sucesso')) {
+                const mensagem = urlParams.get('sucesso');
+                alert('Sucesso: ' + decodeURIComponent(mensagem));
+            }
+        });
+    </script>
+</body>
+
+</html>

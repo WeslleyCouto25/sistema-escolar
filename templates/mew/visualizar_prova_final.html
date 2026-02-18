@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualizar Prova Final - {{ disciplina['nome'] }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .prova-container {
+            max-width: 1000px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .prova-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--light-gray);
+        }
+        
+        .questao-completa {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: #f8f9fa;
+            page-break-inside: avoid;
+        }
+        
+        .numero-questao {
+            background: var(--primary-color);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .opcao-lista {
+            margin: 8px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background: white;
+            border: 1px solid #ced4da;
+        }
+        
+        .opcao-correta {
+            background: #d4edda;
+            border-color: #28a745;
+            font-weight: bold;
+        }
+        
+        .resposta-label {
+            display: inline-block;
+            padding: 5px 10px;
+            background: #28a745;
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .print-only {
+            display: none;
+        }
+        
+        @media print {
+            .no-print {
+                display: none;
+            }
+            .print-only {
+                display: block;
+            }
+            .prova-container {
+                box-shadow: none;
+                padding: 0;
+            }
+            .questao-completa {
+                border: 1px solid #000;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar no-print">
+        <div class="navbar-header">
+            <div class="logo-text">VISUALIZAR PROVA FINAL - {{ disciplina['nome'] }}</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/questoes-final/{{ disciplina['id'] }}" class="logout-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="/mew/avaliacao-final" class="logout-btn">Painel</a>
+            <button onclick="window.print()" class="logout-btn">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+        </div>
+    </div>
+
+    <div class="prova-container">
+        <div class="prova-header">
+            <h1>📝 Prova Final - {{ disciplina['nome'] }}</h1>
+            <p>Total de questões: {{ total_questoes }} | Para uso interno do gestor</p>
+            <div class="no-print">
+                {% if total_questoes >= 30 %}
+                <span class="badge-success" style="font-size: 16px; padding: 8px 15px;">
+                    <i class="fas fa-check-circle"></i> PROVA COMPLETA (30/30)
+                </span>
+                {% else %}
+                <span class="badge-warning" style="font-size: 16px; padding: 8px 15px;">
+                    <i class="fas fa-exclamation-triangle"></i> INCOMPLETA ({{ total_questoes }}/30)
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="print-only">
+            <h2>Prova Final - {{ disciplina['nome'] }}</h2>
+            <p><strong>Data:</strong> {{ date.today().strftime('%d/%m/%Y') }}</p>
+            <hr>
+        </div>
+        
+        {% if questoes %}
+            {% for q in questoes %}
+            <div class="questao-completa">
+                <div style="margin-bottom: 15px;">
+                    <span class="numero-questao">{{ loop.index }}</span>
+                    <strong style="font-size: 16px;">{{ q['pergunta'] }}</strong>
+                </div>
+                
+                <div style="margin-left: 50px;">
+                    <div class="opcao-lista {% if q['resposta_correta'] == 'A' %}opcao-correta{% endif %}">
+                        <strong>A)</strong> {{ q['opcao_a'] }}
+                        {% if q['resposta_correta'] == 'A' %}
+                        <span class="resposta-label">RESPOSTA CORRETA</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="opcao-lista {% if q['resposta_correta'] == 'B' %}opcao-correta{% endif %}">
+                        <strong>B)</strong> {{ q['opcao_b'] }}
+                        {% if q['resposta_correta'] == 'B' %}
+                        <span class="resposta-label">RESPOSTA CORRETA</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="opcao-lista {% if q['resposta_correta'] == 'C' %}opcao-correta{% endif %}">
+                        <strong>C)</strong> {{ q['opcao_c'] }}
+                        {% if q['resposta_correta'] == 'C' %}
+                        <span class="resposta-label">RESPOSTA CORRETA</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="opcao-lista {% if q['resposta_correta'] == 'D' %}opcao-correta{% endif %}">
+                        <strong>D)</strong> {{ q['opcao_d'] }}
+                        {% if q['resposta_correta'] == 'D' %}
+                        <span class="resposta-label">RESPOSTA CORRETA</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="no-print" style="margin-top: 15px; text-align: right;">
+                    <a href="/mew/deletar-questao/{{ q['id'] }}" 
+                       class="btn btn-sm btn-danger"
+                       onclick="return confirm('Excluir esta questão?')">
+                        <i class="fas fa-trash"></i> Excluir Questão
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <div class="no-print" style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--light-gray);">
+                <div style="margin-bottom: 20px;">
+                    <span class="badge {% if total_questoes >= 30 %}badge-success{% else %}badge-warning{% endif %}" 
+                          style="font-size: 18px; padding: 10px 20px;">
+                        {{ total_questoes }} DE 30 QUESTÕES
+                    </span>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <a href="/mew/questoes-final/{{ disciplina['id'] }}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle"></i> Adicionar Mais Questões
+                    </a>
+                    <a href="/mew/avaliacao-final" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Voltar ao Painel
+                    </a>
+                    <button onclick="window.print()" class="btn btn-info">
+                        <i class="fas fa-print"></i> Imprimir Prova
+                    </button>
+                </div>
+                
+                {% if total_questoes < 30 %}
+                <div style="margin-top: 20px; color: #dc3545; font-weight: bold;">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    FALTAM {{ 30 - total_questoes }} QUESTÕES PARA COMPLETAR A PROVA
+                </div>
+                {% else %}
+                <div style="margin-top: 20px; color: #28a745; font-weight: bold;">
+                    <i class="fas fa-check-circle"></i> 
+                    PROVA COMPLETA - PRONTA PARA SER LIBERADA PARA ALUNOS
+                </div>
+                {% endif %}
+            </div>
+            
+        {% else %}
+            <div style="text-align: center; padding: 40px;">
+                <i class="fas fa-question" style="font-size: 48px; color: var(--light-gray);"></i>
+                <h3>Nenhuma questão cadastrada</h3>
+                <p>Esta disciplina ainda não possui questões para a prova final.</p>
+                <a href="/mew/questoes-final/{{ disciplina['id'] }}" class="btn btn-primary" style="margin-top: 20px;">
+                    <i class="fas fa-plus-circle"></i> Adicionar Primeira Questão
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>

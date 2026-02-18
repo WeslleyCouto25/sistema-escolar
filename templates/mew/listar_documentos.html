@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Documentos Autenticados</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilos adicionais para os botões de ação */
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-primary {
+            background: #1a237e;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0d1b6b;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+            border: none;
+        }
+        
+        .btn-success:hover {
+            background: #219a52;
+        }
+        
+        .acoes-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        /* Ajuste na tabela para acomodar os novos botões */
+        .data-table td {
+            vertical-align: middle;
+            padding: 12px 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <a href="/mew/dashboard" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <div class="logo-text">MEW - Documentos Autenticados</div>
+        </div>
+        <div class="user-menu">
+            <a href="/mew/gerar-documento" class="logout-btn">
+                <i class="fas fa-plus"></i> Novo Documento
+            </a>
+            <a href="/mew/dashboard" class="logout-btn">🏠 Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area">
+            <h1 class="page-title">📋 Documentos Autenticados Gerados</h1>
+            <p class="page-subtitle">Lista de todos os documentos com código de autenticação</p>
+
+            <div class="mew-card">
+                {% if not documentos %}
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-file-alt" style="font-size: 64px; color: #ccc; margin-bottom: 20px;"></i>
+                    <h3>Nenhum documento gerado</h3>
+                    <p>Você ainda não gerou nenhum documento autenticado.</p>
+                    <a href="/mew/gerar-documento" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Gerar Primeiro Documento
+                    </a>
+                </div>
+                {% else %}
+                <div style="overflow-x: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Tipo</th>
+                                <th>Aluno</th>
+                                <th>Disciplina</th>
+                                <th>Data Geração</th>
+                                <th>Validade</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for doc in documentos %}
+                            <tr>
+                                <td><strong>{{ doc.codigo_autenticacao }}</strong></td>
+                                <td>
+                                    {% if doc.tipo_documento == 'plano_ensino' %}
+                                    <span class="badge" style="background: #3498db;">Plano Ensino</span>
+                                    {% elif doc.tipo_documento == 'historico' %}
+                                    <span class="badge" style="background: #2ecc71;">Histórico</span>
+                                    {% elif doc.tipo_documento == 'declaracao_conclusao' %}
+                                    <span class="badge" style="background: #9b59b6;">Conclusão</span>
+                                    {% elif doc.tipo_documento == 'matricula' %}
+                                    <span class="badge" style="background: #e74c3c;">Matrícula</span>
+                                    {% else %}
+                                    <span class="badge">{{ doc.tipo_documento }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ doc.aluno_nome or 'N/A' }}</td>
+                                <td>{{ doc.disciplina_nome or 'Geral' }}</td>
+                                <td>{{ doc.data_geracao }}</td>
+                                <td>
+                                    {% if doc.status == 'ativo' %}
+                                    <span style="color: #27ae60;">{{ doc.data_validade }}</span>
+                                    {% else %}
+                                    <span style="color: #e74c3c;">Expirado</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="acoes-container">
+                                        <!-- Botão Visualizar -->
+                                        <a href="/ver-documento/{{ doc.codigo_autenticacao }}" 
+                                           target="_blank" 
+                                           class="btn-icon" 
+                                           title="Visualizar">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        
+                                        <!-- Botão Validar Publicamente -->
+                                        <a href="/validar-documento/{{ doc.codigo_autenticacao }}" 
+                                           target="_blank" 
+                                           class="btn-icon" 
+                                           title="Validar Publicamente">
+                                            <i class="fas fa-check-circle"></i>
+                                        </a>
+                                        
+                                        <!-- BOTÃO PDF A5 - NOVO! -->
+                                        <button onclick="window.open('/ver-documento/{{ doc.codigo_autenticacao }}', '_blank').print();" 
+                                                class="btn-icon" 
+                                                style="background: #27ae60; color: white; border: none; cursor: pointer;"
+                                                title="Baixar PDF em A5">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </button>
+                                        
+                                        <!-- Botão Deletar -->
+                                        <a href="/mew/deletar-documento/{{ doc.codigo_autenticacao }}" 
+                                           class="btn-icon btn-danger" 
+                                           title="Deletar"
+                                           onclick="return confirm('Tem certeza que deseja deletar este documento?')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                    
+                                    <!-- Texto explicativo para o PDF A5 (opcional) -->
+                                    <div style="font-size: 10px; color: #666; margin-top: 5px;">
+                                        <i class="fas fa-info-circle"></i> PDF em A5
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                    <p><i class="fas fa-info-circle"></i> Total de documentos: {{ documentos|length }}</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="mew-card" style="margin-top: 30px;">
+                <h3><i class="fas fa-shield-alt"></i> Sistema de Autenticação</h3>
+                <p>Todo documento gerado inclui:</p>
+                <ul>
+                    <li><strong>Código único</strong> para validação pública</li>
+                    <li><strong>Hash SHA-256</strong> para verificação de integridade</li>
+                    <li><strong>Página de autenticação</strong> com assinatura digital</li>
+                    <li><strong>Validade de 5 anos</strong> a partir da emissão</li>
+                </ul>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="/validar-documento" target="_blank" class="btn btn-secondary">
+                        <i class="fas fa-search"></i> Página Pública de Validação
+                    </a>
+                    <a href="/mew/gerar-documento" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Gerar Novo Documento
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Dica sobre PDF A5 -->
+            <div class="mew-card" style="margin-top: 20px; background: #e8f5e8;">
+                <h4><i class="fas fa-file-pdf" style="color: #27ae60;"></i> PDF em Tamanho A5</h4>
+                <p style="margin: 5px 0 0 0; font-size: 13px;">
+                    <i class="fas fa-info-circle"></i> 
+                    Ao clicar no botão <strong style="color: #27ae60;">📥 PDF A5</strong>, o documento será aberto. 
+                    Basta pressionar <strong>Ctrl+P</strong> (ou Cmd+P no Mac) e escolher "Salvar como PDF". 
+                    O tamanho A5 já está pré-configurado no documento.
+                </p>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        // Função para garantir que o PDF seja gerado em A5
+        function gerarPDF_A5(url) {
+            var janela = window.open(url, '_blank');
+            // Pequeno delay para garantir que a página carregou
+            setTimeout(function() {
+                janela.print();
+            }, 500);
+        }
+    </script>
+</body>
+</html>

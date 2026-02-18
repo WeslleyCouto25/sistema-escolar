@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Avaliação Parcial - Capítulo {{ capitulo }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .questao {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: var(--border-radius);
+            margin-bottom: 25px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .opcao {
+            border: 2px solid #dee2e6;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .opcao:hover {
+            background: #e7f1ff;
+            border-color: var(--primary-light);
+        }
+        
+        .opcao.selected {
+            background: #d4edda;
+            border-color: var(--success-color);
+        }
+        
+        .btn-submit {
+            margin-top: 30px;
+            padding: 18px;
+            width: 100%;
+            font-size: 18px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: background 0.3s;
+        }
+        
+        .btn-submit:hover {
+            background: var(--primary-dark);
+        }
+        
+        .timer-container {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: var(--danger-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            font-weight: bold;
+            z-index: 1000;
+            font-size: 1.2em;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary-color);
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        
+        .back-link:hover {
+            color: var(--primary-dark);
+        }
+        
+        .prova-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--light-gray);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">Ambiente Virtual de Aprendizagem Facop/SiGEU</div>
+        </div>
+        
+        <div class="spacer"></div>
+        
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+        </div>
+    </header>
+
+    <div class="timer-container" id="timerElement">
+        <i class="fas fa-clock"></i>
+        <span id="timerText">60:00</span>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ session.get('aluno_nome', 'Aluno') }}</div>
+                    <div class="ra">RA: {{ session.get('aluno_ra', '00000000') }}</div>
+                </div>
+            </div>
+            
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <div class="menu-section">Prova em Andamento</div>
+                <div class="menu-item" style="color: var(--danger-color); font-weight: 500;">
+                    <i class="fas fa-clock"></i>
+                    <span class="text" id="sidebarTimer">60:00</span>
+                </div>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <a href="/dashboard" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar para o dashboard
+            </a>
+            
+            <div class="container">
+                <div class="prova-header">
+                    <h1>📝 Avaliação Parcial </h1> <h2>Capítulo {{ capitulo }}</h2>
+                    <p>Número total de questões da avaliação: • {{ questoes|length }} questões</p>
+                </div>
+
+                <form method="post" id="formProva">
+                    {% for q in questoes %}
+                    {% set q_index = loop.index %}
+                    <div class="questao">
+                        <h3>Questão {{ q_index }}</h3>
+                        <p><strong>{{ q.pergunta }}</strong></p>
+
+                        {% for letra, texto in q.opcoes.items() %}
+                        <div class="opcao" onclick="selectOption(this)">
+                            <input
+                                type="radio"
+                                name="q{{ q_index }}"
+                                value="{{ letra }}"
+                                hidden
+                            >
+                            <strong>{{ letra }})</strong> {{ texto }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+
+                    <button type="submit" class="btn-submit">
+                        <i class="fas fa-paper-plane"></i> 📤 Enviar Respostas
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        /* =========================
+           TIMER – 60 MINUTOS
+        ========================== */
+        let tempoRestante = 60 * 60;
+        const timerElement = document.getElementById('timerElement');
+        const timerText = document.getElementById('timerText');
+        const sidebarTimer = document.getElementById('sidebarTimer');
+
+        function atualizarTimer() {
+            const minutos = Math.floor(tempoRestante / 60);
+            const segundos = tempoRestante % 60;
+
+            const tempoFormatado = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+            timerText.textContent = tempoFormatado;
+            sidebarTimer.textContent = tempoFormatado;
+
+            if (tempoRestante <= 5 * 60) {
+                timerElement.style.background = '#ff6b6b';
+            }
+
+            if (tempoRestante <= 60) {
+                timerElement.style.background = '#dc3545';
+                timerElement.style.animation = 'pulse 1s infinite';
+            }
+
+            if (tempoRestante <= 0) {
+                alert('⏰ Tempo esgotado! A prova será enviada automaticamente.');
+                document.getElementById('formProva').submit();
+                return;
+            }
+
+            tempoRestante--;
+        }
+
+        setInterval(atualizarTimer, 1000);
+        atualizarTimer();
+
+        /* =========================
+           SELEÇÃO DAS ALTERNATIVAS
+        ========================== */
+        function selectOption(div) {
+            const questao = div.closest('.questao');
+            questao.querySelectorAll('.opcao').forEach(op => {
+                op.classList.remove('selected');
+            });
+            div.classList.add('selected');
+            const radio = div.querySelector('input[type="radio"]');
+            radio.checked = true;
+        }
+
+        /* =========================
+           ALERTA AO SAIR
+        ========================== */
+        window.addEventListener('beforeunload', function (e) {
+            e.preventDefault();
+            e.returnValue = '⚠️ Se você sair agora, a prova será encerrada. Tem certeza?';
+        });
+
+        /* =========================
+           ANIMAÇÃO DE PULSO
+        ========================== */
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.7; }
+                100% { opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

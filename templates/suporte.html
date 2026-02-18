@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FACOP/SiGEU</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        /* RESET E VARIÁVEIS */
+        :root {
+            --primary-color: #1a237e;
+            --primary-dark: #0d1b5e;
+            --secondary-color: #ff6f00;
+            --secondary-dark: #e65100;
+            --accent-color: #4caf50;
+            --accent-dark: #388e3c;
+            --rock-color: #795548;
+            --rock-dark: #5d4037;
+            --rock-light: #d7ccc8;
+            --light-blue: #e8eaf6;
+            --dark-blue: #283593;
+            --dark-gray: #2c3e50;
+            --medium-gray: #546e7a;
+            --light-gray: #f8f9fa;
+            --white: #ffffff;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 15px 35px rgba(0, 0, 0, 0.12);
+            --border-radius: 12px;
+            --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.7;
+            color: var(--dark-gray);
+            background: var(--white);
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* TOP HEADER - CORRIGIDO */
+        .top-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-blue));
+            color: white;
+            padding: 10px 0;
+            font-size: 0.85rem;
+            position: relative;
+            z-index: 1001;
+        }
+
+        .top-header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .top-header-left,
+        .top-header-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .header-contact {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .header-contact:hover {
+            color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .header-social {
+            display: flex;
+            gap: 10px;
+        }
+
+        .social-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+        }
+
+        .social-icon:hover {
+            background: var(--secondary-color);
+            transform: translateY(-3px) scale(1.1);
+            border-color: transparent;
+        }
+
+        .auth-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 20px;
+            transition: var(--transition);
+            color: white;
+            text-decoration: none;
+        }
+
+        .auth-badge:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* WHATSAPP FIXO */
+        .whatsapp-fixed {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #25D366;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+            z-index: 1000;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .whatsapp-fixed:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 30px rgba(37, 211, 102, 0.6);
+        }
+
+        /* HEADER PRINCIPAL - CORRIGIDO */
+        .main-header {
+            background: var(--white);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.97);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            position: relative;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+            margin-right: 25px;
+        }
+
+        .logo {
+            height: 70px;
+            transition: var(--transition);
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-main {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary-color);
+            line-height: 1.1;
+        }
+
+        .logo-subtitle {
+            font-size: 13px;
+            color: var(--medium-gray);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .partnership-badge {
+            background: linear-gradient(45deg, var(--secondary-color), var(--rock-color));
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 5px;
+            display: inline-block;
+            width: fit-content;
+        }
+
+        .mec-badge {
+            background: linear-gradient(45deg, var(--accent-color), var(--rock-dark));
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        /* NAVEGAÇÃO PRINCIPAL - CORRIGIDA */
+        .main-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 35px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            font-weight: 600;
+            color: var(--dark-gray);
+            padding: 8px 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: var(--transition);
+            text-decoration: none !important;
+            border-bottom: 2px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--rock-color);
+        }
+
+        .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--rock-color);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-whatsapp-header {
+            background: #25D366;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .btn-whatsapp-header:hover {
+            background: #128C7E;
+            transform: translateY(-2px);
+        }
+
+        /* Botão do menu mobile */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--primary-color);
+            cursor: pointer;
+            padding: 10px;
+            margin-left: 10px;
+        }
+
+        /* HERO SECTION */
+        .hero {
+            position: relative;
+            padding: 180px 0 120px;
+            overflow: hidden;
+            background: linear-gradient(135deg,
+                    rgba(26, 35, 126, 0.9) 0%,
+                    rgba(41, 98, 255, 0.85) 50%,
+                    rgba(121, 85, 72, 0.8) 100%);
+        }
+
+        .hero-bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+        }
+
+        .hero-title {
+            font-size: 3.8rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 25px;
+            background: linear-gradient(45deg, #fff, #e3f2fd, var(--rock-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero-subtitle {
+            font-size: 1.4rem;
+            margin-bottom: 40px;
+            color: rgba(255, 255, 255, 0.95);
+            font-weight: 300;
+            max-width: 700px;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .hero-badge {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        /* SEÇÃO DE PARCERIA */
+        .partnership-section {
+            background: linear-gradient(135deg, var(--light-gray), var(--light-blue));
+            padding: 80px 0;
+            position: relative;
+        }
+
+        .partnership-content {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 50px;
+            box-shadow: var(--shadow);
+            border-left: 5px solid var(--rock-color);
+        }
+
+        .legal-stamp {
+            background: linear-gradient(45deg, var(--primary-color), var(--rock-dark));
+            color: white;
+            padding: 15px 25px;
+            border-radius: var(--border-radius);
+            margin-top: 30px;
+            display: inline-block;
+        }
+
+        /* CURSOS EM DESTAQUE */
+        .courses-section {
+            padding: 100px 0;
+            background: var(--light-gray);
+        }
+
+        .courses-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .course-tab-btn {
+            padding: 15px 30px;
+            background: var(--white);
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 600;
+            color: var(--medium-gray);
+        }
+
+        .course-tab-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .course-tab-btn:hover:not(.active) {
+            border-color: var(--rock-color);
+            color: var(--rock-color);
+        }
+
+        /* SISTEMA DE PESQUISA DE CURSOS */
+        .course-search-container {
+            max-width: 600px;
+            margin: 0 auto 40px;
+            position: relative;
+        }
+
+        .course-search {
+            width: 100%;
+            padding: 16px 50px 16px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50px;
+            font-size: 16px;
+            transition: var(--transition);
+        }
+
+        .course-search:focus {
+            border-color: var(--rock-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(121, 85, 72, 0.1);
+        }
+
+        .search-icon-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--medium-gray);
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .courses-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .course-card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border: 1px solid #e0e0e0;
+        }
+
+        .course-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--rock-color);
+        }
+
+        .course-header {
+            padding: 25px;
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-blue));
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .course-header.rock-bg {
+            background: linear-gradient(135deg, var(--rock-color), var(--purple));
+        }
+
+        .course-category {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .course-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* MODAIS */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 500px;
+            padding: 40px;
+            text-align: center;
+            animation: modalSlideIn 0.4s ease;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--medium-gray);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .whatsapp-btn-large {
+            background: #25D366;
+            color: white;
+            padding: 18px 35px;
+            border-radius: 50px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .whatsapp-btn-large:hover {
+            background: #128C7E;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(37, 211, 102, 0.3);
+        }
+
+        /* OFERTAS ACADÊMICAS */
+        .academic-offers {
+            padding: 100px 0;
+            background: linear-gradient(135deg, var(--white), var(--light-gray));
+        }
+
+        .offer-category {
+            margin-bottom: 60px;
+        }
+
+        .offer-category h3 {
+            color: purple;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--rock-light);
+            font-size: 1.8rem;
+        }
+
+        .offer-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .offer-item {
+            background: var(--white);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border-left: 4px solid var(--rock-color);
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .offer-item:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        /* ÁREA DE DOCUMENTOS */
+        .documents-section {
+            background: linear-gradient(135deg, var(--primary-dark), var(--dark-blue));
+            color: white;
+            padding: 80px 0;
+        }
+
+        .documents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+
+        .document-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            text-align: center;
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+
+        .document-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px);
+        }
+
+        /* FAQ E OUVIDORIA - CORRIGIDO */
+        .faq-section {
+            padding: 100px 0;
+        }
+
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 20px;
+            background: var(--light-gray);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .faq-question:hover {
+            background: var(--light-blue);
+        }
+
+        .faq-question i {
+            transition: transform 0.3s;
+        }
+
+        .faq-item.active .faq-question i {
+            transform: rotate(180deg);
+        }
+
+        .faq-answer {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s, padding 0.3s;
+        }
+
+        .faq-item.active .faq-answer {
+            padding: 20px;
+            max-height: 500px;
+        }
+
+        .ouvidoria-box {
+            background: linear-gradient(135deg, var(--rock-light), var(--light-blue));
+            padding: 40px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        /* FOOTER */
+        .main-footer {
+            background: linear-gradient(135deg, var(--primary-dark), #0a1640);
+            color: white;
+            padding: 80px 0 30px;
+            position: relative;
+        }
+
+        .footer-wave {
+            position: absolute;
+            top: -100px;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%231a237e'%3E%3C/path%3E%3C/svg%3E");
+            background-size: 1200px 100px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            display: inline-block;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .qr-code-img {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* BOTÕES */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 32px;
+            background: linear-gradient(45deg, var(--secondary-color), var(--secondary-dark));
+            color: white;
+            border-radius: 50px;
+            font-weight: 600;
+            transition: var(--transition);
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 111, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, var(--primary-color), var(--dark-blue));
+        }
+
+        .btn-rock {
+            background: linear-gradient(45deg, var(--rock-color), purple);
+        }
+
+        .mec-verified {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-left: 15px;
+        }
+
+        /* SEÇÃO DE IMAGENS */
+        .image-section {
+            padding: 80px 0;
+            background: var(--light-gray);
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .campus-image {
+            width: 100%;
+            height: 250px;
+            border-radius: var(--border-radius);
+            object-fit: cover;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .campus-image:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-hover);
+        }
+
+
+        @media (max-width: 992px) {
+            .main-nav {
+                position: relative;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .nav-menu {
+                display: none;
+                position: absolute;
+                top: 100%;
+                right: 0;
+                width: 300px;
+                background: var(--white);
+                flex-direction: column;
+                padding: 20px;
+                box-shadow: var(--shadow-hover);
+                z-index: 1000;
+                border-radius: var(--border-radius);
+                margin-top: 10px;
+            }
+
+            .nav-menu.active {
+                display: flex;
+            }
+
+            .nav-item {
+                width: 100%;
+            }
+
+            .nav-link {
+                padding: 12px 15px;
+                border-radius: 8px;
+                width: 100%;
+            }
+
+            .nav-link:hover {
+                background: var(--light-gray);
+            }
+
+            .hero-title {
+                font-size: 2.8rem;
+            }
+        }
+
+        /* ESTILOS GERAIS */
+        section {
+            padding: 100px 0;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(45deg, var(--rock-color), var(--secondary-color));
+            border-radius: 2px;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--medium-gray);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 1200px) {
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .hero-title {
+                font-size: 3.2rem;
+            }
+        }
+
+        /* ===== TABLET ===== */
+        @media (max-width: 1024px) {
+            .hero-title {
+                font-size: 2.8rem;
+            }
+
+            .courses-grid,
+            .documents-grid,
+            .offer-list {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* ===== CELULAR ===== */
+        @media (max-width: 768px) {
+
+            .container {
+                padding: 0 16px;
+            }
+
+            .logo-container {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+
+            .main-nav {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .nav-menu {
+                width: 100%;
+                left: 0;
+                right: auto;
+            }
+
+            .top-header-container {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+
+            .top-header-left,
+            .top-header-right {
+                justify-content: center;
+                width: 100%;
+            }
+
+            .logo {
+                height: 55px;
+            }
+
+            .logo-main {
+                font-size: 22px;
+            }
+
+            .hero {
+                padding: 120px 0 80px;
+            }
+
+            .hero-title {
+                font-size: 2.2rem;
+                line-height: 1.2;
+            }
+
+            .hero-subtitle {
+                font-size: 1.05rem;
+            }
+
+            .courses-grid,
+            .image-grid,
+            .documents-grid,
+            .offer-list,
+            .footer-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .btn,
+            .btn-whatsapp-header {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .section-title {
+                font-size: 2.2rem;
+            }
+
+            .top-header {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- WhatsApp Fixo -->
+    <a href="https://wa.me/5521980075685?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20os%20cursos%20da%20FACOP"
+        target="_blank" class="whatsapp-fixed">
+        <i class="fab fa-whatsapp"></i>
+    </a>
+
+    <!-- Top Header -->
+    <div class="top-header">
+        <div class="container top-header-container">
+            <div class="top-header-left">
+                <a href="tel:+551133020501" class="header-contact">
+                    <i class="fas fa-phone-alt"></i> (21) 99002-0262
+                    <a href="mailto:contato@centroeducacionalunificado.com.br" class="header-contact">
+                        <i class="fas fa-envelope"></i> Matriz: Av. Paulista, 1000 - São Paulo/SP <i
+                            class="fas fa-minus"></i>
+                        Polos em todas as regiões brasileiras
+                    </a>
+                    <div class="header-contact">
+                        <i class="fas fa-clock"></i> Seg-Sab: 8h às 22h &nbsp;&nbsp;
+                        <i class="fas fa-phone-alt"></i> (11) 3302-0501
+                    </div>
+                </a>
+            </div>
+            <div class="top-header-right">
+                <a href="/validar-documento" class="auth-badge">
+                    <i class="fas fa-file-certificate"></i> Validar Documento
+                </a>
+
+                <div class="header-social">
+                    <a href="https://wa.me/5521990020262" target="_blank" class="social-icon">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
+                    <a href="https://wa.me/5521990020262" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.instagram.com/centraldoalunouniversitario/" class="social-icon"><i
+                            class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Header -->
+    <header class="main-header">
+        <div class="container header-content">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
+                <div class="logo-text">
+                    <div class="logo-main">FACOP</span></div>
+                    <div class="logo-subtitle">em parceria</div>
+                    <div class="partnership-badge">
+                        <i class="fas fa-handshake"></i> SiGEU
+                    </div>
+                </div>
+            </div>
+
+            <nav class="main-nav">
+                <ul class="nav-menu" id="navMenu">
+                    <li class="nav-item"><a href="#home" class="nav-link active">Início</a></li>
+                    <li class="nav-item"><a href="#courses" class="nav-link">Cursos</a></li>
+                    <li class="nav-item"><a href="#disciplinas-isoladas" class="nav-link">Disciplinas Isoladas</a></li>
+                    <li class="nav-item"><a href="#academic" class="nav-link">Modalidades</a></li>
+                    <li class="nav-item"><a href="#documents" class="nav-link">Documentos</a></li>
+                    <li class="nav-item"><a href="#faq" class="nav-link">FAQ</a></li>
+                    <li class="nav-item"><a href="#contact" class="nav-link">Contato</a></li>
+                </ul>
+
+                <div class="header-actions">
+                    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20falar%20com%20a%20equipe%20comercial%20da%20FACOP"
+                        target="_blank" class="btn-whatsapp-header">
+                        <i class="fab fa-whatsapp"></i> Matrícula
+                    </a>
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Aluno
+                    </a>
+                </div>
+
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+
+    <!-- Hero Suporte Pedagógico -->
+    <section class="hero" id="home">
+        <canvas class="hero-bg-canvas" id="heroCanvas"></canvas>
+
+        <div class="container">
+            <div class="hero-content">
+
+                <div style="font-size: 70px; margin-bottom: 25px; color: #25D366;">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+
+                <h1 class="hero-title">
+                    Suporte Pedagógico
+                </h1>
+
+                <p class="hero-subtitle">
+                    Precisa de ajuda acadêmica, dúvidas sobre disciplinas, avaliações ou histórico?
+                    Nossa equipe pedagógica está pronta para te atender diretamente pelo WhatsApp.
+                </p>
+
+                <div class="hero-badges">
+                    <div class="hero-badge">
+                        <i class="fas fa-headset"></i> Atendimento Humanizado
+                    </div>
+                    <div class="hero-badge">
+                        <i class="fas fa-clock"></i> Segunda a Sexta – 8h às 20h
+                    </div>
+                    <div class="hero-badge">
+                        <i class="fas fa-graduation-cap"></i> Suporte Acadêmico Oficial
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+
+                    <a href="https://wa.me/5521980075685?text=Olá!%20Preciso%20de%20suporte%20pedagógico%20referente%20às%20disciplinas."
+                       target="_blank"
+                       class="btn"
+                       style="background:#25D366;">
+                        <i class="fab fa-whatsapp"></i> Falar com Suporte
+                    </a>
+
+                    <a href="/" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Voltar ao Início
+                    </a>
+
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container" style="text-align:center; padding:40px 0;">
+            © 2026 FACOP - Sistema de Gestão Educacional Unificada <br>
+            Suporte Pedagógico Oficial
+        </div>
+    </footer>
+
+    <script>
+    const canvas = document.getElementById('heroCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+    }
+
+    class Particle {
+        constructor() { this.reset(); }
+        reset() {
+            this.x = Math.random() * canvas.width;
+            this.y = Math.random() * canvas.height;
+            this.size = Math.random() * 3 + 1;
+            this.speedX = Math.random() * 1 - 0.5;
+            this.speedY = Math.random() * 1 - 0.5;
+            this.color = `rgba(255,255,255,${Math.random() * 0.3 + 0.1})`;
+        }
+        update() {
+            this.x += this.speedX;
+            this.y += this.speedY;
+            if (this.x > canvas.width) this.x = 0;
+            if (this.x < 0) this.x = canvas.width;
+            if (this.y > canvas.height) this.y = 0;
+            if (this.y < 0) this.y = canvas.height;
+        }
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    let particles = [];
+
+    function initParticles() {
+        particles = [];
+        const count = Math.floor((canvas.width * canvas.height) / 10000);
+        for (let i = 0; i < count; i++) {
+            particles.push(new Particle());
+        }
+    }
+
+    function animateParticles() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+        requestAnimationFrame(animateParticles);
+    }
+
+    window.addEventListener('load', () => {
+        resizeCanvas();
+        initParticles();
+        animateParticles();
+    });
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        initParticles();
+    });
+</script>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Gerenciar Disciplinas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Disciplinas do Aluno</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/alunos" class="logout-btn">← Voltar para Alunos</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="margin-left: 0;">
+            <h1 class="page-title">📚 Disciplinas de {{ aluno.nome }}</h1>
+
+            <!-- ✅ MENSAGEM DE SUCESSO -->
+            {% if request.args.get('sucesso') %}
+            <div class="alert alert-success" style="margin-bottom: 15px;">
+                ✅ {{ request.args.get('sucesso') }}
+            </div>
+            {% endif %}
+
+            <div class="mew-card">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Disciplina</th>
+                            <th>Status</th>
+                            <th>Data de Início</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in disciplinas %}
+                        <tr>
+                            <td>{{ d.nome }}</td>
+
+                            <td>
+                                {% if d.data_inicio %}
+                                <span style="color: green; font-weight: 500;">Matriculado</span>
+                                {% else %}
+                                <span style="color: red; font-weight: 500;">Não matriculado</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if d.data_inicio %}
+                                <!-- 🔄 EDITAR DATA (DATA ATUAL APARECE) -->
+                                <form method="post" style="display:inline-flex; gap:6px; align-items:center;">
+                                    <input type="hidden" name="acao" value="editar_data">
+                                    <input type="hidden" name="disciplina_id" value="{{ d.id }}">
+
+                                    <input
+                                        type="date"
+                                        name="data_inicio"
+                                        value="{{ d.data_inicio_input }}"
+                                        required
+                                    >
+
+                                    <button class="btn btn-primary btn-sm">
+                                        🔄 Atualizar
+                                    </button>
+                                </form>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                {% if d.data_inicio %}
+                                <!-- ❌ REMOVER -->
+                                <form method="post" style="display:inline;">
+                                    <input type="hidden" name="acao" value="remover">
+                                    <input type="hidden" name="disciplina_id" value="{{ d.id }}">
+                                    <button class="btn btn-danger btn-sm">
+                                        ❌ Remover
+                                    </button>
+                                </form>
+                                {% else %}
+                                <!-- ➕ ADICIONAR -->
+                                <form method="post" style="display:inline-flex; gap:6px; align-items:center;">
+                                    <input type="hidden" name="acao" value="adicionar">
+                                    <input type="hidden" name="disciplina_id" value="{{ d.id }}">
+
+                                    <input
+                                        type="date"
+                                        name="data_inicio"
+                                        required
+                                    >
+
+                                    <button class="btn btn-success btn-sm">
+                                        ➕ Adicionar
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+
+</html>

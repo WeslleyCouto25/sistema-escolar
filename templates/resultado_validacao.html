@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado da Validação</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .container {
+            max-width: 700px;
+            margin: 50px auto;
+            padding: 30px;
+            text-align: center;
+        }
+        .valid-box {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .invalid-box {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .document-info {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if valido %}
+        <h1 style="color: #28a745;">✅ Documento Válido</h1>
+        <div class="valid-box">
+            <h3>Documento autenticado com sucesso!</h3>
+            <p>Código: <strong>{{ codigo }}</strong></p>
+        </div>
+        
+        {% if documento %}
+        <div class="document-info">
+            <h3>📄 Informações do Documento</h3>
+            <p><strong>Aluno:</strong> {{ documento.aluno_nome }}</p>
+            <p><strong>RA:</strong> {{ documento.aluno_ra }}</p>
+            <p><strong>Tipo:</strong> {{ documento.tipo }}</p>
+            <p><strong>Data de Emissão:</strong> {{ documento.data_geracao }}</p>
+            
+            <div style="margin-top: 20px;">
+                <a href="/ver-documento/{{ codigo }}" target="_blank" class="btn btn-primary">
+                    👁️ Ver Documento Completo
+                </a>
+                <button onclick="window.print()" class="btn btn-secondary" style="margin-left: 10px;">
+                    🖨️ Imprimir
+                </button>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <h1 style="color: #dc3545;">❌ Documento Não Encontrado</h1>
+        <div class="invalid-box">
+            <h3>{{ mensagem }}</h3>
+            <p>Código: <strong>{{ codigo }}</strong></p>
+        </div>
+        {% endif %}
+        
+        <div style="margin-top: 30px;">
+            <a href="/validar-documento" class="btn btn-outline-primary">
+                🔍 Validar Outro Documento
+            </a>
+            <a href="/" class="btn" style="margin-left: 10px;">
+                🏠 Página Inicial
+            </a>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 15px; background: #f8f9fa; border-radius: 10px; font-size: 14px;">
+            <p><strong>📌 Nota:</strong> Este documento foi emitido digitalmente pela FACOP Educação.</p>
+            <p>Código de autenticação único: {{ codigo }}</p>
+        </div>
+    </div>
+</body>
+</html>

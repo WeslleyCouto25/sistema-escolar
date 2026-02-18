@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Validar Documento - SiGEu FACOP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #1a237e, #0d1b6b);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .card-body {
+            padding: 30px;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .info-box-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 10px;
+        }
+        
+        .info-box-text {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            border-color: #1a237e;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(26,35,126,0.1);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #1a237e, #0d1b6b);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(26,35,126,0.4);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #1a237e;
+            border: 2px solid #1a237e;
+        }
+        
+        .btn-secondary:hover {
+            background: #f0f2f5;
+        }
+        
+        .separator {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 20px 0;
+            color: #999;
+        }
+        
+        .separator::before,
+        .separator::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .separator::before {
+            margin-right: 10px;
+        }
+        
+        .separator::after {
+            margin-left: 10px;
+        }
+        
+        .qr-scanner {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .qr-placeholder {
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .qr-placeholder:hover {
+            border-color: #1a237e;
+            background: #f0f2f5;
+        }
+        
+        .qr-placeholder i {
+            font-size: 50px;
+            color: #999;
+            margin-bottom: 10px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255,255,255,0.8);
+            font-size: 12px;
+        }
+        
+        .features {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .feature-item {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .feature-item i {
+            font-size: 20px;
+            color: #1a237e;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="logo">🔍</div>
+                <div class="title">Validar Documento</div>
+                <div class="subtitle">SiGEu - FACOP</div>
+            </div>
+            
+            <div class="card-body">
+                <div class="info-box">
+                    <div class="info-box-title">✓ Documentos Oficiais</div>
+                    <div class="info-box-text">
+                        Valide históricos escolares, declarações e certificados emitidos pelo sistema SiGEu.
+                        Escaneie o QR Code ou digite o código de autenticação.
+                    </div>
+                </div>
+                
+                <div class="qr-scanner">
+                    <div class="qr-placeholder" onclick="simularLeituraQR()">
+                        <i class="fas fa-qrcode"></i>
+                        <p><strong>📱 Escanear QR Code</strong></p>
+                        <p style="font-size: 12px; color: #999;">Clique para simular leitura (demo)</p>
+                    </div>
+                </div>
+                
+                <div class="separator">ou</div>
+                
+                <form action="/validar-documento" method="GET" id="formValidar">
+                    <div class="form-group">
+                        <label for="codigo">Digite o Código de Autenticação</label>
+                        <input type="text" 
+                               id="codigo" 
+                               name="codigo" 
+                               placeholder="Ex: HIST-12345678-2024-ABCD" 
+                               value="{{ request.args.get('codigo', '') }}"
+                               required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        🔍 Validar Documento
+                    </button>
+                    
+                    <a href="/" class="btn btn-secondary">
+                        🏠 Voltar para o Portal
+                    </a>
+                </form>
+                
+                <div class="features">
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <p>Autenticado</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-qrcode"></i>
+                        <p>QR Code</p>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-lock"></i>
+                        <p>Hash SHA-256</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>SiGEu - Sistema de Gestão Educacional | FACOP - Faculdade do Centro Oeste Paulista</p>
+            <p>© 2024 - Documentos eletrônicos com validade legal</p>
+        </div>
+    </div>
+    
+    <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+    <script>
+        function simularLeituraQR() {
+            // Simular códigos para demonstração
+            const codigosDemo = [
+                'HIST-12345678-2024-A1B2',
+                'HIST-87654321-2024-C3D4',
+                'HIST-11223344-2024-E5F6'
+            ];
+            
+            const codigoAleatorio = codigosDemo[Math.floor(Math.random() * codigosDemo.length)];
+            document.getElementById('codigo').value = codigoAleatorio;
+            
+            // Animação
+            const btn = document.querySelector('.qr-placeholder');
+            btn.style.backgroundColor = '#e8f5e8';
+            btn.style.borderColor = '#28a745';
+            
+            setTimeout(() => {
+                document.getElementById('formValidar').submit();
+            }, 500);
+        }
+        
+        // Se tiver código na URL, validar automaticamente
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const codigo = urlParams.get('codigo');
+            
+            if (codigo && codigo.length > 0) {
+                document.getElementById('codigo').value = codigo;
+                setTimeout(() => {
+                    document.getElementById('formValidar').submit();
+                }, 500);
+            }
+        }
+    </script>
+</body>
+</html>

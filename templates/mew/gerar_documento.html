@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Gerar Documentos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .box {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-grande {
+            padding: 15px 30px;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .aluno-info {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #1a237e;
+        }
+
+        .aluno-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .aluno-item {
+            background: white;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        .tipo-documento {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .tipo-card {
+            flex: 1;
+            min-width: 200px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tipo-card:hover {
+            border-color: #1a237e;
+            background: #e8eaf6;
+            transform: translateY(-2px);
+        }
+
+        .tipo-card.selecionado {
+            border-color: #1a237e;
+            background: #e8eaf6;
+            box-shadow: 0 4px 10px rgba(26,35,126,0.2);
+        }
+
+        .tipo-card .icone {
+            font-size: 40px;
+            margin-bottom: 10px;
+            color: #1a237e;
+        }
+
+        .tipo-card h3 {
+            margin: 10px 0;
+            color: #1a237e;
+        }
+
+        .tipo-card p {
+            margin: 5px 0 0;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .disciplinas-lista {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 15px 0;
+        }
+
+        .disciplina-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .disciplina-item:hover {
+            background: #f5f5f5;
+        }
+
+        .disciplina-item.selecionada {
+            background: #e8eaf6;
+            border-left: 3px solid #1a237e;
+        }
+
+        .disciplina-item .status {
+            font-size: 11px;
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .disciplina-item .status.pendente {
+            color: #ffc107;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .info-box {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #28a745;
+        }
+
+        .documentos-anteriores {
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+
+        .documento-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <a href="/mew/dashboard" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <div class="logo-text">MEW - Gerar Documentos</div>
+        </div>
+        <div class="user-menu">
+            <a href="/mew/dashboard" class="logout-btn">🏠 Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area container">
+            <h1 class="page-title">📄 Gerar Documentos Acadêmicos</h1>
+            <p class="page-subtitle">Selecione o tipo de documento e o aluno</p>
+
+            <div class="box">
+                <h3>1. Selecione o Tipo de Documento</h3>
+                <div class="tipo-documento">
+                    <div class="tipo-card" onclick="selecionarTipo('historico')" id="card-historico">
+                        <div class="icone">📚</div>
+                        <h3>Histórico Escolar</h3>
+                        <p>Histórico completo com todas as disciplinas cursadas</p>
+                    </div>
+                    
+                    <div class="tipo-card" onclick="selecionarTipo('declaracao')" id="card-declaracao">
+                        <div class="icone">🎓</div>
+                        <h3>Declaração de Conclusão</h3>
+                        <p>Declaração de conclusão de disciplina isolada</p>
+                    </div>
+                    
+                    <div class="tipo-card" onclick="selecionarTipo('plano')" id="card-plano">
+                        <div class="icone">📋</div>
+                        <h3>Plano de Ensino</h3>
+                        <p>Plano de ensino da disciplina (em breve)</p>
+                    </div>
+                </div>
+                <input type="hidden" id="tipoSelecionado" value="">
+            </div>
+
+            <div class="box">
+                <h3>2. Selecione o Aluno</h3>
+                <select id="alunoSelect" class="form-control" onchange="carregarAluno()">
+                    <option value="">Selecione um aluno...</option>
+                    {% for aluno in alunos %}
+                    <option value="{{ aluno.id }}">{{ aluno.nome }} (RA: {{ aluno.ra }})</option>
+                    {% endfor %}
+                </select>
+
+                <div id="infoAluno" class="aluno-info" style="display: none;">
+                    <h4><i class="fas fa-user-graduate"></i> Dados do Aluno</h4>
+                    <div id="detalhesAluno"></div>
+                </div>
+            </div>
+
+            <!-- ÁREA DE DISCIPLINAS (para declaração) -->
+            <div id="areaDisciplinas" class="box" style="display: none;">
+                <h3>3. Selecione a Disciplina</h3>
+                <p>Escolha a disciplina para gerar a declaração de conclusão:</p>
+                
+                <div id="listaDisciplinas" class="disciplinas-lista">
+                    <p>Carregando disciplinas...</p>
+                </div>
+                
+                <div id="infoDisciplinaSelecionada" class="info-box" style="display: none;">
+                    <strong>✅ Disciplina selecionada:</strong> <span id="nomeDisciplinaSelecionada"></span>
+                </div>
+            </div>
+
+            <div class="box">
+                <h3>4. Configurações do Documento</h3>
+                <div class="form-group">
+                    <label style="font-weight:bold;">Ano de Referência:</label>
+                    <input type="number" id="anoReferencia" value="2026" class="form-control" style="margin-bottom:10px;">
+                </div>
+                
+                <div id="configDeclaracao" style="display: none;">
+                    <p style="background: #fff3cd; padding: 10px; border-radius: 5px;">
+                        <i class="fas fa-info-circle"></i> Será gerada uma declaração para a disciplina selecionada.
+                        A disciplina deve estar concluída (com nota final).
+                    </p>
+                </div>
+
+                <button onclick="gerarDocumento()" id="btnGerar" class="btn btn-primary btn-grande" disabled>
+                    <i class="fas fa-file-pdf"></i> GERAR DOCUMENTO
+                </button>
+
+                <div id="resultado" style="margin-top: 20px; display: none;"></div>
+            </div>
+
+            <!-- DOCUMENTOS ANTERIORES DA MESMA DISCIPLINA -->
+            <div id="documentosAnteriores" class="documentos-anteriores" style="display: none;">
+                <h3>📋 Declarações Anteriores</h3>
+                <div id="listaDocumentosAnteriores"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let tipoAtual = '';
+        let alunoIdAtual = null;
+        let disciplinaIdSelecionada = null;
+        let disciplinasData = [];
+
+        function selecionarTipo(tipo) {
+            // Remover seleção anterior
+            document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selecionado'));
+            
+            // Adicionar seleção ao card clicado
+            document.getElementById(`card-${tipo}`).classList.add('selecionado');
+            document.getElementById('tipoSelecionado').value = tipo;
+            tipoAtual = tipo;
+            
+            // Esconder área de disciplinas por padrão
+            document.getElementById('areaDisciplinas').style.display = 'none';
+            document.getElementById('configDeclaracao').style.display = 'none';
+            
+            // Se for declaração, mostrar área de disciplinas quando aluno estiver selecionado
+            if (tipo === 'declaracao' && alunoIdAtual) {
+                carregarDisciplinasParaDeclaracao(alunoIdAtual);
+            }
+            
+            // Se for plano, mostrar mensagem de em breve
+            if (tipo === 'plano') {
+                alert('Funcionalidade de Plano de Ensino estará disponível em breve!');
+                document.getElementById('tipoSelecionado').value = '';
+                document.getElementById(`card-${tipo}`).classList.remove('selecionado');
+            }
+            
+            // Habilitar/desabilitar botão
+            verificarHabilitarBotao();
+        }
+
+        async function carregarAluno() {
+            const alunoId = document.getElementById('alunoSelect').value;
+            alunoIdAtual = alunoId;
+
+            if (!alunoId) {
+                document.getElementById('infoAluno').style.display = 'none';
+                document.getElementById('areaDisciplinas').style.display = 'none';
+                document.getElementById('btnGerar').disabled = true;
+                return;
+            }
+
+            try {
+                const response = await fetch(`/mew/buscar-dados-aluno/${alunoId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('detalhesAluno').innerHTML = `
+                        <div class="aluno-grid">
+                            <div class="aluno-item">
+                                <strong>Nome:</strong><br>${data.aluno.nome}
+                            </div>
+                            <div class="aluno-item">
+                                <strong>RA:</strong><br>${data.aluno.ra}
+                            </div>
+                            <div class="aluno-item">
+                                <strong>CPF:</strong><br>${data.aluno.cpf_formatado || 'Não informado'}
+                            </div>
+                            <div class="aluno-item">
+                                <strong>Curso:</strong><br>${data.aluno.curso_referencia || 'Disciplinas Isoladas'}
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('infoAluno').style.display = 'block';
+
+                    // Se for declaração, carregar disciplinas
+                    if (tipoAtual === 'declaracao') {
+                        await carregarDisciplinasParaDeclaracao(alunoId);
+                    }
+                    
+                    verificarHabilitarBotao();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        async function carregarDisciplinasParaDeclaracao(alunoId) {
+            try {
+                const response = await fetch(`/mew/buscar-disciplinas-aluno/${alunoId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    disciplinasData = data.disciplinas;
+                    
+                    // Filtrar apenas disciplinas concluídas (com nota final)
+                    const disciplinasConcluidas = disciplinasData.filter(d => 
+                        d.status === 'APROVADO' || d.status === 'REPROVADO'
+                    );
+
+                    let html = '';
+                    if (disciplinasConcluidas.length === 0) {
+                        html = '<p style="color: #856404; background: #fff3cd; padding: 10px; border-radius: 5px;">⚠️ Nenhuma disciplina concluída encontrada para este aluno.</p>';
+                    } else {
+                        disciplinasConcluidas.forEach(d => {
+                            const statusClass = d.status === 'APROVADO' ? 'badge-success' : 'badge-warning';
+                            html += `
+                                <div class="disciplina-item" onclick="selecionarDisciplina(${d.id}, '${d.nome}')">
+                                    <strong>${d.nome}</strong> 
+                                    <span class="badge ${statusClass}" style="float: right;">${d.status}</span>
+                                    <br>
+                                    <span style="font-size: 11px; color: #666;">
+                                        Nota: ${d.nota || 'N/I'} | Carga: ${d.carga}h
+                                    </span>
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    document.getElementById('listaDisciplinas').innerHTML = html;
+                    document.getElementById('areaDisciplinas').style.display = 'block';
+                    document.getElementById('configDeclaracao').style.display = 'block';
+                    
+                    // Buscar documentos anteriores
+                    await buscarDocumentosAnteriores(alunoId);
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        async function buscarDocumentosAnteriores(alunoId) {
+            try {
+                const response = await fetch(`/mew/buscar-documentos-aluno/${alunoId}?tipo=declaracao_conclusao`);
+                const data = await response.json();
+                
+                if (data.success && data.documentos.length > 0) {
+                    let html = '';
+                    data.documentos.forEach(doc => {
+                        html += `
+                            <div class="documento-item">
+                                <div>
+                                    <strong>${doc.disciplina_nome || 'Disciplina'}</strong><br>
+                                    <small>Emitido: ${doc.data_emissao}</small>
+                                </div>
+                                <div>
+                                    <a href="/ver-documento/${doc.codigo}" target="_blank" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye"></i> Ver
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('listaDocumentosAnteriores').innerHTML = html;
+                    document.getElementById('documentosAnteriores').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        function selecionarDisciplina(id, nome) {
+            disciplinaIdSelecionada = id;
+            document.getElementById('nomeDisciplinaSelecionada').innerText = nome;
+            document.getElementById('infoDisciplinaSelecionada').style.display = 'block';
+            
+            // Remover seleção anterior
+            document.querySelectorAll('.disciplina-item').forEach(d => d.classList.remove('selecionada'));
+            
+            // Adicionar seleção ao item clicado
+            event.currentTarget.classList.add('selecionada');
+            
+            verificarHabilitarBotao();
+        }
+
+        function verificarHabilitarBotao() {
+            const btn = document.getElementById('btnGerar');
+            
+            if (tipoAtual === 'historico' && alunoIdAtual) {
+                btn.disabled = false;
+            } else if (tipoAtual === 'declaracao' && alunoIdAtual && disciplinaIdSelecionada) {
+                btn.disabled = false;
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        async function gerarDocumento() {
+            const alunoId = document.getElementById('alunoSelect').value;
+            const ano = document.getElementById('anoReferencia').value;
+            const tipo = tipoAtual;
+            
+            const btn = document.getElementById('btnGerar');
+            const originalText = btn.innerHTML;
+
+            if (!alunoId) {
+                alert('Selecione um aluno!');
+                return;
+            }
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GERANDO...';
+            btn.disabled = true;
+
+            try {
+                let url = '';
+                let bodyData = {};
+
+                if (tipo === 'historico') {
+                    url = '/mew/gerar-historico-automatico';
+                    bodyData = {
+                        aluno_id: alunoId,
+                        ano_historico: ano
+                    };
+                } else if (tipo === 'declaracao') {
+                    if (!disciplinaIdSelecionada) {
+                        alert('Selecione uma disciplina!');
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+                    
+                    url = '/mew/gerar-declaracao-conclusao';
+                    bodyData = {
+                        aluno_id: alunoId,
+                        disciplina_id: disciplinaIdSelecionada,
+                        ano_historico: ano
+                    };
+                }
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(bodyData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let tipoDoc = tipo === 'historico' ? 'Histórico' : 'Declaração';
+                    
+                    document.getElementById('resultado').innerHTML = `
+                        <div style="background: #d4edda; color: #155724; padding: 20px; border-radius: 10px; border: 1px solid #c3e6cb;">
+                            <h3><i class="fas fa-check-circle"></i> ${tipoDoc} gerado com sucesso!</h3>
+                            <p><strong>Código:</strong> ${data.codigo}</p>
+                            <p><strong>Aluno:</strong> ${data.aluno_nome} (RA: ${data.aluno_ra})</p>
+                            ${data.disciplina_nome ? `<p><strong>Disciplina:</strong> ${data.disciplina_nome}</p>` : ''}
+                            
+                            <div style="margin-top: 15px;">
+                                <a href="/ver-documento/${data.codigo}" target="_blank" class="btn btn-primary">
+                                    <i class="fas fa-eye"></i> Ver Documento
+                                </a>
+                                <a href="/validar-documento/${data.codigo}" target="_blank" class="btn btn-success" style="margin-left: 10px;">
+                                    <i class="fas fa-check"></i> Validar
+                                </a>
+                                <button onclick="copiarCodigo('${data.codigo}')" class="btn btn-secondary" style="margin-left: 10px;">
+                                    <i class="fas fa-copy"></i> Copiar Código
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('resultado').style.display = 'block';
+                    
+                    // Recarregar documentos anteriores
+                    if (tipo === 'declaracao') {
+                        await buscarDocumentosAnteriores(alunoId);
+                    }
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao gerar documento: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function copiarCodigo(codigo) {
+            navigator.clipboard.writeText(codigo);
+            alert('Código copiado: ' + codigo);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Notas dos Capítulos - {{ aluno.nome }}</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        h1 { color: #003366; }
+        .nota-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .capitulo-item { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 10px; background: #f9f9f9; }
+        input[type="number"] { width: 80px; padding: 5px; }
+        .btn { background: #003366; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #002244; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Notas - {{ aluno.nome }} ({{ aluno.ra }})</h1>
+        <h2>Disciplina: {{ disciplina.nome }}</h2>
+        
+        <div class="nota-section">
+            <h3>Notas dos Capítulos (0-10)</h3>
+            
+            <div id="capitulos-container">
+                {% for nota in notas_capitulos %}
+                <div class="capitulo-item">
+                    <strong>Capítulo {{ nota.capitulo }}:</strong>
+                    <input type="number" id="cap_{{ nota.id }}" value="{{ nota.nota }}" min="0" max="10" step="0.1" placeholder="Ex: 7.5">
+                    <button onclick="salvarNota({{ nota.id }}, {{ nota.capitulo }})">💾</button>
+                </div>
+                {% endfor %}
+                
+                <!-- Novo capítulo -->
+                <div class="capitulo-item">
+                    <strong>Novo Capítulo:</strong>
+                    <input type="number" id="novo_capitulo_numero" placeholder="Número" min="1">
+                    <input type="number" id="novo_capitulo_nota" placeholder="Nota (0-10)" min="0" max="10" step="0.1">
+                    <button onclick="adicionarCapitulo()">+ Adicionar</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="nota-section" style="background: #fff3cd;">
+            <h3>📝 Prova Final</h3>
+            <p>Nota da Prova Final (0-10):</p>
+            <input type="number" id="nota_final" value="{{ nota_final or '' }}" min="0" max="10" step="0.1" placeholder="Ex: 8.0">
+            <button onclick="salvarProvaFinal()">💾 Salvar Nota Final</button>
+            <p><small><i>O sistema calculará a média e status automaticamente.</i></small></p>
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <a href="/mew/gerenciar-notas/aluno/{{ aluno.id }}" class="btn">← Voltar para Disciplinas</a>
+        </div>
+    </div>
+
+    <script>
+        function salvarNota(notaId, capitulo) {
+            const nota = document.getElementById(`cap_${notaId}`).value;
+            
+            fetch('/mew/salvar-nota-capitulo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    aluno_id: {{ aluno.id }},
+                    disciplina_id: {{ disciplina.id }},
+                    nota_id: notaId,
+                    capitulo: capitulo,
+                    nota: nota
+                })
+            }).then(response => response.json())
+              .then(data => alert(data.message));
+        }
+        
+        function adicionarCapitulo() {
+            const numero = document.getElementById('novo_capitulo_numero').value;
+            const nota = document.getElementById('novo_capitulo_nota').value;
+            
+            if (!numero || !nota) {
+                alert('Preencha número e nota!');
+                return;
+            }
+            
+            fetch('/mew/adicionar-nota-capitulo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    aluno_id: {{ aluno.id }},
+                    disciplina_id: {{ disciplina.id }},
+                    capitulo: numero,
+                    nota: nota
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  alert(data.message);
+                  location.reload();
+              });
+        }
+        
+        function salvarProvaFinal() {
+            const nota = document.getElementById('nota_final').value;
+            
+            fetch('/mew/salvar-nota-final', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    aluno_id: {{ aluno.id }},
+                    disciplina_id: {{ disciplina.id }},
+                    nota_final: nota
+                })
+            }).then(response => response.json())
+              .then(data => alert(data.message));
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Validação de Documento - SiGEu FACOP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .card-header.valido {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .card-header.invalido {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .card-header.expirado {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        
+        .status-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .status-title {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .status-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .card-body {
+            padding: 30px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #1a237e;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            word-break: break-word;
+        }
+        
+        .info-value.small {
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .hash-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .hash-title {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .hash-value {
+            font-family: monospace;
+            font-size: 12px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            word-break: break-all;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #1a237e;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0d1b6b;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeeba;
+        }
+        
+        @media (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header {% if valido and status == 'válido' %}valido{% elif not valido %}invalido{% else %}expirado{% endif %}">
+                <div class="status-icon">
+                    {% if valido and status == 'válido' %}
+                    ✅
+                    {% elif not valido %}
+                    ❌
+                    {% else %}
+                    ⚠️
+                    {% endif %}
+                </div>
+                <div class="status-title">
+                    {% if valido and status == 'válido' %}
+                    DOCUMENTO VÁLIDO
+                    {% elif not valido %}
+                    DOCUMENTO NÃO ENCONTRADO
+                    {% else %}
+                    DOCUMENTO EXPIRADO
+                    {% endif %}
+                </div>
+                <div class="status-subtitle">
+                    {% if valido and status == 'válido' %}
+                    Este documento é autêntico e está registrado no sistema SiGEu
+                    {% elif not valido %}
+                    O código informado não corresponde a nenhum documento válido
+                    {% else %}
+                    Este documento expirou e não é mais válido
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card-body">
+                {% if valido %}
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Código de Autenticação</div>
+                        <div class="info-value">{{ codigo }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Aluno</div>
+                        <div class="info-value">{{ documento.aluno_nome }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">RA</div>
+                        <div class="info-value">{{ documento.aluno_ra }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Tipo de Documento</div>
+                        <div class="info-value">
+                            {% if documento.tipo == 'historico' %}
+                            Histórico Escolar
+                            {% else %}
+                            {{ documento.tipo }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Data de Emissão</div>
+                        <div class="info-value">{{ documento.data_emissao }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <div class="info-label">Válido até</div>
+                        <div class="info-value">{{ documento.data_validade }}</div>
+                    </div>
+                </div>
+                
+                <div class="hash-box">
+                    <div class="hash-title">🔐 Hash do Documento (SHA-256)</div>
+                    <div class="hash-value">{{ documento.hash_documento }}</div>
+                </div>
+                
+                {% if status == 'expirado' %}
+                <div class="warning-box">
+                    <strong>⚠️ Documento Expirado</strong>
+                    <p style="margin-top: 5px;">Este documento foi emitido em {{ documento.data_emissao }} e expirou em {{ documento.data_validade }}. Para obter uma via atualizada, solicite ao setor de secretaria.</p>
+                </div>
+                {% endif %}
+                
+                <div class="actions">
+                    <a href="/ver-documento/{{ codigo }}" target="_blank" class="btn btn-primary">
+                        📄 Visualizar Documento
+                    </a>
+                    <button onclick="window.print()" class="btn btn-secondary">
+                        🖨️ Imprimir Validação
+                    </button>
+                </div>
+                
+                {% else %}
+                <div class="warning-box">
+                    <strong>❌ Documento não encontrado</strong>
+                    <p style="margin-top: 5px;">O código <strong>{{ codigo }}</strong> não corresponde a nenhum documento válido em nosso sistema. Verifique se o código foi digitado corretamente.</p>
+                </div>
+                
+                <div class="actions">
+                    <a href="/validar-documento" class="btn btn-primary">
+                        🔍 Validar outro documento
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>SiGEu - Sistema de Gestão Educacional | FACOP - Faculdade do Centro Oeste Paulista</p>
+            <p>© 2024 - Todos os direitos reservados</p>
+        </div>
+    </div>
+</body>
+</html>

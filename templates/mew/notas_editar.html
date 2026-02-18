@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Editar Notas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .info-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+            color: #555;
+        }
+        
+        .notas-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .nota-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e9ecef;
+        }
+        
+        .nota-card h4 {
+            margin: 0 0 15px 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .nota-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        
+        .nota-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+            flex: 1;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .prova-final-card {
+            background: #e8f4fd;
+            border: 2px solid #007bff;
+        }
+        
+        .progress-section {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .progress-options {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .progress-btn {
+            padding: 8px 15px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .progress-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .progress-btn:hover {
+            background: #f8f9fa;
+        }
+        
+        .dates-section {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .form-inline {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            margin-top: 10px;
+        }
+        
+        .form-inline .form-group {
+            flex: 1;
+        }
+        
+        .form-inline label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .current-progress {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 10px 0;
+        }
+        
+        .back-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+        }
+        
+        .back-link {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        
+        .mensagem {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+        
+        .mensagem.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .mensagem.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Editar Notas</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/gerenciar-notas/aluno/{{ aluno.id }}" class="logout-btn">← Voltar para Disciplinas</a>
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="margin-left: 0;">
+            <h1 class="page-title">📝 Editar Notas</h1>
+            
+            <div class="info-box">
+                <div class="info-row">
+                    <div class="info-label">Aluno:</div>
+                    <div>{{ aluno.nome }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">RA:</div>
+                    <div>{{ aluno.ra }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Disciplina:</div>
+                    <div>{{ disciplina.nome }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Progresso Atual:</div>
+                    <div>{{ provas_feitas }}/{{ total_capitulos }} provas ({{ progresso_atual }}%)</div>
+                </div>
+            </div>
+            
+            <!-- Mensagens de feedback -->
+            <div id="mensagem" class="mensagem"></div>
+            
+            <!-- ========= PROGRESSO DO CURSO ========= -->
+            <div class="progress-section">
+                <h3 class="section-title">📊 Progresso do Curso</h3>
+                <p>Defina o progresso do aluno na disciplina (quantas provas ele já fez):</p>
+                
+                <div class="current-progress">
+                    Progresso Atual: {{ progresso_atual }}%
+                </div>
+                
+                <div class="progress-options">
+                    <div class="progress-btn {% if progresso_atual == 0 %}active{% endif %}" 
+                         onclick="selecionarProgresso(0)" data-value="0">
+                        0% (Nenhuma prova)
+                    </div>
+                    <div class="progress-btn {% if progresso_atual == 25 %}active{% endif %}" 
+                         onclick="selecionarProgresso(25)" data-value="25">
+                        25% (1ª prova)
+                    </div>
+                    <div class="progress-btn {% if progresso_atual == 50 %}active{% endif %}" 
+                         onclick="selecionarProgresso(50)" data-value="50">
+                        50% (2ªs provas)
+                    </div>
+                    <div class="progress-btn {% if progresso_atual == 75 %}active{% endif %}" 
+                         onclick="selecionarProgresso(75)" data-value="75">
+                        75% (3ªs provas)
+                    </div>
+                    <div class="progress-btn {% if progresso_atual == 100 %}active{% endif %}" 
+                         onclick="selecionarProgresso(100)" data-value="100">
+                        100% (4ªs provas)
+                    </div>
+                </div>
+                
+                <div class="dates-section">
+                    <h4>📅 Datas e Configurações</h4>
+                    <form id="formProgresso" class="form-inline">
+                        <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
+                        <input type="hidden" name="disciplina_id" value="{{ disciplina.id }}">
+                        <input type="hidden" name="acao" value="atualizar_progresso">
+                        <input type="hidden" id="inputProgresso" name="progresso" value="{{ progresso_atual }}">
+                        
+                        <div class="form-group">
+                            <label>Data de Início</label>
+                            <input type="date" name="data_inicio" class="nota-input" 
+                                   value="{% if datas_info and datas_info.data_inicio %}{{ datas_info.data_inicio }}{% endif %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Prova Final Liberada?</label>
+                            <select name="prova_final_aberta" class="nota-input">
+                                <option value="0" {% if not datas_info or datas_info.prova_final_aberta == 0 %}selected{% endif %}>
+                                    Não
+                                </option>
+                                <option value="1" {% if datas_info and datas_info.prova_final_aberta == 1 %}selected{% endif %}>
+                                    Sim
+                                </option>
+                            </select>
+                        </div>
+                        
+                        <button type="button" onclick="atualizarProgresso()" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar Progresso
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- ========= NOTAS DOS CAPÍTULOS ========= -->
+            <h2 class="section-title">📋 Notas dos Capítulos</h2>
+            <p>Gerencie as notas de cada capítulo (0-10):</p>
+            
+            <div class="notas-container">
+                {% for capitulo in capitulos %}
+                <div class="nota-card">
+                    <h4>{{ capitulo.titulo }}</h4>
+                    
+                    <div class="info-row">
+                        <div class="info-label">Capítulo:</div>
+                        <div>{{ loop.index }}</div>
+                    </div>
+                    
+                    <form class="form-nota" data-capitulo="{{ loop.index }}">
+                        <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
+                        <input type="hidden" name="disciplina_id" value="{{ disciplina.id }}">
+                        <input type="hidden" name="acao" value="salvar_nota">
+                        <input type="hidden" name="capitulo" value="{{ loop.index }}">
+                        
+                        <label>Nota (0-10):</label>
+                        <input type="number" name="nota" class="nota-input" min="0" max="10" step="0.1"
+                               value="{% if loop.index in notas_existentes %}{{ notas_existentes[loop.index] }}{% endif %}"
+                               placeholder="Ex: 7.5">
+                        
+                        <div class="nota-buttons">
+                            <button type="button" onclick="salvarNota(this)" class="btn btn-success btn-sm">
+                                <i class="fas fa-save"></i> Salvar
+                            </button>
+                            {% if loop.index in notas_existentes %}
+                            <button type="button" onclick="excluirNota(this)" class="btn btn-danger btn-sm">
+                                <i class="fas fa-trash"></i> Excluir
+                            </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- ========= PROVA FINAL ========= -->
+            <div class="nota-card prova-final-card" style="margin-top: 40px;">
+                <h3><i class="fas fa-file-signature"></i> Prova Final</h3>
+                
+                <form id="formFinal">
+                    <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
+                    <input type="hidden" name="disciplina_id" value="{{ disciplina.id }}">
+                    <input type="hidden" name="acao" value="salvar_final">
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                        <div class="form-group">
+                            <label>Nota da Prova Final</label>
+                            <input type="number" name="nota_final" class="nota-input" min="0" max="10" step="0.1"
+                                   value="{% if nota_final %}{{ nota_final.nota_final }}{% endif %}" placeholder="0-10">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Média das Provas</label>
+                            <input type="number" name="media_disciplina" class="nota-input" min="0" max="10" step="0.1"
+                                   value="{% if nota_final %}{{ nota_final.media_disciplina }}{% endif %}" placeholder="Média capítulos">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Média Final</label>
+                            <input type="number" name="media_final" class="nota-input" min="0" max="10" step="0.1"
+                                   value="{% if nota_final %}{{ nota_final.media_final }}{% endif %}" placeholder="Média total">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status" class="nota-input">
+                                <option value="">Selecione...</option>
+                                <option value="aprovado" {% if nota_final and nota_final.status == 'aprovado' %}selected{% endif %}>
+                                    Aprovado
+                                </option>
+                                <option value="reprovado" {% if nota_final and nota_final.status == 'reprovado' %}selected{% endif %}>
+                                    Reprovado
+                                </option>
+                                <option value="cursando" {% if nota_final and nota_final.status == 'cursando' %}selected{% endif %}>
+                                    Cursando
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="nota-buttons" style="margin-top: 20px;">
+                        <button type="button" onclick="salvarFinal()" class="btn btn-success">
+                            <i class="fas fa-save"></i> Salvar Prova Final
+                        </button>
+                        
+                        {% if nota_final %}
+                        <button type="button" onclick="excluirFinal()" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Excluir Prova Final
+                        </button>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+            
+            <!-- ========= BOTÕES DE NAVEGAÇÃO ========= -->
+            <div class="back-links">
+                <a href="/mew/gerenciar-notas/aluno/{{ aluno.id }}" class="back-link">
+                    <i class="fas fa-arrow-left"></i> Voltar para Disciplinas
+                </a>
+                <a href="/mew/editar-aluno/{{ aluno.id }}" class="back-link">
+                    <i class="fas fa-user-edit"></i> Editar Aluno
+                </a>
+                <a href="/mew/gerenciar-notas" class="back-link">
+                    <i class="fas fa-users"></i> Todos os Alunos
+                </a>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let progressoSelecionado = {{ progresso_atual }};
+        
+        function selecionarProgresso(valor) {
+            progressoSelecionado = valor;
+            
+            // Atualizar visualmente
+            document.querySelectorAll('.progress-btn').forEach(btn => {
+                if (parseInt(btn.dataset.value) === valor) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Atualizar campo hidden
+            document.getElementById('inputProgresso').value = valor;
+        }
+        
+        function mostrarMensagem(texto, tipo) {
+            const mensagemDiv = document.getElementById('mensagem');
+            mensagemDiv.textContent = texto;
+            mensagemDiv.className = 'mensagem ' + tipo;
+            mensagemDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                mensagemDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        function atualizarProgresso() {
+            const form = document.getElementById('formProgresso');
+            const formData = new FormData(form);
+            
+            fetch('/mew/gerenciar-notas/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    mostrarMensagem(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                mostrarMensagem('Erro ao salvar: ' + error, 'error');
+            });
+        }
+        
+        function salvarNota(button) {
+            const form = button.closest('.form-nota');
+            const formData = new FormData(form);
+            
+            fetch('/mew/gerenciar-notas/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    mostrarMensagem(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                mostrarMensagem('Erro ao salvar: ' + error, 'error');
+            });
+        }
+        
+        function excluirNota(button) {
+            if (!confirm('Tem certeza que deseja excluir esta nota?')) {
+                return;
+            }
+            
+            const form = button.closest('.form-nota');
+            const formData = new FormData(form);
+            formData.set('acao', 'excluir_nota');
+            
+            fetch('/mew/gerenciar-notas/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    mostrarMensagem(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                mostrarMensagem('Erro ao excluir: ' + error, 'error');
+            });
+        }
+        
+        function salvarFinal() {
+            const form = document.getElementById('formFinal');
+            const formData = new FormData(form);
+            
+            // Validar campos
+            const notaFinal = formData.get('nota_final');
+            const mediaFinal = formData.get('media_final');
+            const status = formData.get('status');
+            
+            if (!notaFinal || !mediaFinal || !status) {
+                mostrarMensagem('Preencha todos os campos da prova final', 'error');
+                return;
+            }
+            
+            fetch('/mew/gerenciar-notas/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    mostrarMensagem(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                mostrarMensagem('Erro ao salvar: ' + error, 'error');
+            });
+        }
+        
+        function excluirFinal() {
+            if (!confirm('Tem certeza que deseja excluir a nota final?')) {
+                return;
+            }
+            
+            const form = document.getElementById('formFinal');
+            const formData = new FormData(form);
+            formData.set('acao', 'excluir_final');
+            
+            fetch('/mew/gerenciar-notas/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarMensagem(data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    mostrarMensagem(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                mostrarMensagem('Erro ao excluir: ' + error, 'error');
+            });
+        }
+        
+        // Adicionar link no menu do MEW
+        document.addEventListener('DOMContentLoaded', function() {
+            // Verificar se já existe o menu e adicionar item
+            const menu = document.querySelector('.main-menu');
+            if (menu) {
+                const novoItem = document.createElement('a');
+                novoItem.href = '/mew/gerenciar-notas';
+                novoItem.className = 'menu-item';
+                novoItem.innerHTML = '<i class="fas fa-chart-line"></i><span class="text">Notas Acadêmicas</span>';
+                menu.appendChild(novoItem);
+            }
+        });
+    </script>
+</body>
+</html>

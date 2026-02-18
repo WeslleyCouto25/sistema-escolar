@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login - AVA FACOP/SiGEU</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --light: #ecf0f1;
+            --dark: #2c3e50;
+            --success: #27ae60;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated background particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            animation: float 15s infinite linear;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+            }
+
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+            }
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: var(--shadow);
+            position: relative;
+            z-index: 1;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 20px;
+            object-fit: contain;
+        }
+
+
+        .title {
+            color: var(--primary);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: var(--primary);
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .input-with-icon {
+            position: relative;
+        }
+
+        .input-with-icon i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #95a5a6;
+        }
+
+        .input-with-icon input {
+            width: 100%;
+            padding: 15px 15px 15px 45px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .input-with-icon input:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, var(--secondary), #2980b9);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-accent {
+            background: linear-gradient(135deg, var(--accent), #c0392b);
+            margin-top: 10px;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        .btn-accent:hover {
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .forgot-password {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+            border-left: 4px solid var(--accent);
+        }
+
+        .forgot-password h3 {
+            color: var(--primary);
+            font-size: 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .forgot-password p {
+            color: #666;
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .info-box i {
+            color: var(--secondary);
+            margin-right: 5px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            transform: translateX(150%);
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            .login-container {
+                padding: 30px 20px;
+                border-radius: 15px;
+            }
+
+            .logo {
+                width: 150px;
+            }
+
+            .title {
+                font-size: 20px;
+            }
+
+            .subtitle {
+                font-size: 13px;
+            }
+
+            .input-with-icon input {
+                padding: 13px 13px 13px 40px;
+                font-size: 15px;
+            }
+
+            .btn {
+                padding: 14px;
+                font-size: 15px;
+            }
+
+            .forgot-password {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .login-container {
+                padding: 25px 15px;
+                border-radius: 12px;
+            }
+
+            .logo {
+                width: 130px;
+                margin-bottom: 15px;
+            }
+
+            .title {
+                font-size: 18px;
+            }
+
+            .btn {
+                padding: 13px;
+            }
+
+            .notification {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                transform: translateY(-150%);
+            }
+
+            .notification.show {
+                transform: translateY(0);
+            }
+        }
+
+        /* Mobile landscape */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                padding: 10px;
+                align-items: flex-start;
+                overflow-y: auto;
+            }
+
+            .login-container {
+                margin: 20px 0;
+                max-width: 500px;
+            }
+
+            .header {
+                margin-bottom: 15px;
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+        }
+
+        /* Extra small devices */
+        @media (max-width: 360px) {
+            .login-container {
+                padding: 20px 12px;
+            }
+
+            .logo {
+                width: 110px;
+            }
+
+            .title {
+                font-size: 16px;
+            }
+
+            .input-with-icon input {
+                padding: 12px 12px 12px 35px;
+                font-size: 14px;
+            }
+
+            .btn {
+                padding: 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            .login-container {
+                background: #2c3e50;
+                color: white;
+            }
+
+            .title,
+            .form-group label,
+            .forgot-password h3 {
+                color: white;
+            }
+
+            .subtitle,
+            .forgot-password p,
+            .info-box {
+                color: #bdc3c7;
+            }
+
+            .input-with-icon input {
+                background: #34495e;
+                border-color: #4a6572;
+                color: white;
+            }
+
+            .forgot-password,
+            .info-box {
+                background: #34495e;
+            }
+
+            .input-with-icon i {
+                color: #95a5a6;
+            }
+        }
+
+        /* Tablets e telas médias */
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            .login-container {
+                padding: 30px 20px;
+                border-radius: 15px;
+            }
+
+            .logo {
+                width: 150px;
+            }
+
+            .title {
+                font-size: 20px;
+                text-align: center;
+            }
+
+            .subtitle {
+                font-size: 13px;
+                text-align: center;
+            }
+
+            .input-with-icon input {
+                padding: 13px 13px 13px 40px;
+                font-size: 15px;
+            }
+
+            .btn {
+                padding: 14px;
+                font-size: 15px;
+            }
+        }
+
+        /* Celulares */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .login-container {
+                padding: 25px 15px;
+                border-radius: 12px;
+            }
+
+            .logo {
+                width: 130px;
+                margin-bottom: 15px;
+            }
+
+            .title {
+                font-size: 18px;
+            }
+
+            .subtitle {
+                font-size: 12px;
+            }
+
+            .btn {
+                padding: 13px;
+                font-size: 14px;
+            }
+
+            .forgot-password {
+                padding: 15px;
+            }
+
+            .notification {
+                left: 10px;
+                right: 10px;
+                top: 10px;
+            }
+        }
+
+        /* Celulares muito pequenos */
+        @media (max-width: 360px) {
+            .login-container {
+                padding: 20px 12px;
+            }
+
+            .logo {
+                width: 110px;
+            }
+
+            .title {
+                font-size: 16px;
+            }
+
+            .input-with-icon input {
+                padding: 12px 12px 12px 35px;
+                font-size: 14px;
+            }
+
+            .btn {
+                padding: 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* Landscape (celular deitado) */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                align-items: flex-start;
+                overflow-y: auto;
+            }
+
+            .login-container {
+                margin: 20px 0;
+                max-width: 500px;
+            }
+
+            .header {
+                margin-bottom: 15px;
+            }
+
+            .form-group {
+                margin-bottom: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Animated particles -->
+    <div class="particles" id="particles"></div>
+
+    <div class="login-container">
+        <div class="header">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
+            <h1 class="title" style="color: white;">AVA FACOP/SiGEU</h1>
+            <p class="subtitle">Ambiente Virtual de Aprendizagem</p>
+        </div>
+
+        <form method="POST">
+            <div class="form-group">
+                <label for="ra">RA (Registro Acadêmico)</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-id-card"></i>
+                    <input type="text" id="ra" name="ra" required placeholder="Digite seu RA de 8 dígitos">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="senha">Senha</label>
+                <div class="input-with-icon">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="senha" name="senha" required placeholder="Digite sua senha">
+                </div>
+            </div>
+
+            <button type="submit" class="btn">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>Acessar Plataforma</span>
+            </button>
+        </form>
+
+        <div class="forgot-password">
+            <h3><i class="fas fa-key"></i> Alterar Senha</h3>
+            <p>Esqueceu sua senha? Informe seu e-mail cadastrado e enviaremos uma nova senha.</p>
+            <div class="form-group">
+                <div class="input-with-icon">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="email" placeholder="seu.email@exemplo.com">
+                </div>
+            </div>
+            <button type="button" class="btn btn-accent" onclick="sendPasswordReset()">
+                <i class="fas fa-paper-plane"></i>
+                Enviar Nova Senha
+            </button>
+        </div>
+
+        <div class="info-box">
+            <p><i class="fas fa-info-circle"></i> Seu RA foi fornecido pela instituição.</p>
+            <p><i class="fas fa-phone-alt"></i> Em caso de esquecimento, entre em contato com a secretaria.</p>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <i class="fas fa-check-circle"></i>
+        <span>Nova senha enviada para o e-mail informado!</span>
+    </div>
+
+    <script>
+        // Create animated particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = window.innerWidth < 768 ? 15 : 30;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+
+                // Random size
+                const size = Math.random() * 60 + 20;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+
+                // Random position
+                particle.style.left = `${Math.random() * 100}vw`;
+
+                // Random animation
+                const duration = Math.random() * 20 + 15;
+                const delay = Math.random() * -20;
+                particle.style.animationDuration = `${duration}s`;
+                particle.style.animationDelay = `${delay}s`;
+
+                // Random opacity
+                particle.style.opacity = Math.random() * 0.3 + 0.1;
+
+                // Random blur effect
+                particle.style.filter = `blur(${Math.random() * 3}px)`;
+
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // Password reset function
+        function sendPasswordReset() {
+            const emailInput = document.getElementById('email');
+            const email = emailInput.value.trim();
+
+            // Basic email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!email) {
+                showError(emailInput, 'Por favor, informe seu e-mail');
+                return;
+            }
+
+            if (!emailRegex.test(email)) {
+                showError(emailInput, 'Por favor, informe um e-mail válido');
+                return;
+            }
+
+            // Simulate API call
+            console.log('Solicitando nova senha para:', email);
+
+            // Show success notification
+            showNotification();
+
+            // Reset input
+            emailInput.value = '';
+            emailInput.style.borderColor = '#e0e0e0';
+        }
+
+        function showError(inputElement, message) {
+            inputElement.style.borderColor = 'var(--accent)';
+            inputElement.focus();
+
+            // Remove existing error if any
+            const existingError = inputElement.parentElement.querySelector('.error-message');
+            if (existingError) existingError.remove();
+
+            // Create error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.style.color = 'var(--accent)';
+            errorDiv.style.fontSize = '12px';
+            errorDiv.style.marginTop = '5px';
+            errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+
+            inputElement.parentElement.appendChild(errorDiv);
+
+            // Auto-remove error after 3 seconds
+            setTimeout(() => {
+                if (errorDiv.parentElement) {
+                    errorDiv.remove();
+                }
+                inputElement.style.borderColor = '#e0e0e0';
+            }, 3000);
+        }
+
+        function showNotification() {
+            const notification = document.getElementById('notification');
+            notification.classList.add('show');
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 5000);
+        }
+
+        // Form submission handling
+        document.querySelector('form').addEventListener('submit', function (e) {
+            const raInput = document.getElementById('ra');
+            const ra = raInput.value.trim();
+
+            if (!ra) {
+                e.preventDefault();
+                showError(raInput, 'Por favor, informe seu RA');
+            }
+        });
+
+        // Initialize particles on load
+        window.addEventListener('load', createParticles);
+
+        // Recreate particles on resize
+        window.addEventListener('resize', function () {
+            document.getElementById('particles').innerHTML = '';
+            createParticles();
+        });
+
+        // Add keyboard support
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                const activeElement = document.activeElement;
+                if (activeElement.id === 'email') {
+                    sendPasswordReset();
+                }
+            }
+        });
+
+        // Add loading state to buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', function () {
+                if (this.classList.contains('btn-accent')) {
+                    const originalHTML = this.innerHTML;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+                    this.disabled = true;
+
+                    // Reset after 2 seconds (simulated API call)
+                    setTimeout(() => {
+                        this.innerHTML = originalHTML;
+                        this.disabled = false;
+                    }, 2000);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

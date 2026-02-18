@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Gerenciar Alunos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .toggle-header {
+            cursor: pointer;
+            padding: 15px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .toggle-header:hover {
+            background: var(--secondary-color);
+        }
+        
+        .toggle-content {
+            display: none;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        
+        .toggle-header.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+        
+        .disciplina-checkbox {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .disciplina-checkbox:last-child {
+            border-bottom: none;
+        }
+        
+        #listaDisciplinas {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .section-title {
+            margin-top: 25px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+            color: var(--dark-color);
+            font-size: 18px;
+        }
+        
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Painel Administrativo</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+            <a href="/" class="logout-btn">Site Principal</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-cog"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">Administrador</div>
+                    <div class="ra">MEW Admin</div>
+                </div>
+            </div>
+
+            <div class="main-menu">
+                <a href="/mew/dashboard" class="menu-item">
+                    <i class="fas fa-home"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/mew/disciplinas" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">Disciplinas</span>
+                </a>
+                <a href="/mew/alunos" class="menu-item active">
+                    <i class="fas fa-users"></i>
+                    <span class="text">Alunos</span>
+                </a>
+                <a href="/mew/solicitacoes" class="menu-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="text">Solicitações</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <h1 class="page-title">👤 Gerenciar Alunos</h1>
+
+            <!-- ========= BOTÃO EXPANSÍVEL NOVO ALUNO ========= -->
+            <div class="toggle-header" onclick="toggleNovoAluno()" id="novoAlunoHeader">
+                <div>
+                    <i class="fas fa-user-plus"></i>
+                    <strong>➕ Novo Aluno</strong>
+                    <span style="font-size: 14px; margin-left: 10px;">Clique para expandir</span>
+                </div>
+                <div class="toggle-icon">
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+            
+            <div class="toggle-content" id="novoAlunoForm">
+                <form method="post">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome Completo</label>
+                            <input type="text" name="nome" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" name="email" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" name="senha" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Matrícula (RA)</label>
+                        <input type="text" name="ra" maxlength="8" placeholder="8 dígitos (opcional)">
+                    </div>
+
+                    <div class="form-group">
+                        <label>CPF</label>
+                        <input type="text" name="cpf" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>RG</label>
+                        <input type="text" name="rg">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="text" name="telefone" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Endereço</label>
+                        <input type="text" name="endereco">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Cidade</label>
+                            <input type="text" name="cidade">
+                        </div>
+                        <div class="form-group">
+                            <label>Estado</label>
+                            <input type="text" name="estado" maxlength="2" placeholder="UF">
+                        </div>
+                        <div class="form-group">
+                            <label>CEP</label>
+                            <input type="text" name="cep">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Curso de Referência</label>
+                        <input type="text" name="curso_referencia" placeholder="Ex: Engenharia, Administração, etc.">
+                    </div>
+
+                    <!-- ========= NOVOS CAMPOS DE DADOS PESSOAIS ========= -->
+                    <h3 class="section-title">👪 Dados Adicionais</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome do Pai</label>
+                            <input type="text" name="nome_pai" placeholder="Nome completo do pai">
+                        </div>
+                        <div class="form-group">
+                            <label>Nome da Mãe</label>
+                            <input type="text" name="nome_mae" placeholder="Nome completo da mãe">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data de Nascimento</label>
+                            <input type="date" name="data_nascimento">
+                        </div>
+                        <div class="form-group">
+                            <label>Sexo</label>
+                            <select name="sexo">
+                                <option value="">Selecione</option>
+                                <option value="M">Masculino</option>
+                                <option value="F">Feminino</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Naturalidade</label>
+                            <input type="text" name="naturalidade" placeholder="Cidade de nascimento">
+                        </div>
+                        <div class="form-group">
+                            <label>Nacionalidade</label>
+                            <input type="text" name="nacionalidade" value="Brasileira">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Estado Civil</label>
+                            <select name="estado_civil">
+                                <option value="">Selecione</option>
+                                <option value="Solteiro(a)">Solteiro(a)</option>
+                                <option value="Casado(a)">Casado(a)</option>
+                                <option value="Divorciado(a)">Divorciado(a)</option>
+                                <option value="Viúvo(a)">Viúvo(a)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Email Alternativo</label>
+                            <input type="email" name="email_alternativo" placeholder="Email alternativo do aluno">
+                        </div>
+                    </div>
+
+                    <!-- ========= SITUAÇÃO FINANCEIRA ========= -->
+                    <h3 class="section-title">💰 Situação Financeira</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Forma de Pagamento</label>
+                            <select name="forma_pagamento" required>
+                                <option value="">Selecione</option>
+                                <option value="avista">À vista</option>
+                                <option value="cartao">Cartão</option>
+                                <option value="boleto_pix">Boleto / PIX</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Valor Total (R$)</label>
+                            <input type="text" name="valor_total" required placeholder="Ex: 1500,00">
+                        </div>
+                    </div>
+
+                    <!-- ========= DATAS DO CURSO ========= -->
+                    <h3 class="section-title">📅 Datas do Curso</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data de Início das Aulas</label>
+                            <input type="date" name="data_inicio" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Prazo Máximo (dias)</label>
+                            <select name="prazo_dias" required>
+                                <option value="60">60 dias</option>
+                                <option value="90">90 dias</option>
+                                <option value="120">120 dias</option>
+                                <option value="180">180 dias</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- ========= DISCIPLINAS ========= -->
+                    <h3 class="section-title">📚 Disciplinas</h3>
+
+                    <!-- 🔍 BUSCA DE DISCIPLINAS -->
+                    <div style="margin-bottom: 10px;">
+                        <input
+                            type="text"
+                            id="searchDisciplinas"
+                            placeholder="🔍 Pesquisar disciplina..."
+                            style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc;"
+                            onkeyup="filtrarDisciplinas()"
+                        >
+                    </div>
+
+                    <div id="listaDisciplinas">
+                        {% for d in disciplinas %}
+                        <div class="disciplina-checkbox">
+                            <label>
+                                <input type="checkbox" name="disciplinas" value="{{ d.id }}">
+                                <span class="disciplina-nome">{{ d.nome }}</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- ========= BOTÕES DO FORMULÁRIO ========= -->
+                    <div class="form-buttons">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-plus"></i> Criar Aluno
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="toggleNovoAluno()">
+                            <i class="fas fa-times"></i> Cancelar
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+
+            <!-- ========= LISTAGEM DE ALUNOS ========= -->
+            <div class="mew-card">
+                <h2 class="section-title">📋 Alunos Cadastrados</h2>
+
+                <div style="margin-bottom: 15px;">
+                    <input
+                        type="text"
+                        id="searchAlunos"
+                        placeholder="🔍 Pesquisar aluno pelo nome..."
+                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc;"
+                        onkeyup="filtrarAlunos()"
+                    >
+                </div>
+
+                {% if alunos %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>RA</th>
+                            <th>Nome</th>
+                            <th>CPF</th>
+                            <th>Telefone</th>
+                            <th>Pagamento</th>
+                            <th>Disciplinas</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for aluno in alunos %}
+                        <tr>
+                            <td>{{ aluno.ra }}</td>
+                            <td>{{ aluno.nome }}</td>
+                            <td>{{ aluno.cpf }}</td>
+                            <td>{{ aluno.telefone }}</td>
+                            <td>
+                                {% if aluno.forma_pagamento %}
+                                {{ aluno.forma_pagamento }}<br>
+                                <small>R$ {{ "%.2f"|format(aluno.valor_total) if aluno.valor_total else '0.00' }}</small>
+                                {% else %}
+                                <span style="color: #888;">Não informado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ aluno.total_disciplinas }}
+                                {% if aluno.disciplinas_datas %}
+                                <br><small style="font-size: 11px; color: #666;">
+                                    {{ aluno.disciplinas_datas[0].nome if aluno.disciplinas_datas[0] else '' }}
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td style="display:flex; gap:6px; flex-wrap: wrap;">
+                                <a href="/mew/aluno/{{ aluno.id }}/disciplinas" class="btn btn-sm btn-info" title="Gerenciar Disciplinas">
+                                    <i class="fas fa-book"></i>
+                                </a>
+                                <a href="/mew/editar-aluno/{{ aluno.id }}" class="btn btn-sm btn-primary" title="Editar Aluno">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="/mew/deletar-aluno/{{ aluno.id }}" class="btn btn-sm btn-danger"
+                                   onclick="return confirmDelete('{{ aluno.nome }}')" title="Excluir Aluno">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <i class="fas fa-users" style="font-size: 48px; margin-bottom: 20px; color: #ddd;"></i>
+                    <p>Nenhum aluno cadastrado.</p>
+                    <p>Clique em "Novo Aluno" para começar.</p>
+                </div>
+                {% endif %}
+            </div>
+
+        </main>
+    </div>
+</body>
+
+<script>
+function confirmDelete(nome) {
+    return confirm(`Deseja realmente excluir o aluno "${nome}"?\n\nEsta ação não poderá ser desfeita!`);
+}
+
+function filtrarAlunos() {
+    const input = document.getElementById("searchAlunos");
+    const filtro = input.value.toLowerCase();
+    const linhas = document.querySelectorAll("table tbody tr");
+
+    linhas.forEach(linha => {
+        const nome = linha.children[1].innerText.toLowerCase();
+        const ra = linha.children[0].innerText.toLowerCase();
+        const cpf = linha.children[2].innerText.toLowerCase();
+        
+        linha.style.display = (nome.includes(filtro) || ra.includes(filtro) || cpf.includes(filtro)) 
+            ? "" 
+            : "none";
+    });
+}
+
+function filtrarDisciplinas() {
+    const input = document.getElementById("searchDisciplinas");
+    const filtro = input.value.toLowerCase();
+    const disciplinas = document.querySelectorAll("#listaDisciplinas .disciplina-checkbox");
+
+    disciplinas.forEach(div => {
+        const nome = div.innerText.toLowerCase();
+        div.style.display = nome.includes(filtro) ? "" : "none";
+    });
+}
+
+// Toggle para mostrar/ocultar formulário de novo aluno
+function toggleNovoAluno() {
+    const header = document.getElementById('novoAlunoHeader');
+    const form = document.getElementById('novoAlunoForm');
+    const icon = header.querySelector('.toggle-icon');
+    
+    if (form.style.display === 'none' || form.style.display === '') {
+        form.style.display = 'block';
+        header.classList.add('active');
+        icon.innerHTML = '<i class="fas fa-chevron-up"></i>';
+        
+        // Foca no primeiro campo
+        const firstInput = form.querySelector('input[name="nome"]');
+        if (firstInput) firstInput.focus();
+        
+        // Scroll suave para o formulário
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        form.style.display = 'none';
+        header.classList.remove('active');
+        icon.innerHTML = '<i class="fas fa-chevron-down"></i>';
+    }
+}
+
+// Inicializar com formulário oculto
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('novoAlunoForm').style.display = 'none';
+    
+    // Formatar CPF nos inputs
+    const cpfInputs = document.querySelectorAll('input[name="cpf"]');
+    cpfInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.substring(0, 11);
+            
+            if (value.length <= 11) {
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            }
+            
+            e.target.value = value;
+        });
+    });
+    
+    // Formatar telefone
+    const telInputs = document.querySelectorAll('input[name="telefone"]');
+    telInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 11) value = value.substring(0, 11);
+            
+            if (value.length === 11) {
+                value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+            } else if (value.length === 10) {
+                value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+            }
+            
+            e.target.value = value;
+        });
+    });
+    
+    // Formatar CEP
+    const cepInputs = document.querySelectorAll('input[name="cep"]');
+    cepInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 8) value = value.substring(0, 8);
+            
+            if (value.length === 8) {
+                value = value.replace(/(\d{5})(\d{3})/, '$1-$2');
+            }
+            
+            e.target.value = value;
+        });
+    });
+});
+</script>
+
+</html>

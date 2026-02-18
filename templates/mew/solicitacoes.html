@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Solicitações</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Painel Administrativo</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+            <a href="/" class="logout-btn">Site Principal</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-cog"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">Administrador</div>
+                    <div class="ra">MEW Admin</div>
+                </div>
+            </div>
+            
+            <div class="main-menu">
+                <a href="/mew/dashboard" class="menu-item">
+                    <i class="fas fa-home"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/mew/disciplinas" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">Disciplinas</span>
+                </a>
+                <a href="/mew/alunos" class="menu-item">
+                    <i class="fas fa-users"></i>
+                    <span class="text">Alunos</span>
+                </a>
+                <a href="/mew/solicitacoes" class="menu-item active">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="text">Solicitações</span>
+                    {% set total_pendentes = 0 %}
+                    {% for sm in solicitacoes_material %}
+                        {% if sm['entregue'] == 0 %}
+                            {% set total_pendentes = total_pendentes + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    {% for sd in solicitacoes_declaracoes %}
+                        {% if sd['entregue'] == 0 %}
+                            {% set total_pendentes = total_pendentes + 1 %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if total_pendentes > 0 %}
+                    <span class="badge">{{ total_pendentes }}</span>
+                    {% endif %}
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <h1 class="page-title">📋 Solicitações Pendentes</h1>
+
+            <div class="mew-card">
+                <h2 class="section-title">📚 Materiais Didáticos</h2>
+                
+                {% if solicitacoes_material %}
+                <table class="requests-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Aluno</th>
+                            <th>Material</th>
+                            <th>Disciplina</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sm in solicitacoes_material %}
+                        <tr>
+                            <td>{{ sm['id'] }}</td>
+                            <td>{{ sm['aluno_nome'] }}</td>
+                            <td>{{ sm['material'] }}</td>
+                            <td>{{ sm['disciplina_nome'] or 'N/A' }}</td>
+                            <td>{{ sm['data_solicitacao'] }}</td>
+                            <td>
+                                {% if sm['entregue'] == 1 %}
+                                <span class="status-indicator status-delivered">Entregue</span>
+                                {% else %}
+                                <span class="status-indicator status-pending-approval">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td style="display: flex; gap: 5px;">
+                                {% if sm['entregue'] == 0 %}
+                                <a href="/mew/marcar-entregue/material/{{ sm['id'] }}" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; width: auto;">
+                                    <i class="fas fa-check"></i> Entregue
+                                </a>
+                                {% endif %}
+                                <a href="/mew/deletar-solicitacao/material/{{ sm['id'] }}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 13px; width: auto;" onclick="return confirm('Tem certeza que deseja excluir esta solicitação?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-book"></i>
+                    <h3>Nenhuma solicitação de material</h3>
+                    <p>Não há solicitações de material didático pendentes.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mew-card">
+                <h2 class="section-title">📄 Declarações</h2>
+                
+                {% if solicitacoes_declaracoes %}
+                <table class="requests-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Aluno</th>
+                            <th>Tipo</th>
+                            <th>Detalhes</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sd in solicitacoes_declaracoes %}
+                        <tr>
+                            <td>{{ sd['id'] }}</td>
+                            <td>{{ sd['aluno_nome'] }}</td>
+                            <td>{{ sd['tipo'] }}</td>
+                            <td>{{ sd['detalhes'] }}</td>
+                            <td>{{ sd['data_solicitacao'] }}</td>
+                            <td>
+                                {% if sd['entregue'] == 1 %}
+                                <span class="status-indicator status-delivered">Entregue</span>
+                                {% else %}
+                                <span class="status-indicator status-pending-approval">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td style="display: flex; gap: 5px;">
+                                {% if sd['entregue'] == 0 %}
+                                <a href="/mew/marcar-entregue/declaracao/{{ sd['id'] }}" class="btn btn-primary" style="padding: 5px 10px; font-size: 13px; width: auto;">
+                                    <i class="fas fa-check"></i> Entregue
+                                </a>
+                                {% endif %}
+                                <a href="/mew/deletar-solicitacao/declaracao/{{ sd['id'] }}" class="btn btn-secondary" style="padding: 5px 10px; font-size: 13px; width: auto;" onclick="return confirm('Tem certeza que deseja excluir esta solicitação?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>Nenhuma solicitação de declaração</h3>
+                    <p>Não há solicitações de declarações pendentes.</p>
+                </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

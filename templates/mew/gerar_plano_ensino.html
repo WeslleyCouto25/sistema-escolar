@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Gerar Plano de Ensino com IA</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #1e3a2f; 
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 30px auto; 
+            background: #fbfef9; 
+            padding: 40px; 
+            box-shadow: 0 25px 40px -12px rgba(0,20,10,0.35);
+            border: 1px solid #2a6e4b;
+            border-top: 8px solid #1e4a3b;
+            border-bottom: 8px solid #1e4a3b;
+        }
+        h1 { 
+            color: #0a3b2a; 
+            text-align: center; 
+            margin-bottom: 20px; 
+            font-size: 28px; 
+            border-bottom: 2px solid #2a6e4b; 
+            padding-bottom: 10px; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .form-group { margin-bottom: 20px; }
+        label { 
+            display: block; 
+            margin-bottom: 5px; 
+            font-weight: 600; 
+            color: #0a3b2a; 
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input, textarea, select { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #99bcab; 
+            border-radius: 4px; 
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            background: white;
+        }
+        textarea { min-height: 120px; resize: vertical; }
+        .btn { 
+            background: #1e4a3b; 
+            color: white; 
+            border: none; 
+            padding: 16px; 
+            font-size: 16px; 
+            border-radius: 40px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-weight: 700; 
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border: 1px solid #2a7a4f;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #0d3b2c; transform: scale(1.02); }
+        .btn-secondary {
+            background: #6c757d;
+            border: 1px solid #5a6268;
+        }
+        .btn-secondary:hover { background: #5a6268; }
+        .loading { display: none; text-align: center; padding: 20px; color: #0a3b2a; font-weight: bold; }
+        .alert-error { background: #fee; color: #c00; padding: 10px; border: 1px solid #c00; border-radius: 4px; margin: 10px 0; display: none; }
+        .alert-success { background: #d4edda; color: #155724; padding: 15px; border: 1px solid #c3e6cb; border-radius: 4px; margin: 20px 0; }
+        .info-distribuicao, .config-section { 
+            background: #ecf7f0; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-left: 6px solid #267a4e;
+            font-size: 14px;
+            color: #1f3e32;
+        }
+        .checkbox-group { display: flex; align-items: center; margin-bottom: 10px; }
+        .checkbox-group input { width: auto; margin-right: 10px; }
+        .info-paginacao {
+            background: #e0eae5;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #2a6e4b;
+            font-size: 13px;
+            color: #0a3b2a;
+        }
+        .resultado-box {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f5e8;
+            border-radius: 10px;
+            border: 2px solid #1e4a3b;
+        }
+        .qr-code-preview {
+            text-align: center;
+            padding: 20px;
+        }
+        .qr-code-preview img {
+            max-width: 200px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+        .acoes {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .acoes .btn { width: auto; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Gerar Plano de Ensino com IA</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+            <a href="/mew/logout" class="logout-btn">Sair</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-cog"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">Administrador MEW</div>
+                    <div class="ra">Gestor</div>
+                </div>
+            </div>
+
+            <div class="main-menu">
+                <a href="/mew/dashboard" class="menu-item">
+                    <i class="fas fa-home"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/mew/alunos" class="menu-item">
+                    <i class="fas fa-users"></i>
+                    <span class="text">Alunos</span>
+                </a>
+                <a href="/mew/disciplinas" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">Disciplinas</span>
+                </a>
+                <a href="/mew/gerar-plano-ensino" class="menu-item active">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span class="text">Planos de Ensino</span>
+                </a>
+                <a href="/mew/planos-ensino" class="menu-item">
+                    <i class="fas fa-folder-open"></i>
+                    <span class="text">Meus Planos</span>
+                </a>
+                <a href="/mew/gerenciar-documentos" class="menu-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="text">Gerenciar Documentos</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <div class="container" style="max-width: 100%; margin: 0; background: transparent; border: none; padding: 20px;">
+                <h1>📋 GERAR PLANO DE ENSINO COM IA</h1>
+                
+                <div class="info-paginacao">
+                    <strong>📄 ORGANIZAÇÃO DO DOCUMENTO (3 PÁGINAS):</strong><br>
+                    • <strong>Página 1:</strong> Identificação, Objetivos, Ementa<br>
+                    • <strong>Página 2:</strong> Conteúdo Programático (apenas)<br>
+                    • <strong>Página 3:</strong> Metodologia, Avaliação, Bibliografia, Autenticação com QR Code
+                </div>
+                
+                <div class="info-distribuicao">
+                    <strong>⚡ DISTRIBUIÇÃO ALEATÓRIA:</strong><br>
+                    • 4 unidades com 5 a 8 subtópicos cada (total 20-30)<br>
+                    • Ementa com 20 a 30 tópicos numerados<br>
+                    • Metodologia técnica de 300 palavras<br>
+                    • Geração automática via IA (GPT-4)
+                </div>
+
+                <form id="formPlano">
+                    <div class="form-group">
+                        <label>DISCIPLINA *</label>
+                        <input type="text" id="disciplina" name="disciplina" required placeholder="Ex: Anatomia Humana I">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>EMENTA BÁSICA *</label>
+                        <textarea id="ementa" name="ementa" required placeholder="Descreva os principais tópicos da disciplina..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>CARGA HORÁRIA</label>
+                        <select id="carga_horaria" name="carga_horaria">
+                            <option value="60 horas">60 horas</option>
+                            <option value="80 horas">80 horas</option>
+                            <option value="120 horas" selected>120 horas</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>MODALIDADE</label>
+                        <select id="modalidade" name="modalidade">
+                            <option value="EaD" selected>EaD</option>
+                            <option value="Presencial">Presencial</option>
+                            <option value="Híbrido">Híbrido</option>
+                        </select>
+                    </div>
+                    
+                    <div id="configuracaoPresencial" class="config-section" style="display: none;">
+                        <h4 style="margin-bottom: 15px; color: #0a3b2a;">CONFIGURAÇÃO PRESENCIAL</h4>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="relatorio_cientifico" name="relatorio_cientifico" value="true">
+                            <label style="display: inline; font-weight: normal;">Incluir relatório científico/trabalho final</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="ficha_acompanhamento" name="ficha_acompanhamento" value="true">
+                            <label style="display: inline; font-weight: normal;">Disciplina com laboratório prático/estágio</label>
+                        </div>
+                    </div>
+                    
+                    <div id="configuracaoEad" class="config-section" style="display: block;">
+                        <h4 style="margin-bottom: 15px; color: #0a3b2a;">CONFIGURAÇÃO EAD</h4>
+                        <div class="form-group">
+                            <label>Dias dos encontros síncronos</label>
+                            <select id="dias_semana" name="dias_semana">
+                                <option value="Segundas e terças-feiras">Segundas e Terças</option>
+                                <option value="Segundas e quartas-feiras">Segundas e Quartas</option>
+                                <option value="Terças e quintas-feiras" selected>Terças e Quintas</option>
+                                <option value="Quartas e sextas-feiras">Quartas e Sextas</option>
+                                <option value="Quintas e sextas-feiras">Quintas e Sextas</option>
+                                <option value="Terças e sextas-feiras">Terças e Sextas</option>
+                                <option value="Terças e quartas-feiras">Terças e Quartas</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Início</label>
+                                <select id="horario_inicio" name="horario_inicio">
+                                    <option value="13h00">13:00</option>
+                                    <option value="14h00">14:00</option>
+                                    <option value="15h00">15:00</option>
+                                    <option value="18h00">18:00</option>
+                                    <option value="19h00" selected>19:00</option>
+                                    <option value="20h00">20:00</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Término</label>
+                                <select id="horario_fim" name="horario_fim">
+                                    <option value="15h30">15:30</option>
+                                    <option value="16h30">16:30</option>
+                                    <option value="17h30">17:30</option>
+                                    <option value="18h30">18:30</option>
+                                    <option value="20h30">20:30</option>
+                                    <option value="21h30" selected>21:30</option>
+                                    <option value="22h30">22:30</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="configuracaoHibrido" class="config-section" style="display: none;">
+                        <h4 style="margin-bottom: 15px; color: #0a3b2a;">CONFIGURAÇÃO HÍBRIDA</h4>
+                        <p>40% presencial + 60% EaD (configuração automática)</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>PRÉ-REQUISITOS</label>
+                        <textarea id="pre_requisitos" name="pre_requisitos" placeholder="Opcional - Ex: Conhecimentos básicos de biologia"></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px;">
+                        <div class="form-group" style="flex: 2;">
+                            <label>DOCENTE</label>
+                            <input type="text" id="docente" name="docente" placeholder="Prof. Responsável" value="Roberto S. M. Souza">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>DATA</label>
+                            <input type="date" id="data_geracao" name="data_geracao" value="{{ hoje }}">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn">GERAR PLANO DE ENSINO (3 PÁGINAS)</button>
+                </form>
+                
+                <div class="loading" id="loading">
+                    <p style="font-size: 18px;">⏳ GERANDO PLANO COM IA...</p>
+                    <p style="font-size: 14px;">Aguarde até 40 segundos</p>
+                </div>
+                
+                <div class="alert-error" id="errorAlert"></div>
+                
+                <div id="resultado" style="display: none;">
+                    <div class="resultado-box">
+                        <h3 style="color: #0a3b2a; margin-bottom: 20px;">✅ PLANO GERADO COM SUCESSO!</h3>
+                        
+                        <div class="qr-code-preview">
+                            <img id="qrCode" src="" alt="QR Code">
+                        </div>
+                        
+                        <p><strong>Disciplina:</strong> <span id="resultDisciplina"></span></p>
+                        <p><strong>Código de Autenticação:</strong> <span id="resultCodigo"></span></p>
+                        <p><strong>Hash:</strong> <span id="resultHash" style="font-family: monospace; font-size: 12px;"></span></p>
+                        <p><strong>Data de Emissão:</strong> <span id="resultData"></span></p>
+                        
+                        <div class="acoes">
+                            <a href="#" id="btnVisualizar" class="btn" target="_blank">🔍 VISUALIZAR PLANO</a>
+                            <a href="#" id="btnValidar" class="btn btn-secondary" target="_blank">🔐 VALIDAR DOCUMENTO</a>
+                            <a href="/mew/planos-ensino" class="btn btn-secondary">📋 LISTAR TODOS OS PLANOS</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('modalidade').addEventListener('change', function() {
+            const m = this.value;
+            document.getElementById('configuracaoPresencial').style.display = m === 'Presencial' ? 'block' : 'none';
+            document.getElementById('configuracaoEad').style.display = m === 'EaD' ? 'block' : 'none';
+            document.getElementById('configuracaoHibrido').style.display = m === 'Híbrido' ? 'block' : 'none';
+        });
+        document.getElementById('modalidade').dispatchEvent(new Event('change'));
+
+        document.getElementById('formPlano').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            data.relatorio_cientifico = document.getElementById('relatorio_cientifico')?.checked || false;
+            data.ficha_acompanhamento = document.getElementById('ficha_acompanhamento')?.checked || false;
+            
+            if (!data.pre_requisitos) data.pre_requisitos = 'Não há pré-requisitos formais.';
+            if (!data.docente) data.docente = 'Roberto S. M. Souza';
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('errorAlert').style.display = 'none';
+            document.getElementById('resultado').style.display = 'none';
+            
+            try {
+                const response = await fetch('/mew/processar-plano-ensino', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Erro na requisição');
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.message);
+                }
+                
+                // Mostrar resultado
+                document.getElementById('resultado').style.display = 'block';
+                document.getElementById('resultDisciplina').textContent = result.disciplina;
+                document.getElementById('resultCodigo').textContent = result.codigo;
+                document.getElementById('resultHash').textContent = result.hash;
+                document.getElementById('resultData').textContent = result.data_emissao;
+                document.getElementById('qrCode').src = result.qr_code;
+                document.getElementById('btnVisualizar').href = result.url_visualizar;
+                document.getElementById('btnValidar').href = result.url_validacao;
+                
+                document.getElementById('loading').style.display = 'none';
+                
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorAlert').textContent = 'ERRO: ' + error.message;
+                document.getElementById('errorAlert').style.display = 'block';
+            }
+        };
+    </script>
+</body>
+</html>

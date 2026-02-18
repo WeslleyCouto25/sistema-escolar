@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rendimento Acadêmico - MEW</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .back-btn {
+            display: inline-block;
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .back-btn:hover {
+            background: #5a6268;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .btn-primary {
+            background: #1a237e;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn-primary:hover {
+            background: #0d1b6b;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+        .conceito-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .conceito-A { background: #28a745; color: white; }
+        .conceito-B { background: #17a2b8; color: white; }
+        .conceito-C { background: #ffc107; color: black; }
+        .conceito-D { background: #fd7e14; color: white; }
+        .conceito-F { background: #dc3545; color: white; }
+        .info-display {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        .info-display h4 {
+            margin-top: 0;
+            color: #1a237e;
+        }
+        .info-row {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1a237e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .ira-result {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        .ira-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #1a237e;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/mew/info-disciplinas" class="back-btn">← Voltar</a>
+        <h1>📊 Rendimento Acadêmico</h1>
+        
+        <div class="card">
+            <h2>Calcular Índice de Rendimento Acadêmico (IRA)</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="aluno_ira">Selecionar Aluno</label>
+                    <select id="aluno_ira" class="form-control">
+                        <option value="">-- Selecione um aluno --</option>
+                        {% for aluno in alunos %}
+                        <option value="{{ aluno.id }}">{{ aluno.nome }} (RA: {{ aluno.ra }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group" style="align-self: end;">
+                    <button onclick="calcularIRA()" class="btn-primary">
+                        🧮 Calcular IRA
+                    </button>
+                    <span id="loadingIRA" class="loading" style="display: none;"></span>
+                </div>
+            </div>
+            
+            <div id="iraResult" class="ira-result">
+                <h4>📈 Índice de Rendimento Acadêmico (IRA)</h4>
+                <div class="info-row">
+                    <div class="info-label">Aluno:</div>
+                    <div id="iraAlunoNome">--</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">RA:</div>
+                    <div id="iraAlunoRA">--</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Disciplinas Cursadas:</div>
+                    <div id="iraTotalDisciplinas">--</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Carga Horária Total:</div>
+                    <div id="iraCargaTotal">--</div>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <div style="font-size: 14px; color: #666;">IRA</div>
+                    <div id="iraValor" class="ira-value">0.00</div>
+                    <div style="color: #666; font-size: 14px;">Escala: 0.00 a 4.00</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Gerenciar Rendimento por Disciplina</h2>
+            <div id="alertMessage" class="alert"></div>
+            
+            <form id="rendimentoForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="aluno_id">Aluno *</label>
+                        <select id="aluno_id" name="aluno_id" class="form-control" required
+                                onchange="buscarRendimento()">
+                            <option value="">-- Selecione um aluno --</option>
+                            {% for aluno in alunos %}
+                            <option value="{{ aluno.id }}">{{ aluno.nome }} (RA: {{ aluno.ra }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="disciplina_id">Disciplina *</label>
+                        <select id="disciplina_id" name="disciplina_id" class="form-control" required
+                                onchange="buscarRendimento()">
+                            <option value="">-- Selecione uma disciplina --</option>
+                            {% for disciplina in disciplinas %}
+                            <option value="{{ disciplina.id }}">{{ disciplina.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nota_final">Nota Final (0-100) *</label>
+                        <input type="number" id="nota_final" name="nota_final" 
+                               class="form-control" min="0" max="100" step="0.1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="carga_horaria">Carga Horária da Disciplina</label>
+                        <input type="number" id="carga_horaria" name="carga_horaria" 
+                               class="form-control" value="80" min="20" max="200">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="conceito">Conceito</label>
+                        <select id="conceito" name="conceito" class="form-control">
+                            <option value="">Calcular automaticamente</option>
+                            <option value="A">A (90-100)</option>
+                            <option value="B">B (80-89)</option>
+                            <option value="C">C (70-79)</option>
+                            <option value="D">D (60-69)</option>
+                            <option value="F">F (0-59)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="infoRendimento" class="info-display">
+                    <h4>📋 Rendimento Atual</h4>
+                    <div class="info-row">
+                        <div class="info-label">Aluno:</div>
+                        <div id="infoAluno">--</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Disciplina:</div>
+                        <div id="infoDisciplina">--</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Nota Final:</div>
+                        <div id="infoNota">--</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Conceito:</div>
+                        <div id="infoConceito">--</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Carga Horária:</div>
+                        <div id="infoCarga">--</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <button type="submit" class="btn-primary" id="submitBtn">
+                        💾 Salvar Rendimento
+                    </button>
+                    <button type="button" class="btn-secondary" onclick="limparFormulario()">
+                        🗑️ Limpar
+                    </button>
+                    <span id="loadingIndicator" class="loading" style="display: none;"></span>
+                </div>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h3>📋 Tabela de Conceitos</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Conceito</th>
+                            <th>Faixa de Notas</th>
+                            <th>Valor Numérico</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="conceito-badge conceito-A">A</span></td>
+                            <td>90 - 100</td>
+                            <td>4.0</td>
+                            <td>Excelente</td>
+                        </tr>
+                        <tr>
+                            <td><span class="conceito-badge conceito-B">B</span></td>
+                            <td>80 - 89</td>
+                            <td>3.0</td>
+                            <td>Bom</td>
+                        </tr>
+                        <tr>
+                            <td><span class="conceito-badge conceito-C">C</span></td>
+                            <td>70 - 79</td>
+                            <td>2.0</td>
+                            <td>Regular</td>
+                        </tr>
+                        <tr>
+                            <td><span class="conceito-badge conceito-D">D</span></td>
+                            <td>60 - 69</td>
+                            <td>1.0</td>
+                            <td>Insuficiente</td>
+                        </tr>
+                        <tr>
+                            <td><span class="conceito-badge conceito-F">F</span></td>
+                            <td>0 - 59</td>
+                            <td>0.0</td>
+                            <td>Reprovado</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p style="margin-top: 15px; color: #666;">
+                <strong>Fórmula do IRA:</strong> IRA = Σ(Conceito × Carga Horária) / Σ(Carga Horária)
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        let carregando = false;
+        
+        async function buscarRendimento() {
+            const alunoId = document.getElementById('aluno_id').value;
+            const disciplinaId = document.getElementById('disciplina_id').value;
+            
+            if (!alunoId || !disciplinaId) {
+                document.getElementById('infoRendimento').style.display = 'none';
+                return;
+            }
+            
+            const infoDisplay = document.getElementById('infoRendimento');
+            infoDisplay.style.display = 'block';
+            
+            // Atualizar nomes
+            const alunoSelect = document.getElementById('aluno_id');
+            const disciplinaSelect = document.getElementById('disciplina_id');
+            
+            document.getElementById('infoAluno').textContent = alunoSelect.options[alunoSelect.selectedIndex].text;
+            document.getElementById('infoDisciplina').textContent = disciplinaSelect.options[disciplinaSelect.selectedIndex].text;
+            
+            try {
+                const response = await fetch(`/mew/buscar-rendimento/${alunoId}/${disciplinaId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const rendimento = data.rendimento;
+                    
+                    document.getElementById('infoNota').textContent = rendimento.nota_final;
+                    document.getElementById('infoCarga').textContent = `${rendimento.carga_horaria || 80} horas`;
+                    
+                    // Atualizar conceito
+                    const conceito = rendimento.conceito || 'F';
+                    const conceitoClass = `conceito-badge conceito-${conceito}`;
+                    document.getElementById('infoConceito').innerHTML = `<span class="${conceitoClass}">${conceito}</span>`;
+                    
+                    // Preencher formulário
+                    document.getElementById('nota_final').value = rendimento.nota_final;
+                    document.getElementById('carga_horaria').value = rendimento.carga_horaria || 80;
+                    document.getElementById('conceito').value = conceito;
+                } else {
+                    // Limpar se não existir
+                    document.getElementById('infoNota').textContent = '--';
+                    document.getElementById('infoCarga').textContent = '--';
+                    document.getElementById('infoConceito').textContent = '--';
+                    
+                    document.getElementById('nota_final').value = '';
+                    document.getElementById('carga_horaria').value = 80;
+                    document.getElementById('conceito').value = '';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+        
+        async function calcularIRA() {
+            const alunoId = document.getElementById('aluno_ira').value;
+            
+            if (!alunoId) {
+                showAlert('Selecione um aluno para calcular o IRA.', 'error');
+                return;
+            }
+            
+            const loadingElement = document.getElementById('loadingIRA');
+            const resultElement = document.getElementById('iraResult');
+            
+            loadingElement.style.display = 'inline-block';
+            resultElement.style.display = 'none';
+            
+            try {
+                const response = await fetch(`/mew/ira-aluno/${alunoId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const alunoSelect = document.getElementById('aluno_ira');
+                    
+                    document.getElementById('iraAlunoNome').textContent = data.aluno.nome;
+                    document.getElementById('iraAlunoRA').textContent = data.aluno.ra;
+                    document.getElementById('iraTotalDisciplinas').textContent = data.total_disciplinas;
+                    document.getElementById('iraCargaTotal').textContent = `${data.total_carga_horaria} horas`;
+                    document.getElementById('iraValor').textContent = data.ira.toFixed(2);
+                    
+                    resultElement.style.display = 'block';
+                } else {
+                    showAlert('Erro ao calcular IRA: ' + (data.message || 'Aluno não encontrado'), 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showAlert('Erro ao calcular IRA. Tente novamente.', 'error');
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+        
+        function showAlert(message, type) {
+            const alertElement = document.getElementById('alertMessage');
+            alertElement.textContent = message;
+            alertElement.className = `alert alert-${type}`;
+            alertElement.style.display = 'block';
+            
+            setTimeout(() => {
+                alertElement.style.display = 'none';
+            }, 5000);
+        }
+        
+        function limparFormulario() {
+            document.getElementById('rendimentoForm').reset();
+            document.getElementById('infoRendimento').style.display = 'none';
+            document.getElementById('alertMessage').style.display = 'none';
+        }
+        
+        // Prevenir múltiplos envios
+        document.getElementById('rendimentoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (carregando) return;
+            
+            const alunoId = document.getElementById('aluno_id').value;
+            const disciplinaId = document.getElementById('disciplina_id').value;
+            const notaFinal = document.getElementById('nota_final').value;
+            
+            if (!alunoId || !disciplinaId || !notaFinal) {
+                showAlert('Preencha todos os campos obrigatórios.', 'error');
+                return;
+            }
+            
+            carregando = true;
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Salvando...';
+            loadingIndicator.style.display = 'inline-block';
+            
+            try {
+                const formData = new FormData(this);
+                
+                const response = await fetch('/mew/salvar-rendimento', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                    
+                    // Atualizar conceito no display
+                    const conceitoClass = `conceito-badge conceito-${data.conceito}`;
+                    document.getElementById('infoConceito').innerHTML = `<span class="${conceitoClass}">${data.conceito}</span>`;
+                    document.getElementById('conceito').value = data.conceito;
+                    
+                    // Buscar novamente para atualizar informações
+                    buscarRendimento();
+                } else {
+                    showAlert('❌ ' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showAlert('❌ Erro ao salvar rendimento. Tente novamente.', 'error');
+            } finally {
+                carregando = false;
+                submitBtn.disabled = false;
+                submitBtn.textContent = '💾 Salvar Rendimento';
+                loadingIndicator.style.display = 'none';
+            }
+        });
+        
+        // Calcular conceito automaticamente baseado na nota
+        document.getElementById('nota_final').addEventListener('input', function() {
+            const nota = parseFloat(this.value);
+            const conceitoSelect = document.getElementById('conceito');
+            
+            if (isNaN(nota) || conceitoSelect.value) return;
+            
+            let conceito = 'F';
+            if (nota >= 90) conceito = 'A';
+            else if (nota >= 80) conceito = 'B';
+            else if (nota >= 70) conceito = 'C';
+            else if (nota >= 60) conceito = 'D';
+            
+            // Apenas atualizar visualmente, não o valor do select
+            const infoConceito = document.getElementById('infoConceito');
+            const conceitoClass = `conceito-badge conceito-${conceito}`;
+            infoConceito.innerHTML = `<span class="${conceitoClass}">${conceito}</span>`;
+        });
+    </script>
+</body>
+</html>

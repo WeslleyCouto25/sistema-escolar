@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado da Prova</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .resumo-box {
+            text-align: center;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, #764ba2 100%);
+            color: white;
+            box-shadow: var(--shadow);
+        }
+        
+        .nota-grande {
+            font-size: 4em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .status-box {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .status-item {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .questao-resultado {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            border-left: 5px solid #ccc;
+            background: white;
+            box-shadow: var(--shadow);
+        }
+        
+        .acertou {
+            background: #d4edda;
+            border-left-color: var(--success-color);
+        }
+        
+        .errou {
+            background: #f8d7da;
+            border-left-color: var(--danger-color);
+        }
+        
+        .opcao {
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 4px;
+            display: inline-block;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        
+        .opcao-correta {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
+        }
+        
+        .opcao-errada {
+            background: var(--danger-color);
+            color: white;
+            border-color: var(--danger-color);
+        }
+        
+        .botoes-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid var(--light-gray);
+        }
+        
+        .btn {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .pergunta-texto {
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--dark-gray);
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary-color);
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        
+        .back-link:hover {
+            color: var(--primary-dark);
+        }
+        
+        .result-details {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">Ambiente Virtual de Aprendizagem Facop/SiGEU</div>
+        </div>
+        
+        <div class="spacer"></div>
+        
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="/disciplina/{{ disciplina_id }}" class="logout-btn">
+                <i class="fas fa-book"></i> Voltar à Disciplina
+            </a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="ra">RA: {{ session.get('aluno_ra', '00000000') }}</div>
+                </div>
+            </div>
+            
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/disciplina/{{ disciplina_id }}" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">{{ disciplina_nome[:20] }}...</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <a href="/disciplina/{{ disciplina_id }}" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar para a disciplina
+            </a>
+            
+            <div class="resumo-box">
+                <h1>📊 Resultado da Prova</h1>
+                <div class="nota-grande">{{ nota_final }}/10</div>
+                <h3>{{ disciplina_nome }} - {{ capitulo_titulo }}</h3>
+                <p>Aluno: {{ aluno_nome }}</p>
+            </div>
+
+            <div class="status-box">
+                <div class="status-item">
+                    <h4>🎯 Acertos</h4>
+                    <p style="font-size: 2.5em; color: var(--success-color); font-weight: bold;">{{ acertos }}</p>
+                    <p>de {{ total_questoes }} questões</p>
+                </div>
+                <div class="status-item">
+                    <h4>📈 Porcentagem</h4>
+                    <p style="font-size: 2.5em; color: var(--primary-color); font-weight: bold;">{{ percentual }}%</p>
+                    <p>de aproveitamento</p>
+                </div>
+            </div>
+
+            <div class="result-details">
+                <h2 class="page-title">📝 Detalhes das Questões</h2>
+                
+                {% for resultado in resultados %}
+                <div class="questao-resultado {{ 'acertou' if resultado.acertou else 'errou' }}">
+                    <div class="pergunta-texto">
+                        <strong>Questão {{ loop.index }}:</strong> {{ resultado.pergunta }}
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        {% for letra, texto in resultado.opcoes.items() %}
+                            {% set classe = '' %}
+                            {% if letra == resultado.resposta_correta %}
+                                {% set classe = 'opcao-correta' %}
+                            {% elif letra == resultado.resposta_aluno and not resultado.acertou %}
+                                {% set classe = 'opcao-errada' %}
+                            {% endif %}
+                            
+                            <div class="opcao {{ classe }}">
+                                <strong>{{ letra }})</strong> {{ texto }}
+                                {% if letra == resultado.resposta_aluno and not resultado.acertou %}
+                                    <span style="color: white; font-weight: bold; margin-left: 10px;">(Sua resposta)</span>
+                                {% endif %}
+                                {% if letra == resultado.resposta_correta %}
+                                    <span style="color: white; font-weight: bold; margin-left: 10px;">(Resposta correta)</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 10px; border-radius: 4px; background: rgba(0,0,0,0.05);">
+                        {% if resultado.acertou %}
+                            <span style="color: var(--success-color); font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-check-circle"></i> Você acertou esta questão!
+                            </span>
+                        {% else %}
+                            <span style="color: var(--danger-color); font-weight: bold; display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-times-circle"></i> Você errou esta questão.
+                            </span>
+                            {% if resultado.resposta_aluno %}
+                            <p style="margin-top: 5px;"><strong>Sua resposta:</strong> {{ resultado.resposta_aluno }}</p>
+                            {% endif %}
+                            <p><strong>Resposta correta:</strong> {{ resultado.resposta_correta }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="botoes-container">
+                <a href="/disciplina/{{ disciplina_id }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Voltar para a Disciplina
+                </a>
+                <a href="/dashboard" class="btn btn-secondary">
+                    <i class="fas fa-chart-bar"></i> Ver Todas as Notas
+                </a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

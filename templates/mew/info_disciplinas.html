@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informações das Disciplinas - MEW</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .menu-card {
+            background: #1a237e;
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: transform 0.3s, background 0.3s;
+        }
+        .menu-card:hover {
+            background: #0d1b6b;
+            transform: translateY(-5px);
+        }
+        .menu-icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            display: block;
+        }
+        .menu-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .menu-description {
+            font-size: 0.95em;
+            opacity: 0.9;
+        }
+        .back-btn {
+            display: inline-block;
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .back-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <a href="/mew/dashboard" class="back-btn">← Voltar ao Dashboard</a>
+        <h1>📚 Gerenciar Informações das Disciplinas</h1>
+        <p>Configure informações adicionais como carga horária, docentes e rendimento acadêmico</p>
+        
+        <div class="menu-grid">
+            <a href="/mew/docentes" class="menu-card">
+                <div class="menu-icon">👨‍🏫</div>
+                <div class="menu-title">Gerenciar Docentes</div>
+                <div class="menu-description">Cadastre e gerencie os professores responsáveis pelas disciplinas</div>
+            </a>
+            
+            <a href="/mew/atribuir-info-disciplina" class="menu-card">
+                <div class="menu-icon">⚙️</div>
+                <div class="menu-title">Atribuir Informações</div>
+                <div class="menu-description">Defina carga horária, docente responsável e semestre para cada disciplina</div>
+            </a>
+            
+            <a href="/mew/listar-info-disciplinas" class="menu-card">
+                <div class="menu-icon">📋</div>
+                <div class="menu-title">Listar Disciplinas</div>
+                <div class="menu-description">Veja todas as disciplinas com suas informações completas</div>
+            </a>
+            
+            <a href="/mew/rendimento-academico" class="menu-card">
+                <div class="menu-icon">📊</div>
+                <div class="menu-title">Rendimento Acadêmico</div>
+                <div class="menu-description">Gerencie notas finais, conceitos e calcule IRA dos alunos</div>
+            </a>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+            <h3>📈 Estatísticas</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 20px;">
+                <div style="background: white; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2em; font-weight: bold; color: #1a237e;" id="totalDisciplinas">--</div>
+                    <div>Disciplinas</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2em; font-weight: bold; color: #1a237e;" id="totalDocentes">--</div>
+                    <div>Docentes</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 2em; font-weight: bold; color: #1a237e;" id="disciplinasComInfo">--</div>
+                    <div>Com informações</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Carregar estatísticas
+        async function carregarEstatisticas() {
+            try {
+                const response = await fetch('/mew/api/estatisticas-info-disciplinas');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalDisciplinas').textContent = data.total_disciplinas;
+                    document.getElementById('totalDocentes').textContent = data.total_docentes;
+                    document.getElementById('disciplinasComInfo').textContent = data.disciplinas_com_info;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar estatísticas:', error);
+            }
+        }
+        
+        carregarEstatisticas();
+    </script>
+</body>
+</html>

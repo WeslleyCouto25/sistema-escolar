@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Dashboard Administrativo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos adicionais para o menu-grid e cards */
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .menu-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid #e0e0e0;
+            position: relative;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-color: var(--primary-color);
+        }
+
+        .menu-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .menu-icon i {
+            font-size: 28px;
+            color: white;
+        }
+
+        .menu-card h3 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .menu-card p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+
+        .badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #dc3545;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Ajustes para a sidebar */
+        .main-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+            position: relative;
+        }
+
+        .menu-item i {
+            width: 24px;
+            margin-right: 10px;
+        }
+
+        .menu-item .badge {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #ffc107;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Card personalizado para Plano de Ensino */
+        .card-plano-ensino {
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: white;
+        }
+        
+        .card-plano-ensino p {
+            color: rgba(255,255,255,0.9);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Painel Administrativo</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/" class="logout-btn">Site Principal</a>
+            <a href="/mew/logout" class="logout-btn">Sair</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-cog"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">Administrador MEW</div>
+                    <div class="ra">Gestor</div>
+                </div>
+            </div>
+
+            <div class="main-menu">
+                <a href="/mew/dashboard" class="menu-item active">
+                    <i class="fas fa-home"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                
+                <a href="/mew/alunos" class="menu-item">
+                    <i class="fas fa-users"></i>
+                    <span class="text">Alunos</span>
+                </a>
+                
+                <a href="/mew/disciplinas" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">Disciplinas</span>
+                </a>
+                
+                <a href="/mew/info-disciplinas" class="menu-item">
+                    <i class="fas fa-info-circle"></i>
+                    <span class="text">Info Disciplinas</span>
+                </a>
+                
+                <a href="/mew/avaliacao-final" class="menu-item">
+                    <i class="fas fa-file-signature"></i>
+                    <span class="text">Avaliação Final</span>
+                    {% if total_alunos_acesso and total_alunos_acesso > 0 %}
+                    <span class="badge">{{ total_alunos_acesso }}</span>
+                    {% endif %}
+                </a>
+
+                <a href="/mew/gerenciar-notas" class="menu-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="text">Notas Acadêmicas</span>
+                </a>
+                
+                <a href="/mew/gerar-documento" class="menu-item">
+                    <i class="fas fa-file-certificate"></i>
+                    <span class="text">Documentos Autent.</span>
+                </a>
+                
+                <a href="/mew/gerar-plano-ensino" class="menu-item">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span class="text">Planos de Ensino</span>
+                </a>
+                
+                <a href="/mew/solicitacoes" class="menu-item">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="text">Materiais/Decl.</span>
+                    {% if total_solicitacoes_pendentes and total_solicitacoes_pendentes > 0 %}
+                    <span class="badge">{{ total_solicitacoes_pendentes }}</span>
+                    {% endif %}
+                </a>
+                
+                <a href="/mew/solicitacoes-documentos" class="menu-item">
+                    <i class="fas fa-file-contract"></i>
+                    <span class="text">Documentos</span>
+                    {% if total_solicitacoes_documentos_pendentes and total_solicitacoes_documentos_pendentes > 0 %}
+                    <span class="badge">{{ total_solicitacoes_documentos_pendentes }}</span>
+                    {% endif %}
+                </a>
+                
+                <a href="/mew/planos-ensino" class="menu-item">
+                    <i class="fas fa-folder-open"></i>
+                    <span class="text">Meus Planos</span>
+                    {% if total_planos and total_planos > 0 %}
+                    <span class="badge">{{ total_planos }}</span>
+                    {% endif %}
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <h1 class="page-title">📊 Dashboard Administrativo (MEW)</h1>
+            <p class="page-subtitle">Bem-vindo ao painel de administração. Selecione uma opção abaixo:</p>
+
+            <!-- MENU GRID - CARDS PRINCIPAIS -->
+            <div class="menu-grid">
+                <!-- Card Alunos -->
+                <div class="menu-card" onclick="window.location.href='/mew/alunos'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Alunos</h3>
+                    <p>Gerenciar alunos matriculados, dados pessoais e situação financeira</p>
+                </div>
+
+                <!-- Card Planos de Ensino (NOVO) -->
+                <div class="menu-card card-plano-ensino" onclick="window.location.href='/mew/gerar-plano-ensino'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #ff8f00, #ff6f00);">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <h3 style="color: white;">📋 Planos de Ensino</h3>
+                    <p style="color: rgba(255,255,255,0.9);">Gerar planos de ensino completos com IA - 3 páginas com autenticação digital</p>
+                    <span style="position: absolute; bottom: 15px; right: 15px; background: rgba(255,255,255,0.2); color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                        <i class="fas fa-robot"></i> IA
+                    </span>
+                </div>
+
+                <!-- Card Disciplinas -->
+                <div class="menu-card" onclick="window.location.href='/mew/disciplinas'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #28a745, #1e7e34);">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <h3>Disciplinas</h3>
+                    <p>Gerenciar disciplinas, capítulos, vídeos, PDFs e mini-provas</p>
+                </div>
+
+                <!-- Card Info Disciplinas -->
+                <div class="menu-card" onclick="window.location.href='/mew/info-disciplinas'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #17a2b8, #117a8b);">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <h3>Info Disciplinas</h3>
+                    <p>Gerenciar informações adicionais, docentes e carga horária</p>
+                </div>
+
+                <!-- Card Avaliação Final -->
+                <div class="menu-card" onclick="window.location.href='/mew/avaliacao-final'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #fd7e14, #dc3545);">
+                        <i class="fas fa-file-signature"></i>
+                    </div>
+                    <h3>Avaliação Final</h3>
+                    <p>Gerenciar liberação de provas finais para alunos</p>
+                    {% if total_alunos_acesso and total_alunos_acesso > 0 %}
+                    <span class="badge">{{ total_alunos_acesso }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Card Notas Acadêmicas -->
+                <div class="menu-card" onclick="window.location.href='/mew/gerenciar-notas'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #6f42c1, #6610f2);">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3>Notas Acadêmicas</h3>
+                    <p>Gerenciar notas dos alunos por disciplina</p>
+                </div>
+
+                <!-- Card Documentos Autenticados -->
+                <div class="menu-card" onclick="window.location.href='/mew/gerar-documento'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #20c997, #0ca678);">
+                        <i class="fas fa-file-certificate"></i>
+                    </div>
+                    <h3>Documentos Autent.</h3>
+                    <p>Gerar documentos oficiais com QR Code e autenticação</p>
+                </div>
+
+                <!-- Card Meus Planos (Listagem) -->
+                <div class="menu-card" onclick="window.location.href='/mew/planos-ensino'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #5e35b1, #4527a0);">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <h3>Meus Planos</h3>
+                    <p>Visualizar e gerenciar todos os planos de ensino gerados</p>
+                    {% if total_planos and total_planos > 0 %}
+                    <span class="badge">{{ total_planos }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Card Gerenciar Documentos -->
+                <div class="menu-card" onclick="window.location.href='/mew/gerenciar-documentos'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #1a237e, #0d1b6b);">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <h3>Gerenciar Documentos</h3>
+                    <p>Visualize e envie documentos para os alunos</p>
+                    {% if total_documentos and total_documentos > 0 %}
+                    <span class="badge">{{ total_documentos }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Card Solicitações (Materiais/Declarações) -->
+                <div class="menu-card" onclick="window.location.href='/mew/solicitacoes'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #ffc107, #e0a800);">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <h3>Materiais/Decl.</h3>
+                    <p>Solicitações de material didático e declarações</p>
+                    {% if total_solicitacoes_pendentes and total_solicitacoes_pendentes > 0 %}
+                    <span class="badge">{{ total_solicitacoes_pendentes }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Card Documentos (Solicitações) -->
+                <div class="menu-card" onclick="window.location.href='/mew/solicitacoes-documentos'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #6c757d, #495057);">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <h3>Documentos</h3>
+                    <p>Solicitações de documentos dos alunos</p>
+                    {% if total_solicitacoes_documentos_pendentes and total_solicitacoes_documentos_pendentes > 0 %}
+                    <span class="badge">{{ total_solicitacoes_documentos_pendentes }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- ESTATÍSTICAS RÁPIDAS -->
+            <div class="mew-card" style="margin-top: 30px;">
+                <h2 class="section-title">📈 Estatísticas Rápidas</h2>
+                <div class="info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-users" style="color: #667eea;"></i> Total de Alunos</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--primary-color);">
+                            {{ total_alunos or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-book" style="color: #28a745;"></i> Total de Disciplinas</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--primary-color);">
+                            {{ total_disciplinas or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-clipboard-list" style="color: #ff8f00;"></i> Planos de Ensino</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: #ff8f00;">
+                            {{ total_planos or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-file-alt" style="color: #fd7e14;"></i> Solicitações Pendentes</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--secondary-color);">
+                            {{ total_solicitacoes_pendentes or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-clipboard-check" style="color: #17a2b8;"></i> Provas Realizadas</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--accent-color);">
+                            {{ total_provas or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-file-pdf" style="color: #dc3545;"></i> Documentos Gerados</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: #1a237e;">
+                            {{ total_documentos or 0 }}
+                        </p>
+                    </div>
+
+                    <div class="info-card" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-align: center;">
+                        <h4 style="color: #666; margin-bottom: 10px;"><i class="fas fa-file-signature" style="color: #6f42c1;"></i> Avaliações Finais</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: #fd7e14;">
+                            {{ total_alunos_acesso or 0 }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ÚLTIMAS ATIVIDADES (OPCIONAL) -->
+            <div class="mew-card" style="margin-top: 30px;">
+                <h2 class="section-title">🕒 Últimas Atividades</h2>
+                <div style="background: white; border-radius: 8px; padding: 20px;">
+                    <p style="color: #666; text-align: center; padding: 20px;">
+                        <i class="fas fa-info-circle"></i> 
+                        Em breve: histórico de atividades recentes
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Adicionar classe active ao menu atual baseado na URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            menuItems.forEach(item => {
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        });
+
+        // Mostrar toast se houver mensagem na URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('sucesso')) {
+            alert('✅ ' + urlParams.get('sucesso').replace(/\+/g, ' '));
+        }
+        if (urlParams.get('erro')) {
+            alert('❌ ' + urlParams.get('erro').replace(/\+/g, ' '));
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Avaliação Final Disciplinar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .card-disciplina {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 5px solid var(--primary-color);
+        }
+        .card-resultado {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+        }
+        .status-aprovado {
+            background: #d4edda;
+            color: #155724;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .status-reprovado {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">Ambiente Virtual de Aprendizagem Facop/SiGEU</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="ra">Avaliação Final</div>
+                </div>
+            </div>
+            
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/avaliacao-final" class="menu-item active">
+                    <i class="fas fa-file-signature"></i>
+                    <span class="text">Avaliação Final</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <h1 class="page-title">📝 Avaliação Final Disciplinar</h1>
+            
+            {% if disciplinas %}
+            <div class="mew-card">
+                <h3><i class="fas fa-book"></i> Disciplinas Disponíveis</h3>
+                <p>Selecione uma disciplina para realizar a avaliação final:</p>
+                
+                {% for d in disciplinas %}
+                <div class="card-disciplina">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4>{{ d['nome'] }}</h4>
+                            <p style="color: var(--medium-gray); font-size: 14px;">
+                                <i class="fas fa-calendar"></i> Liberada em: {{ d['data_liberacao'] }}
+                            </p>
+                        </div>
+                        <div>
+                            {% if d['ja_realizada'] %}
+                            <span class="badge-secondary">Já realizada</span>
+                            {% else %}
+                            <a href="/avaliacao-final/prova/{{ d['id'] }}" class="btn btn-primary">
+                                <i class="fas fa-play-circle"></i> Iniciar Prova
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="mew-card">
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-calendar-times" style="font-size: 48px; color: var(--light-gray);"></i>
+                    <h3>Nenhuma avaliação final disponível</h3>
+                    <p>Não há avaliações finais liberadas no momento ou você já realizou todas.</p>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if resultados %}
+            <div class="mew-card" style="margin-top: 30px;">
+                <h3><i class="fas fa-history"></i> Resultados Anteriores</h3>
+                
+                {% for r in resultados %}
+                <div class="card-resultado">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4>{{ r['disciplina_nome'] }}</h4>
+                            <p style="font-size: 14px; color: var(--medium-gray);">
+                                Realizada em: {{ r['data_realizacao'] }}
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 24px; font-weight: bold; 
+                                color: {% if r['status'] == 'aprovado' %}#28a745{% else %}#dc3545{% endif %};">
+                                {{ "%.1f"|format(r['media_final']) }}/10
+                            </div>
+                            <div>
+                                {% if r['status'] == 'aprovado' %}
+                                <span class="status-aprovado">✅ Aprovado</span>
+                                {% else %}
+                                <span class="status-reprovado">❌ Reprovado</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 20px; margin-top: 10px; font-size: 14px;">
+                        <span><strong>Prova Final:</strong> {{ "%.1f"|format(r['nota_final']) }}/10</span>
+                        <span><strong>Média Disciplina:</strong> {{ "%.1f"|format(r['media_disciplina']) }}/10</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Gerenciar Notas Acadêmicas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .search-box {
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .search-box i {
+            position: absolute;
+            top: 50%;
+            left: 12px;
+            transform: translateY(-50%);
+            color: #777;
+        }
+        
+        .search-box input {
+            padding-left: 38px;
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+        
+        .alunos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .aluno-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.2s;
+        }
+        
+        .aluno-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        }
+        
+        .aluno-card h3 {
+            margin: 0 0 10px 0;
+            color: var(--primary-color);
+        }
+        
+        .aluno-card p {
+            margin: 5px 0;
+            color: #666;
+        }
+        
+        .aluno-card .btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 15px;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .aluno-card .btn:hover {
+            background: var(--secondary-color);
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Gerenciar Notas Acadêmicas</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+            <a href="/mew/alunos" class="logout-btn">← Voltar para Alunos</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="margin-left: 0;">
+            <h1 class="page-title">📊 Gerenciar Notas Acadêmicas</h1>
+            
+            <div class="mew-card">
+                <h2 class="section-title">👥 Selecione um Aluno</h2>
+                <p>Escolha um aluno abaixo para gerenciar suas notas por disciplina:</p>
+                
+                <div class="search-box">
+                    <i class="fa fa-search"></i>
+                    <input type="text" id="searchAluno" placeholder="Pesquisar aluno por nome ou RA...">
+                </div>
+                
+                {% if alunos %}
+                <div class="alunos-grid" id="listaAlunos">
+                    {% for aluno in alunos %}
+                    <div class="aluno-card" data-nome="{{ aluno.nome | lower }}" data-ra="{{ aluno.ra }}">
+                        <h3>{{ aluno.nome }}</h3>
+                        <p><strong>RA:</strong> {{ aluno.ra }}</p>
+                        <p><strong>ID:</strong> {{ aluno.id }}</p>
+                        <a href="/mew/gerenciar-notas/aluno/{{ aluno.id }}" class="btn">
+                            <i class="fas fa-edit"></i> Gerenciar Notas
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="text-align: center; padding: 40px;">
+                    <i class="fas fa-users-slash" style="font-size: 48px; color: #ccc; margin-bottom: 20px;"></i>
+                    <p style="color: #666;">Nenhum aluno cadastrado no sistema.</p>
+                    <a href="/mew/alunos" class="btn btn-primary" style="margin-top: 20px;">
+                        <i class="fas fa-user-plus"></i> Cadastrar Novo Aluno
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            
+            <a href="/mew/dashboard" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar para o Dashboard
+            </a>
+        </main>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('searchAluno');
+        const cards = document.querySelectorAll('.aluno-card');
+
+        searchInput.addEventListener('input', function () {
+            const termo = this.value.toLowerCase();
+
+            cards.forEach(card => {
+                const nome = card.dataset.nome;
+                const ra = card.dataset.ra;
+                
+                if (nome.includes(termo) || ra.includes(termo)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

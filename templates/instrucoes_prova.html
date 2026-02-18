@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Instruções da Prova</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            background: white;
+            padding: 40px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .disciplina-info {
+            background: rgba(0, 51, 102, 0.1);
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .aviso-box {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .regra-item {
+            margin: 15px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .regra-item:before {
+            content: "⚠️";
+            position: absolute;
+            left: 0;
+        }
+        
+        .termo-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 25px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .checkbox-container {
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            text-align: center;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 20px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        
+        .btn-primary:disabled {
+            background: var(--medium-gray);
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: var(--medium-gray);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: var(--dark-gray);
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary-color);
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        
+        .back-link:hover {
+            color: var(--primary-dark);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">Ambiente Virtual de Aprendizagem Facop/SiGEU</div>
+        </div>
+        
+        <div class="spacer"></div>
+        
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+            <a href="/disciplina/{{ disciplina_id }}" class="logout-btn">
+                <i class="fas fa-book"></i> Voltar à Disciplina
+            </a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="ra">RA: {{ session.get('aluno_ra', '00000000') }}</div>
+                </div>
+            </div>
+            
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/disciplina/{{ disciplina_id }}" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">Voltar à Disciplina</span>
+                </a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <a href="/disciplina/{{ disciplina_id }}" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar para a disciplina
+            </a>
+            
+            <div class="container">
+                <div class="disciplina-info">
+                    <h2>📝 Avaliação Parcial</h2>
+                    <p><strong>Disciplina:</strong> {{ disciplina_nome }}</p>
+                    <p><strong>Capítulo:</strong> {{ capitulo_numero }} - {{ capitulo_titulo }}</p>
+                    <p><strong>Quantidade de questões:</strong> {{ total_questoes }}</p>
+                </div>
+
+                <h1 class="page-title">Instruções Importantes</h1>
+                
+                <div class="aviso-box">
+                    <h3><i class="fas fa-exclamation-triangle"></i> ATENÇÃO</h3>
+                    <p>Leia atentamente todas as instruções antes de iniciar a prova:</p>
+                </div>
+
+                <div>
+                    <h3>📋 Regras da Prova:</h3>
+                    <div class="regra-item"><strong>Tempo limite:</strong> 60 minutos para concluir a prova</div>
+                    <div class="regra-item"><strong>Acesso único:</strong> A prova só pode ser realizada uma vez</div>
+                    <div class="regra-item"><strong>Navegação:</strong> Não feche a aba/navegador durante a prova</div>
+                    <div class="regra-item"><strong>Questões:</strong> Todas são de múltipla escolha (A, B, C, D)</div>
+                    <div class="regra-item"><strong>Conclusão:</strong> Se fechar a aba, a prova será automaticamente encerrada</div>
+                </div>
+
+                <div class="termo-box">
+                    <h3>📝 Termo de Compromisso</h3>
+                    <p>Eu, <strong>{{ aluno_nome }}</strong>, declaro que:</p>
+                    <ol>
+                        <li>Estou ciente de que esta prova é individual;</li>
+                        <li>Não utilizarei qualquer material não autorizado durante a realização da prova;</li>
+                        <li>Responderei todas as questões com honestidade e ética;</li>
+                        <li>Aceito que qualquer tentativa de fraude resultará na anulação da prova;</li>
+                        <li>Confirmo que todas as respostas serão de minha própria autoria.</li>
+                    </ol>
+                    <p style="margin-top: 15px; font-style: italic;">
+                        "Declaro que as informações fornecidas são verdadeiras e assumo total responsabilidade pelas respostas."
+                    </p>
+                </div>
+
+                <div class="checkbox-container">
+                    <input type="checkbox" id="termoAceito" onchange="habilitarBotao()">
+                    <label for="termoAceito">
+                        <strong>Declaro que li, compreendi e concordo com todas as regras e o termo de compromisso acima.</strong>
+                    </label>
+                </div>
+
+                <div class="btn-group">
+                    <a href="/disciplina/{{ disciplina_id }}" class="btn btn-secondary">❌ Cancelar</a>
+                    <button id="btnIniciar" class="btn btn-primary" disabled onclick="iniciarProva()">
+                        ✅ Iniciar Prova
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function habilitarBotao() {
+            const checkbox = document.getElementById('termoAceito');
+            const botao = document.getElementById('btnIniciar');
+            botao.disabled = !checkbox.checked;
+        }
+
+        function iniciarProva() {
+            window.location.href = "/prova/{{ disciplina_id }}/{{ capitulo_numero }}";
+        }
+
+        // Prevenir F5 e fechamento da janela
+        window.addEventListener('beforeunload', function (e) {
+            if (!document.getElementById('termoAceito').checked) return;
+            e.preventDefault();
+            e.returnValue = 'Se você sair agora, a prova será encerrada. Tem certeza?';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Histórico Escolar - {{ aluno.nome }}</title>
+
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            color: #000;
+            line-height: 1.4;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .header img {
+            height: 70px;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .line {
+            border-top: 1px solid #000;
+            margin: 10px 0;
+        }
+
+        .section-title {
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 5px;
+        }
+
+        .box {
+            border: 1px solid #000;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            font-size: 10px;
+        }
+
+        table th,
+        table td {
+            border: 1px solid #000;
+            padding: 4px;
+            text-align: center;
+        }
+
+        table th {
+            font-weight: bold;
+            background-color: #f2f2f2;
+        }
+
+        .left {
+            text-align: left;
+        }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .assinatura {
+            margin-top: 30px;
+        }
+
+        .assinatura img {
+            height: 60px;
+        }
+
+        .carimbo {
+            margin-top: 20px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        /* Melhorias para impressão */
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        }
+
+        /* Container para a página de autenticação */
+        .auth-page {
+            page-break-before: always;
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 2px solid #000;
+        }
+
+        .auth-code {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #1a237e;
+        }
+
+        .qr-placeholder {
+            width: 150px;
+            height: 150px;
+            margin: 20px auto;
+            border: 2px dashed #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- CABEÇALHO -->
+    <div class="header">
+        <img src="{{ url_for('static', filename='img/logoinstitucional.jpeg') }}">
+        <img src="{{ url_for('static', filename='img/logoinstitucional.jpeg') }}">
+    </div>
+
+    <div class="center">
+        <p style="font-size: 10px; line-height: 1.2;">
+            FACOP/SIGEU<br>
+            Faculdade do Centro Oeste Paulista CNPJ: 04.344.730/0001-60<br>
+            Centro Unificado Educacional LDA – Polo de Ensino e Secretaria Executora<br>
+            Matriz: Rua Luiz Gimenez Mossego, 72 – Distrito Industrial – Telefones: (14) 3042-0884 / 3302-0501<br>
+            SIGEU – campusvirtualfacop.com.br<br>
+            Credenciamento Faculdade do Centro Oeste Paulista – Port. nº 487 de 26 de junho de 2017<br>
+            Publicado no D.O.U. de 28 de junho de 2017
+        </p>
+    </div>
+
+    <div class="line"></div>
+
+    <div class="center">
+        <strong style="font-size: 12px;">HISTÓRICO ESCOLAR (MODALIDADE: ISOLADAS)</strong><br>
+        {{ aluno.nome }}<br>
+        <small>Registro Acadêmico: {{ aluno.ra }}</small>
+    </div>
+
+    <!-- DADOS PESSOAIS -->
+    <div class="box">
+        <strong>Dados Pessoais:</strong><br>
+        <table style="border: none; margin: 0; padding: 0;">
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0; width: 120px;"><strong>Nome do aluno:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.nome }}</td>
+            </tr>
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Filiação:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.filiacao }}</td>
+            </tr>
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Nacionalidade:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.nacionalidade }}</td>
+                <td style="border: none; padding: 2px 10px 2px 0; width: 100px;"><strong>Naturalidade:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.naturalidade }}</td>
+            </tr>
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>CPF:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.cpf }}</td>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Data Nascimento:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.data_nascimento }}</td>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Sexo:</strong></td>
+                <td style="border: none; padding: 2px;">{{ aluno.sexo }}</td>
+            </tr>
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Carteira de Identidade:</strong></td>
+                <td style="border: none; padding: 2px;" colspan="3">{{ aluno.rg }}</td>
+            </tr>
+            <tr>
+                <td style="border: none; padding: 2px 10px 2px 0;"><strong>Referência:</strong></td>
+                <td style="border: none; padding: 2px;" colspan="3">{{ aluno.curso }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- TABELA DE DISCIPLINAS -->
+    <table>
+        <thead>
+            <tr>
+                <th>Período</th>
+                <th>Componente Curricular</th>
+                <th>Semestre</th>
+                <th>Carga Horária</th>
+                <th>Docente/Titulação</th>
+                <th>Nota Final</th>
+                <th>Resultado Final</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in disciplinas %}
+            <tr>
+                <td>{{ d.periodo }}</td>
+                <td class="left">{{ d.nome }}</td>
+                <td>{{ d.semestre }}</td>
+                <td>{{ d.carga }}h</td>
+                <td class="left">{{ d.docente }}</td>
+                <td>{{ d.nota }}</td>
+                <td>{{ d.status }}</td>
+            </tr>
+            {% endfor %}
+
+            <!-- Linha de total -->
+            <tr style="font-weight: bold; background-color: #f9f9f9;">
+                <td colspan="3" style="text-align: right;">Carga Horária Total:</td>
+                <td>{{ carga_total }}H</td>
+                <td colspan="3"></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- SISTEMA DE AVALIAÇÃO -->
+    <div class="box">
+        <strong>SISTEMA DE AVALIAÇÃO</strong><br>
+        A distribuição dos 100 pontos acontece da seguinte forma durante o período de oferta da disciplina:<br>
+        Produção Científica: 20%<br>
+        Prova I: 20%<br>
+        Prova II: 20%<br>
+        Prova III: 20%<br>
+        Prova IV: 20%<br><br>
+        Caso o aluno não alcance no mínimo 60% da pontuação distribuída, há a Avaliação Suplementar com as seguintes
+        características:<br>
+        Prova do conteúdo da disciplina. Valor: 100 pontos<br>
+        Pré-requisito: Resultado Final ≥ 60<br>
+        Regra: (Resultado Final + Nota Prova Suplementar) / 2<br>
+        Média final para Aprovação: ≥ 60 pontos
+    </div>
+
+    <!-- OBSERVAÇÕES -->
+    <div class="box">
+        <strong>OBSERVAÇÕES</strong><br>
+        Oferta de disciplina isolada de acordo com o art. 50 da Lei de Diretrizes e Bases da Educação Nacional – LDBEN
+        (Lei nº 9.394/1996).<br>
+        Modalidade de ingresso isolada, respeitados os pré-requisitos exigidos para cada disciplina, conforme registrado
+        no ato da matrícula, vinculada à estrutura curricular do curso reconhecido no convênio institucional
+        FACOP/SIGEU.
+    </div>
+
+    <!-- DATA -->
+    <div class="footer">
+        São Paulo – SP, {{ data_emissao }}
+    </div>
+
+    <!-- ASSINATURA -->
+    <div class="footer assinatura">
+        <img src="{{ url_for('static', filename='img/assinatura.png') }}"><br>
+        <strong>TATIANE REGINA COSTA LOURENÇO</strong><br>
+        Secretária Geral
+    </div>
+
+    <!-- CARIMBO -->
+    <div class="footer carimbo">
+        FACOP / SIGEU – Validade e Autenticidade via QR Code
+    </div>
+
+    <!-- PÁGINA DE AUTENTICAÇÃO (será adicionada automaticamente pelo sistema) -->
+    <div class="no-print" style="margin-top: 50px; padding: 20px; background: #f9f9f9; border-radius: 10px;">
+        <h3>Pré-visualização do Histórico Escolar</h3>
+
+        <div style="margin-top: 20px;">
+            <button onclick="gerarAutenticado()" class="btn btn-success" style="padding: 10px 20px;">
+                <i class="fas fa-file-signature"></i> Gerar Versão Autenticada
+            </button>
+            <a href="/mew/gerar-documentos" class="btn btn-secondary" style="margin-left: 10px;">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function gerarAutenticado() {
+            // Chamar API para gerar versão autenticada
+            fetch('/mew/gerar-documento-processar-historico', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    aluno_id: '{{ aluno.id }}'
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Abrir nova aba com o documento autenticado
+                        window.open(data.url_visualizar, '_blank');
+
+                        // Mostrar mensagem
+                        alert('Histórico autenticado gerado com sucesso! Código: ' + data.codigo);
+                    } else {
+                        alert('Erro: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao gerar documento autenticado');
+                });
+        }
+    </script>
+
+</body>
+
+</html>

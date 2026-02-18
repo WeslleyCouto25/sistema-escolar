@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado da Avaliação Final</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .resultado-box {
+            max-width: 800px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .resultado-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #2c3e50 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .nota-grande {
+            font-size: 5em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        
+        .status-box {
+            padding: 30px;
+        }
+        
+        .status-aprovado {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .status-reprovado {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .calculo-box {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 5px solid var(--primary-color);
+        }
+        
+        .calculo-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .calculo-final {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--primary-color);
+            background: #e7f1ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            padding: 30px;
+            border-top: 1px solid var(--light-gray);
+        }
+        
+        .btn {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">RESULTADO - AVALIAÇÃO FINAL</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/avaliacao-final" class="logout-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-home"></i> Dashboard
+            </a>
+        </div>
+    </header>
+
+    <div class="resultado-box">
+        <div class="resultado-header">
+            <h1>🎓 Resultado da Avaliação Final</h1>
+            <p>{{ aluno_nome }} - {{ resultado.get('disciplina_nome', 'Disciplina') }}</p>
+        </div>
+        
+        <div class="status-box">
+            <!-- Status Aprovado/Reprovado -->
+            {% if resultado.status == 'aprovado' %}
+            <div class="status-aprovado">
+                <i class="fas fa-trophy" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <h2>✅ PARABÉNS! VOCÊ FOI APROVADO!</h2>
+                <p>Sua média final foi igual ou superior a 7.0</p>
+            </div>
+            {% else %}
+            <div class="status-reprovado">
+                <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                <h2>❌ VOCÊ FOI REPROVADO</h2>
+                <p>Sua média final foi inferior a 7.0</p>
+                <p style="margin-top: 10px; font-size: 14px;">
+                    Entre em contato com a administração para mais informações.
+                </p>
+            </div>
+            {% endif %}
+            
+            <!-- Nota Principal -->
+            <div style="text-align: center; margin: 30px 0;">
+                <div class="nota-grande" style="color: {% if resultado.status == 'aprovado' %}#28a745{% else %}#dc3545{% endif %};">
+                    {{ "%.1f"|format(resultado.media_final) }}/10
+                </div>
+                <p style="color: var(--medium-gray);">Média Final</p>
+            </div>
+            
+            <!-- Cálculo Detalhado -->
+            <div class="calculo-box">
+                <h3><i class="fas fa-calculator"></i> Cálculo da Média Final</h3>
+                <p>Média final = (Nota da Prova Final + Média das 4 Provas) ÷ 2</p>
+                
+                <div style="margin-top: 20px;">
+                    <div class="calculo-item">
+                        <span>Nota da Prova Final (30 questões):</span>
+                        <strong>{{ "%.1f"|format(resultado.nota_final) }}/10</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>Média das 4 Provas da Disciplina:</span>
+                        <strong>{{ "%.1f"|format(resultado.media_disciplina) }}/10</strong>
+                    </div>
+                    <div class="calculo-item">
+                        <span>Acertos na Prova Final:</span>
+                        <strong>{{ resultado.get('acertos', '?') }}/30 questões</strong>
+                    </div>
+                    <div class="calculo-final">
+                        <span>MÉDIA FINAL:</span>
+                        <strong>{{ "%.1f"|format(resultado.media_final) }}/10</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Data e Informações -->
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; color: var(--medium-gray); font-size: 14px;">
+                    <div>
+                        <i class="fas fa-calendar"></i> 
+                        Data da Prova: {{ resultado.get('data_realizacao', 'Hoje') }}
+                    </div>
+                    <div>
+                        <i class="fas fa-user-graduate"></i> 
+                        Status: 
+                        {% if resultado.status == 'aprovado' %}
+                        <span style="color: #28a745;">APROVADO</span>
+                        {% else %}
+                        <span style="color: #dc3545;">REPROVADO</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Botões de Ação -->
+        <div class="btn-group">
+            <a href="/avaliacao-final" class="btn btn-secondary">
+                <i class="fas fa-list"></i> Ver Outras Disciplinas
+            </a>
+            <a href="/dashboard" class="btn btn-primary">
+                <i class="fas fa-chart-bar"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+</body>
+</html>
