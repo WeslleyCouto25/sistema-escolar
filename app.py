@@ -1315,11 +1315,24 @@ body {
     
     <!-- QR CODE - AGORA USA O TEMPLATE COM {{ qrcode_base64 }} -->
     <div class="qr-code-box">
-        <div class="qr-code-label">Validação Digital</div>
-        <div id="qr-code-placeholder">
-            <img src="{{ qrcode_base64 }}" alt="QR Code de Validação" style="width: 100%; height: 100%; object-fit: contain;">
-        </div>
+    <div class="qr-code-label">Validação Digital</div>
+    <div id="qr-code-placeholder">
+        <!-- Símbolo simples de código de barras usando SVG -->
+        <svg width="60" height="40" viewBox="0 0 60 40" style="opacity: 0.6;">
+            <rect x="2" y="5" width="4" height="30" fill="#1a237e"/>
+            <rect x="8" y="5" width="2" height="30" fill="#1a237e"/>
+            <rect x="12" y="5" width="6" height="30" fill="#1a237e"/>
+            <rect x="20" y="5" width="3" height="30" fill="#1a237e"/>
+            <rect x="25" y="5" width="2" height="30" fill="#1a237e"/>
+            <rect x="30" y="5" width="5" height="30" fill="#1a237e"/>
+            <rect x="37" y="5" width="2" height="30" fill="#1a237e"/>
+            <rect x="42" y="5" width="4" height="30" fill="#1a237e"/>
+            <rect x="48" y="5" width="3" height="30" fill="#1a237e"/>
+            <rect x="53" y="5" width="2" height="30" fill="#1a237e"/>
+            <rect x="57" y="5" width="1" height="30" fill="#1a237e"/>
+        </svg>
     </div>
+</div>
     
     <!-- RODAPÉ TÉCNICO -->
     <div class="rodape-tecnico">
