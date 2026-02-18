@@ -1,6 +1,4 @@
 from pydoc import html
-from dotenv import load_dotenv
-load_dotenv()
 import sqlite3
 import json
 import time
@@ -2665,7 +2663,7 @@ def solicitar_declaracao():
 # MEW - PAINEL ADMIN
 # ==========================
 
-@app.route("/mew/login", methods=["GET", "POST"])
+'''@app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
         email = request.form.get("email")
@@ -2679,6 +2677,18 @@ def mew_login():
             and admin_password_hash
             and check_password_hash(admin_password_hash, senha)
         ):
+            session["mew_admin"] = True
+            return redirect("/mew/dashboard")
+
+    return render_template("mew/login.html")'''
+    
+@app.route("/mew/login", methods=["GET", "POST"])
+def mew_login():
+    if request.method == "POST":
+        email = request.form.get("email")
+        senha = request.form.get("senha")
+
+        if email == "admin@mew.com" and senha == "123456":
             session["mew_admin"] = True
             return redirect("/mew/dashboard")
 
@@ -5899,7 +5909,7 @@ def obter_configuracao_ano():
     return str(datetime.now().year)
 
 def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None):
-    """Gera HTML do histórico escolar com QR CODE JÁ INCLUSO - DIVIDIDO EM 2 PÁGINAS"""
+    """Gera HTML do histórico escolar com QR CODE JÁ INCLUSO"""
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -5931,8 +5941,17 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     ano_historico = ano_manual if ano_manual else obter_configuracao_ano()
     
     # Calcular IRA
-    ira_info = calcular_ira_aluno_completo(aluno_id)
-    ira_display = f"{ira_info['ira']:.2f}" if ira_info['ira'] > 0 else "N/I"
+    cursor.execute("""
+                SELECT ira_ponderado 
+    FROM ira_aluno 
+    WHERE aluno_id = ?
+""", (aluno_id,))
+
+    ira_row = cursor.fetchone()    
+    if ira_row and ira_row['ira_ponderado']:
+        ira_display = f"{ira_row['ira_ponderado']:.2f}"
+    else:
+        ira_display = "N/I"
     
     # Buscar dados adicionais do aluno
     cursor.execute("""
@@ -5980,8 +5999,8 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     else:
         sexo_display = sexo
     
-    # Gerar linhas da tabela para PÁGINA 1 (todas as disciplinas)
-    linhas_tabela = ""
+    # Gerar linhas da tabela
+    linhas = ""
     for d in disciplinas:
         # Buscar informações adicionais da disciplina
         cursor.execute("""
@@ -6046,7 +6065,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         # Determinar semestre
         semestre = periodo.split('.')[-1] if '.' in periodo else "1"
         
-        linhas_tabela += f"""
+        linhas += f"""
             <tr>
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{periodo}</td>
                 <td style="border: 1px solid #000; padding: 4px; text-align: left;">{d.get('nome', 'Disciplina')}</td>
@@ -6058,59 +6077,28 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             </tr>
         """
     
-    # Adicionar linha de totais na tabela
-    linha_totais = f"""
-        <tr style="background: #f0f0f0; font-weight: bold;">
-            <td colspan="3">Carga Horária Total Aprovada:</td>
-            <td>{carga_total_aprovada}H</td>
-            <td colspan="2">Carga Horária Total Cursada:</td>
-            <td>{carga_total_cursada}H</td>
-        </tr>
-    """
-    
     # Gerar link de validação
-    base_url = "https://campusvirtualfacop.com.br"
+    base_url = "https://campusvirtualfacop.com.br"  # Ajuste conforme necessário
     link_validacao = f"{base_url}/validar-documento/{codigo}"
     data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
     data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
     
-    # CSS COMPARTILHADO ENTRE AS PÁGINAS
-    css_compartilhado = '''
+    # HTML COMPLETO COM QUEBRA DE PÁGINA ANTES DO RESUMO ACADÊMICO
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>HISTÓRICO ESCOLAR - {dados_aluno.get('nome','')}</title>
+
 <style>
-
-/* CONFIGURAÇÃO PARA PDF A5 - COLOQUE ISSO NO INÍCIO DO CSS */
-@page {
-    size: A5;
-    margin: 1.5cm;
-}
-
-@media print {
-    body, .folha {
-        width: 148mm !important;
-        margin: 0 auto !important;
-        padding: 15mm 20mm 25mm 20mm !important;
-        box-shadow: none !important;
-    }
-    
-    .no-print {
-        display: none !important;
-    }
-}
-
 /* TIPOGRAFIA INSTITUCIONAL - ARIAL/CALIBRI */
-* {
+* {{
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-}
-/* TIPOGRAFIA INSTITUCIONAL - ARIAL/CALIBRI */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+}}
 
-body {
+body {{
     margin: 0;
     padding: 0;
     background: #c9c9c9;
@@ -6120,10 +6108,10 @@ body {
     line-height: 1.4;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-}
+}}
 
 /* FOLHA A4 COM MARGENS PRECISAS */
-.folha {
+.folha {{
     width: 210mm;
     min-height: 297mm;
     margin: 0 auto;
@@ -6133,14 +6121,10 @@ body {
     box-shadow: 0 0 20px rgba(0,0,0,0.3);
     padding: 15mm 20mm 25mm 20mm;
     page-break-after: always;
-}
-
-.folha:last-child {
-    page-break-after: auto;
-}
+}}
 
 /* BORDA DE SEGURANÇA - ESTILO PAPEL MOEDA */
-.borda-seguranca {
+.borda-seguranca {{
     position: absolute;
     top: 8mm;
     left: 8mm;
@@ -6148,9 +6132,9 @@ body {
     bottom: 8mm;
     border: 0.5pt solid #1a237e;
     pointer-events: none;
-}
+}}
 
-.borda-seguranca::before {
+.borda-seguranca::before {{
     content: "";
     position: absolute;
     top: 2mm;
@@ -6159,47 +6143,47 @@ body {
     bottom: 2mm;
     border: 0.3pt dashed #1a237e;
     opacity: 0.5;
-}
+}}
 
 /* CANTONEIRAS DE SEGURANÇA */
-.cantoneira {
+.cantoneira {{
     position: absolute;
     width: 15mm;
     height: 15mm;
     border: 2pt solid #1a237e;
     z-index: 100;
-}
+}}
 
-.cantoneira.top-left {
+.cantoneira.top-left {{
     top: 6mm;
     left: 6mm;
     border-right: none;
     border-bottom: none;
-}
+}}
 
-.cantoneira.top-right {
+.cantoneira.top-right {{
     top: 6mm;
     right: 6mm;
     border-left: none;
     border-bottom: none;
-}
+}}
 
-.cantoneira.bottom-left {
+.cantoneira.bottom-left {{
     bottom: 6mm;
     left: 6mm;
     border-right: none;
     border-top: none;
-}
+}}
 
-.cantoneira.bottom-right {
+.cantoneira.bottom-right {{
     bottom: 6mm;
     right: 6mm;
     border-left: none;
     border-top: none;
-}
+}}
 
 /* MARCA D'ÁGUA PRINCIPAL - SELO INSTITUCIONAL */
-.marca-dagua-principal {
+.marca-dagua-principal {{
     position: absolute;
     top: 50%;
     left: 50%;
@@ -6213,10 +6197,10 @@ body {
     pointer-events: none;
     z-index: 1;
     font-weight: 900;
-}
+}}
 
 /* MARCA D'ÁGUA SECUNDÁRIA - PATTERN GEOMÉTRICO */
-.marca-dagua-pattern {
+.marca-dagua-pattern {{
     position: absolute;
     top: 0;
     left: 0;
@@ -6227,10 +6211,10 @@ body {
         repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
     pointer-events: none;
     z-index: 1;
-}
+}}
 
 /* MICROTEXTO DE SEGURANÇA NA BORDA */
-.microtexto-borda {
+.microtexto-borda {{
     position: absolute;
     font-family: "Arial", sans-serif;
     font-size: 5pt;
@@ -6239,36 +6223,36 @@ body {
     text-transform: uppercase;
     white-space: nowrap;
     z-index: 2;
-}
+}}
 
-.microtexto-borda.top {
+.microtexto-borda.top {{
     top: 5mm;
     left: 50%;
     transform: translateX(-50%);
-}
+}}
 
-.microtexto-borda.bottom {
+.microtexto-borda.bottom {{
     bottom: 5mm;
     left: 50%;
     transform: translateX(-50%);
-}
+}}
 
-.microtexto-borda.left {
+.microtexto-borda.left {{
     left: 3mm;
     top: 50%;
     transform: translateY(-50%) rotate(-90deg);
     transform-origin: center;
-}
+}}
 
-.microtexto-borda.right {
+.microtexto-borda.right {{
     right: 3mm;
     top: 50%;
     transform: translateY(-50%) rotate(90deg);
     transform-origin: center;
-}
+}}
 
 /* FAIXA SUPERIOR IDENTIFICADORA */
-.faixa-identificadora {
+.faixa-identificadora {{
     position: absolute;
     top: 0;
     left: 0;
@@ -6284,25 +6268,10 @@ body {
         #1a237e 15mm
     );
     z-index: 10;
-}
-
-/* MICROTEXTOS DE SEGURANÇA ESPALHADOS */
-.microtexto-seguranca {
-    position: absolute;
-    font-family: "Arial", sans-serif;
-    font-size: 5pt;
-    color: rgba(0,0,0,0.15);
-    z-index: 2;
-    letter-spacing: 0.5px;
-}
-
-.micro-1 { top: 30mm; left: 10mm; transform: rotate(90deg); }
-.micro-2 { top: 50mm; right: 10mm; transform: rotate(-90deg); }
-.micro-3 { bottom: 80mm; left: 12mm; }
-.micro-4 { bottom: 100mm; right: 50mm; }
+}}
 
 /* CABEÇALHO INSTITUCIONAL */
-.cabecalho {
+.cabecalho {{
     position: relative;
     z-index: 5;
     border-bottom: 1.5pt solid #1a237e;
@@ -6311,25 +6280,25 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-}
+}}
 
-.logo-area {
+.logo-area {{
     display: flex;
     align-items: center;
     gap: 5mm;
-}
+}}
 
-.logo-area img {
+.logo-area img {{
     width: 25mm;
     height: auto;
     opacity: 0.9;
-}
+}}
 
-.instituicao-info {
+.instituicao-info {{
     flex: 1;
-}
+}}
 
-.instituicao-nome {
+.instituicao-nome {{
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 14pt;
     color: #1a237e;
@@ -6337,18 +6306,18 @@ body {
     letter-spacing: 1.5px;
     line-height: 1.2;
     margin-top: 8mm;
-}
+}}
 
-.instituicao-sub {
+.instituicao-sub {{
     font-family: "Arial", sans-serif;
     font-size: 8pt;
     color: #444;
     margin-top: 2mm;
     line-height: 1.3;
-}
+}}
 
 /* SELO DE AUTENTICIDADE NO CABEÇALHO */
-.selo-autenticidade {
+.selo-autenticidade {{
     width: 22mm;
     height: 22mm;
     border: 1.5pt solid #1a237e;
@@ -6364,9 +6333,9 @@ body {
     line-height: 1.1;
     position: relative;
     background: radial-gradient(circle, rgba(26,35,126,0.05) 0%, transparent 70%);
-}
+}}
 
-.selo-autenticidade::before {
+.selo-autenticidade::before {{
     content: "";
     display: inline-block;
     width: 24px;
@@ -6377,10 +6346,10 @@ body {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Crect x='0' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='4' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='7' y='0' width='3' height='16' fill='%231a237e'/%3E%3Crect x='12' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='15' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='19' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='22' y='0' width='2' height='16' fill='%231a237e'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-size: contain;
-}
+}}
 
 /* NÚMERO DE CONTROLE NO CANTO */
-.numero-controle-box {
+.numero-controle-box {{
     position: absolute;
     top: 12mm;
     right: 12mm;
@@ -6391,22 +6360,22 @@ body {
     color: #1a237e;
     background: rgba(26,35,126,0.03);
     z-index: 20;
-}
+}}
 
-.numero-controle-box::before {
+.numero-controle-box::before {{
     content: "Nº CONTROLE: ";
     font-weight: bold;
-}
+}}
 
 /* TÍTULO DO DOCUMENTO */
-.titulo-documento {
+.titulo-documento {{
     text-align: center;
     margin: 1mm 0 10mm 0;
     position: relative;
     z-index: 5;
-}
+}}
 
-.titulo-principal {
+.titulo-principal {{
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 18pt;
     color: #1a237e;
@@ -6416,27 +6385,28 @@ body {
     position: relative;
     display: inline-block;
     padding: 0 15mm;
-}
+}}
 
+/* LINHAS DECORATIVAS LATERAIS DO TÍTULO */
 .titulo-principal::before,
-.titulo-principal::after {
+.titulo-principal::after {{
     content: "";
     position: absolute;
     top: 50%;
     width: 10mm;
     height: 1pt;
     background: #1a237e;
-}
+}}
 
-.titulo-principal::before {
+.titulo-principal::before {{
     left: 0;
-}
+}}
 
-.titulo-principal::after {
+.titulo-principal::after {{
     right: 0;
-}
+}}
 
-.titulo-sub {
+.titulo-sub {{
     font-family: "Arial", sans-serif;
     font-size: 9pt;
     color: #555;
@@ -6446,18 +6416,35 @@ body {
     border-bottom: 0.5pt solid #ccc;
     padding: 2mm 0;
     display: inline-block;
-}
+}}
 
-/* BOX DE IDENTIFICAÇÃO DO ALUNO (SIMPLIFICADO) */
-.box-identificacao {
+/* TEXTO DE ABERTURA */
+.texto-abertura {{
+    text-align: justify;
+    margin-bottom: 8mm;
+    position: relative;
+    z-index: 5;
+    font-size: 10.5pt;
+    line-height: 1.6;
+    text-indent: 15mm;
+}}
+
+.destaque {{
+    font-weight: bold;
+    color: #1a237e;
+    font-family: "Arial Black", "Arial", sans-serif;
+}}
+
+/* BOX DE IDENTIFICAÇÃO - ESTILO FICHA CRIMINAL */
+.box-identificacao {{
     border: 1pt solid #1a237e;
     margin: 8mm 0;
     position: relative;
     z-index: 5;
     background: rgba(26,35,126,0.02);
-}
+}}
 
-.box-identificacao-header {
+.box-identificacao-header {{
     background: #1a237e;
     color: #fff;
     font-family: "Arial Black", "Arial", sans-serif;
@@ -6466,25 +6453,25 @@ body {
     letter-spacing: 2px;
     padding: 1mm 4mm;
     text-align: center;
-}
+}}
 
-.box-identificacao-content {
+.box-identificacao-content {{
     padding: 3mm;
-}
+}}
 
-.linha-dado {
+.linha-dado {{
     display: flex;
     margin-bottom: 3mm;
     border-bottom: 0.3pt dotted #999;
     padding-bottom: 2mm;
-}
+}}
 
-.linha-dado:last-child {
+.linha-dado:last-child {{
     margin-bottom: 0;
     border-bottom: none;
-}
+}}
 
-.rotulo {
+.rotulo {{
     width: 25mm;
     font-family: "Arial", sans-serif;
     font-size: 8pt;
@@ -6492,28 +6479,28 @@ body {
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
+}}
 
-.valor {
+.valor {{
     flex: 1;
     font-family: "Arial", sans-serif;
     font-size: 11pt;
     color: #000;
     font-weight: bold;
     padding-left: 3mm;
-}
+}}
 
 /* BOX DE DADOS PESSOAIS ESTENDIDOS */
-.box-dados-pessoais {
+.box-dados-pessoais {{
     border: 1pt solid #1a237e;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
     z-index: 5;
     background: #fff;
-}
+}}
 
-.box-dados-pessoais::before {
+.box-dados-pessoais::before {{
     content: "DADOS PESSOAIS COMPLETOS";
     position: absolute;
     top: -3mm;
@@ -6524,45 +6511,45 @@ body {
     font-size: 7pt;
     color: #1a237e;
     letter-spacing: 1px;
-}
+}}
 
-.dados-grid {
+.dados-grid {{
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 3mm;
     margin-top: 2mm;
-}
+}}
 
-.dado-item-historico {
+.dado-item-historico {{
     margin-bottom: 2mm;
-}
+}}
 
-.dado-label-historico {
+.dado-label-historico {{
     font-size: 7pt;
     color: #666;
     text-transform: uppercase;
     letter-spacing: 1px;
-}
+}}
 
-.dado-valor-historico {
+.dado-valor-historico {{
     font-weight: bold;
     color: #000;
     font-size: 10pt;
     border-bottom: 0.5pt dotted #ccc;
     padding-bottom: 1mm;
-}
+}}
 
 /* TABELA DE DISCIPLINAS */
-.tabela-disciplinas {
+.tabela-disciplinas {{
     width: 100%;
     border-collapse: collapse;
     margin: 8mm 0;
     font-size: 8pt;
     z-index: 5;
     position: relative;
-}
+}}
 
-.tabela-disciplinas th {
+.tabela-disciplinas th {{
     background: #1a237e;
     color: white;
     font-weight: bold;
@@ -6570,20 +6557,20 @@ body {
     text-align: center;
     font-size: 7pt;
     text-transform: uppercase;
-}
+}}
 
-.tabela-disciplinas td {
+.tabela-disciplinas td {{
     border: 1px solid #1a237e;
     padding: 4px;
     vertical-align: middle;
-}
+}}
 
-.tabela-disciplinas tr:nth-child(even) {
+.tabela-disciplinas tr:nth-child(even) {{
     background: rgba(26,35,126,0.02);
-}
+}}
 
 /* BOX DE RESUMO */
-.box-resumo {
+.box-resumo {{
     border: 1pt solid #1a237e;
     border-left: 4pt solid #1a237e;
     margin: 8mm 0;
@@ -6591,9 +6578,9 @@ body {
     position: relative;
     z-index: 5;
     background: #fff;
-}
+}}
 
-.box-resumo::before {
+.box-resumo::before {{
     content: "RESUMO ACADÊMICO";
     position: absolute;
     top: -3mm;
@@ -6604,53 +6591,53 @@ body {
     font-size: 7pt;
     color: #1a237e;
     letter-spacing: 1px;
-}
+}}
 
-.resumo-grid {
+.resumo-grid {{
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 3mm;
-}
+}}
 
-.resumo-item {
+.resumo-item {{
     text-align: center;
     border-right: 0.5pt solid #ddd;
     padding: 2mm;
-}
+}}
 
-.resumo-item:last-child {
+.resumo-item:last-child {{
     border-right: none;
-}
+}}
 
-.resumo-label {
+.resumo-label {{
     font-size: 7pt;
     color: #666;
     text-transform: uppercase;
     margin-bottom: 1mm;
-}
+}}
 
-.resumo-valor {
+.resumo-valor {{
     font-weight: bold;
     color: #1a237e;
     font-size: 12pt;
-}
+}}
 
-.resumo-detalhe {
+.resumo-detalhe {{
     font-size: 7pt;
     color: #999;
-}
+}}
 
 /* BOX DE SISTEMA DE AVALIAÇÃO */
-.box-avaliacao {
+.box-avaliacao {{
     border: 1pt solid #1a237e;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
     z-index: 5;
     background: #f9f9f9;
-}
+}}
 
-.box-avaliacao::before {
+.box-avaliacao::before {{
     content: "SISTEMA DE AVALIAÇÃO";
     position: absolute;
     top: -3mm;
@@ -6661,18 +6648,9 @@ body {
     font-size: 7pt;
     color: #1a237e;
     letter-spacing: 1px;
-}
+}}
 
-.box-avaliacao2 {
-    border: 1pt solid #1a237e;
-    margin: 8mm 0;
-    padding: 5mm;
-    position: relative;
-    z-index: 5;
-    background: #f9f9f9;
-}
-
-.box-avaliacao2::before {
+.box-avaliacao2::before {{
     content: "OBSERVAÇÕES";
     position: absolute;
     top: -3mm;
@@ -6683,10 +6661,9 @@ body {
     font-size: 7pt;
     color: #1a237e;
     letter-spacing: 1px;
-}
-
+}}
 /* SELO GRANDE DE AUTENTICAÇÃO */
-.selo-grande {
+.selo-grande {{
     position: absolute;
     bottom: 45mm;
     right: 15mm;
@@ -6706,24 +6683,24 @@ body {
     transform: rotate(-15deg);
     z-index: 3;
     pointer-events: none;
-}
+}}
 
-.selo-grande::before {
+.selo-grande::before {{
     content: "AUTENTICIDADE";
     font-weight: bold;
     font-size: 7pt;
     margin-bottom: 2mm;
     letter-spacing: 1px;
-}
+}}
 
-.selo-grande::after {
+.selo-grande::after {{
     content: "★ ★ ★";
     font-size: 8pt;
     margin-top: 2mm;
-}
+}}
 
 /* DATA E LOCAL */
-.data-local {
+.data-local {{
     text-align: right;
     margin: 15mm 0 10mm 0;
     font-family: "Arial", sans-serif;
@@ -6732,10 +6709,54 @@ body {
     position: relative;
     z-index: 5;
     font-style: italic;
-}
+}}
+
+/* ASSINATURA */
+.assinatura-area {{
+    margin-top: 15mm;
+    text-align: center;
+    position: relative;
+    z-index: 5;
+    page-break-inside: avoid;
+}}
+
+.assinatura-linha {{
+    width: 70mm;
+    height: 0;
+    border-top: 0.5pt solid #000;
+    margin: 0 auto 3mm auto;
+    position: relative;
+}}
+
+.assinatura-linha::before {{
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -2mm;
+    transform: translateX(-50%);
+    width: 20mm;
+    height: 4mm;
+    border-left: 0.5pt solid #999;
+    border-right: 0.5pt solid #999;
+}}
+
+.assinatura-nome {{
+    font-family: "Arial Black", "Arial", sans-serif;
+    font-size: 11pt;
+    color: #1a237e;
+    margin-bottom: 1mm;
+}}
+
+.assinatura-cargo {{
+    font-family: "Arial", sans-serif;
+    font-size: 8pt;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}}
 
 /* QR CODE AREA */
-.qr-code-box {
+.qr-code-box {{
     position: absolute;
     bottom: 23mm;
     left: 15mm;
@@ -6748,26 +6769,26 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 5;
-}
+}}
 
-.qr-code-label {
+.qr-code-label {{
     font-size: 6pt;
     color: #666;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 2mm;
-}
+}}
 
-#qr-code-placeholder {
+#qr-code-placeholder {{
     width: 20mm;
     height: 20mm;
     display: flex;
     align-items: center;
     justify-content: center;
-}
+}}
 
 /* RODAPÉ TÉCNICO */
-.rodape-tecnico {
+.rodape-tecnico {{
     position: absolute;
     bottom: 12mm;
     left: 50mm;
@@ -6780,42 +6801,50 @@ body {
     z-index: 5;
     border-top: 0.3pt solid #ddd;
     padding-top: 3mm;
-}
+}}
 
-.rodape-tecnico strong {
+.rodape-tecnico strong {{
     color: #1a237e;
-}
+}}
+
+/* MICROTEXTOS DE SEGURANÇA */
+.microtexto-seguranca {{
+    position: absolute;
+    font-family: "Arial", sans-serif;
+    font-size: 5pt;
+    color: rgba(0,0,0,0.15);
+    z-index: 2;
+    letter-spacing: 0.5px;
+}}
+
+.micro-1 {{ top: 30mm; left: 10mm; transform: rotate(90deg); }}
+.micro-2 {{ top: 50mm; right: 10mm; transform: rotate(-90deg); }}
+.micro-3 {{ bottom: 80mm; left: 12mm; }}
+.micro-4 {{ bottom: 100mm; right: 50mm; }}
 
 /* OBSERVAÇÕES */
-.observacoes-texto {
+.observacoes-texto {{
     font-size: 7pt;
     line-height: 1.4;
     color: #333;
-}
+}}
 
 /* PRINT STYLES */
-@media print {
-    body {
+@media print {{
+    body {{
         background: #fff;
-    }
+    }}
     
-    .folha {
+    .folha {{
         box-shadow: none;
         margin: 0;
-    }
-}
+    }}
+}}
 </style>
-'''
-    
-    # PÁGINA 1 - CABEÇALHO, DADOS DO ALUNO, TABELA DE DISCIPLINAS
-    pagina_1 = f'''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>HISTÓRICO ESCOLAR - {dados_aluno.get('nome','')} (PÁGINA 1/2)</title>
-{css_compartilhado}
 </head>
+
 <body>
+<!-- PRIMEIRA PÁGINA -->
 <div class="folha">
     <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
     <div class="borda-seguranca"></div>
@@ -6844,7 +6873,7 @@ body {
     <div class="faixa-identificadora"></div>
     
     <!-- NÚMERO DE CONTROLE -->
-    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico} (1/2)</div>
+    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
     
     <!-- CABEÇALHO -->
     <div class="cabecalho">
@@ -6927,7 +6956,7 @@ body {
         </div>
     </div>
     
-    <!-- TABELA DE DISCIPLINAS (PÁGINA 1) -->
+    <!-- TABELA DE DISCIPLINAS -->
     <table class="tabela-disciplinas">
         <thead>
             <tr>
@@ -6941,18 +6970,18 @@ body {
             </tr>
         </thead>
         <tbody>
-            {linhas_tabela}
+            {linhas}
+            <tr style="background: #f0f0f0; font-weight: bold;">
+                <td colspan="3">Carga Horária Total Aprovada:</td>
+                <td>{carga_total_aprovada}H</td>
+                <td colspan="2">Carga Horária Total Cursada:</td>
+                <td>{carga_total_cursada}H</td>
+            </tr>
         </tbody>
     </table>
-    
-    <div style="text-align: right; margin-top: 10mm; font-size: 8pt; color: #666;">
-        Continua na próxima página.
-    </div>
 </div>
-'''
-    
-    # PÁGINA 2 - RESUMO ACADÊMICO, AVALIAÇÃO, OBSERVAÇÕES, QR CODE
-    pagina_2 = f'''
+
+<!-- SEGUNDA PÁGINA - COMEÇA COM RESUMO ACADÊMICO -->
 <div class="folha">
     <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
     <div class="borda-seguranca"></div>
@@ -6981,9 +7010,9 @@ body {
     <div class="faixa-identificadora"></div>
     
     <!-- NÚMERO DE CONTROLE -->
-    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico} (2/2)</div>
+    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
     
-    <!-- CABEÇALHO (repetido na página 2) -->
+    <!-- CABEÇALHO -->
     <div class="cabecalho">
         <div class="logo-area">
             <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
@@ -7001,12 +7030,11 @@ body {
         </div>
     </div>
     
-    <!-- LINHA DE TOTAIS (REPETIDA PARA REFERÊNCIA) -->
-    <table class="tabela-disciplinas" style="margin-top: 0;">
-        <tbody>
-            {linha_totais}
-        </tbody>
-    </table>
+    <!-- TÍTULO -->
+    <div class="titulo-documento">
+        <div class="titulo-principal">Histórico Escolar</div>
+        <div class="titulo-sub">COMPONENTES CURRICULARES - {ano_historico}</div>
+    </div>
     
     <!-- BOX DE RESUMO ACADÊMICO -->
     <div class="box-resumo">
@@ -7055,12 +7083,16 @@ body {
         São Paulo – SP, {data_atual}.
     </div>
     
-    <!-- QR CODE -->
+     <!-- QR CODE - JÁ INCLUSO -->
     <div class="qr-code-box">
         <div class="qr-code-label">Validação Digital</div>
         <div id="qr-code-placeholder">
             <img src="{qr_code_base64}" alt="QR Code de Validação" style="width: 100%; height: 100%; object-fit: contain;">
         </div>
+    </div>
+    
+    <!-- SEÇÃO DE AUTENTICAÇÃO -->
+    <div style="position: absolute; bottom: 17mm; left: 15mm; right: 15mm; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 8pt; text-align: center; border-top: 1px solid #1a237e;">
     </div>
     
     <!-- RODAPÉ TÉCNICO -->
@@ -7070,11 +7102,12 @@ body {
         Para verificar autenticidade: <strong>https://campusvirtualfacop.com.br/validar-documento</strong> | Protocolo: HIST-{dados_aluno.get('ra','')}-{ano_historico}
     </div>
 </div>
+
 </body>
 </html>'''
     
     conn.close()
-    return pagina_1 + pagina_2
+    return html
   
 
 def salvar_documento_simples_db(codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html):
@@ -7261,11 +7294,12 @@ def gerar_historico_automatico_route():
         print(f"Erro: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+
 @app.route("/ver-documento/<codigo>")
 def ver_documento_completo(codigo):
     """
-    Mostra o documento completo com botão para baixar PDF em A5
+    Mostra o documento completo com QR Code e informações de autenticação
+    VERSÃO CORRIGIDA
     """
     try:
         conn = get_db_connection()
@@ -7276,122 +7310,52 @@ def ver_documento_completo(codigo):
         conn.close()
         
         if not documento:
-            return "Documento não encontrado", 404
+            return '''
+            <html>
+            <head>
+                <title>Documento não encontrado</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                    .error-box { 
+                        background: white; 
+                        padding: 30px; 
+                        border-radius: 10px; 
+                        max-width: 500px; 
+                        margin: 0 auto;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        border-left: 4px solid #dc3545;
+                    }
+                    .btn { 
+                        display: inline-block; 
+                        padding: 10px 20px; 
+                        background: #007bff; 
+                        color: white; 
+                        text-decoration: none; 
+                        border-radius: 5px; 
+                        margin-top: 20px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="error-box">
+                    <h2>❌ Documento não encontrado</h2>
+                    <p>Código: <strong>{}</strong></p>
+                    <p>Este documento não foi encontrado no sistema ou foi removido.</p>
+                    <a href="/validar-documento" class="btn">← Validar outro documento</a>
+                </div>
+            </body>
+            </html>
+            '''.format(codigo)
         
-        # PEGAR O HTML ORIGINAL DO DOCUMENTO
-        html_original = documento['conteudo_html']
+        # Converter para dicionário para facilitar o acesso
+        doc_dict = dict(documento)
         
-        # ADICIONAR O CSS E BOTÕES NO INÍCIO DO HTML
-        cabecalho_pdf = '''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        /* CONFIGURAÇÃO PARA PDF A5 */
-        @page {
-            size: A5;
-            margin: 1.5cm;
-        }
-
-        @media print {
-            body, .folha, .page {
-                width: 148mm !important;
-                margin: 0 auto !important;
-                padding: 0 !important;
-                box-shadow: none !important;
-                background: white !important;
-            }
-            
-            .no-print {
-                display: none !important;
-            }
-        }
-        
-        /* ESTILO DO BOTÃO FLUTUANTE */
-        .pdf-download-btn {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 9999;
-            text-align: center;
-        }
-        
-        .pdf-download-btn button {
-            background: #1a237e;
-            color: white;
-            border: none;
-            padding: 15px 25px;
-            border-radius: 50px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            transition: all 0.3s;
-        }
-        
-        .pdf-download-btn button:hover {
-            background: #0d1b6b;
-            transform: scale(1.05);
-        }
-        
-        .pdf-instruction {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #1a237e;
-            z-index: 9998;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            font-size: 13px;
-            max-width: 250px;
-        }
-        
-        .pdf-instruction strong {
-            color: #1a237e;
-        }
-    </style>
-</head>
-<body>
-    <!-- BOTÃO FLUTUANTE -->
-    <div class="pdf-download-btn no-print">
-        <button onclick="window.print()">
-            📄 BAIXAR PDF EM A5
-        </button>
-        <p style="color: #666; font-size: 11px; margin-top: 5px;">Clique e escolha "Salvar como PDF"</p>
-    </div>
-    
-    <!-- INSTRUÇÕES -->
-    <div class="pdf-instruction no-print">
-        <p style="margin: 0 0 8px 0;"><strong>📌 Como salvar em A5:</strong></p>
-        <ol style="margin: 0; padding-left: 20px;">
-            <li>Clique no botão ao lado</li>
-            <li>Na impressão, escolha <strong>"Salvar como PDF"</strong></li>
-            <li>Verifique se o tamanho é <strong>A5</strong></li>
-            <li>Clique em "Salvar"</li>
-        </ol>
-    </div>
-'''
-        
-        # JUNTAR O CABEÇALHO COM O CONTEÚDO ORIGINAL
-        # (removendo o doctype e head original se existir)
-        if '<!DOCTYPE html>' in html_original:
-            # Extrair apenas o body do documento original
-            import re
-            body_match = re.search(r'<body.*?>(.*)</body>', html_original, re.DOTALL)
-            if body_match:
-                conteudo_body = body_match.group(1)
-                html_final = cabecalho_pdf + conteudo_body + '</body></html>'
-            else:
-                html_final = cabecalho_pdf + html_original
-        else:
-            html_final = cabecalho_pdf + html_original
-        
-        return html_final
+        # Retornar o HTML salvo no banco diretamente
+        return doc_dict.get('conteudo_html', '<p>Erro: Conteúdo não encontrado</p>')
         
     except Exception as e:
         return f"Erro ao carregar documento: {str(e)}"
+    
 # ==========================
 # ROTA PARA LISTAR DOCUMENTOS (MEW)
 # ==========================
@@ -8847,22 +8811,13 @@ def mew_processar_plano_ensino():
     try:
         dados = request.json
         
-        # Chamar a API de IA para gerar o conteúdo
-        import requests
-        response = requests.post(
-            "http://localhost:5000/api/gerar-conteudo-plano",
-            json=dados,
-            headers={"Content-Type": "application/json"}
-        )
+        # ✅ CHAMAR DIRETAMENTE A FUNÇÃO DO MÓDULO (sem HTTP request)
+        from api_planos import consultar_openai_para_plano
         
-        if not response.ok:
-            return jsonify({"success": False, "message": "Erro na API de IA"})
+        conteudo_ia = consultar_openai_para_plano(dados)
         
-        resultado = response.json()
-        if not resultado.get('success'):
-            return jsonify({"success": False, "message": resultado.get('error', 'Erro desconhecido')})
-        
-        conteudo_ia = resultado['conteudo']
+        if not conteudo_ia:
+            return jsonify({"success": False, "message": "Erro ao gerar conteúdo com IA"})
         
         # Dados do formulário
         disciplina = dados.get('disciplina', '').upper()
@@ -8872,8 +8827,8 @@ def mew_processar_plano_ensino():
         data_geracao = dados.get('data_geracao', '')
         
         # Formatar data
+        from datetime import datetime, timedelta
         if data_geracao:
-            from datetime import datetime
             data_obj = datetime.strptime(data_geracao, "%Y-%m-%d")
             data_formatada = data_obj.strftime("%d/%m/%Y")
         else:
@@ -8882,13 +8837,13 @@ def mew_processar_plano_ensino():
         # Gerar código único e hash
         import hashlib
         import secrets
-        from datetime import timedelta
         
         codigo = gerar_codigo_simples()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         hash_documento = gerar_hash_documento(
             f"plano_ensino_{disciplina}_{data_geracao}",
             "ADMIN",
-            datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp
         )
         
         # Gerar link de validação
@@ -8965,10 +8920,10 @@ def mew_processar_plano_ensino():
         
     except Exception as e:
         import traceback
-        print(f"Erro: {e}")
+        print(f"Erro em mew_processar_plano_ensino: {e}")
         print(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-
+        return jsonify({"success": False, "message": f"Erro ao processar plano: {str(e)}"})
+    
 
 @app.route("/mew/planos-ensino")
 def mew_planos_ensino():

@@ -291,7 +291,7 @@ def consultar_openai_para_plano(dados):
         raise Exception(f"Erro ao gerar plano: {str(e)}")
 
 # ============================================
-# ROTAS DA API
+# ROTAS DA API (mantidas para compatibilidade, mas não usadas internamente)
 # ============================================
 
 @planos_bp.route('/gerar-conteudo-plano', methods=['POST'])
@@ -316,4 +316,5 @@ def gerar_conteudo_plano():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-__all__ = ['planos_bp']
+# ✅ CORREÇÃO: Adicionar consultar_openai_para_plano ao __all__ para permitir importação direta
+__all__ = ['planos_bp', 'consultar_openai_para_plano']
