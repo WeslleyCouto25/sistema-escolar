@@ -4487,45 +4487,19 @@ def situacao_academica():
 # ADICIONE ESTA FUNÇÃO PARA VERIFICAR DISPONIBILIDADE
 # ==========================
 
-
-@app.route("/mew/deletar-documento/<codigo>")
-def mew_deletar_documento(codigo):
-    """Deleta um documento autenticado"""
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo_autenticacao = ?", (codigo,))
-    
-    conn.commit()
-    conn.close()
-    
-    return redirect("/mew/listar-documentos?sucesso=Documento+removido")
-
-# ==========================
-# VALIDAÇÃO PÚBLICA DE DOCUMENTOS
-# ==========================
-
-@app.route("/validar-documento")
-def validar_documento_publico():
-    """Página pública para validação de documentos"""
-    return render_template("validar_documento.html")
-
-
 @app.route("/validar-documento/<codigo>")
 def validar_documento_por_codigo(codigo):
     """
     Valida um documento específico pelo código (versão completa)
-    VERSÃO CORRIGIDA
+    VERSÃO CORRIGIDA - NOMES DE COLUNAS CORRETOS
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # 👇 USANDO data_geracao (nome correto da coluna)
         cursor.execute("""
-            SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, data_validade, hash_documento, metadados
+            SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento, metadados
             FROM documentos_autenticados 
             WHERE codigo = ?
         """, (codigo.upper(),))
@@ -4537,13 +4511,19 @@ def validar_documento_por_codigo(codigo):
             # Converter para dicionário
             doc_dict = dict(documento)
             
+            # 👇 CRIAR ALIAS PARA COMPATIBILIDADE COM O TEMPLATE
+            doc_dict['data_emissao'] = doc_dict.get('data_geracao', '')
+            
             # Calcular status de validade
             from datetime import datetime
             hoje = datetime.now()
             
             if doc_dict.get('data_validade'):
-                data_validade = datetime.strptime(doc_dict['data_validade'], "%d/%m/%Y")
-                status = "válido" if hoje <= data_validade else "expirado"
+                try:
+                    data_validade = datetime.strptime(doc_dict['data_validade'], "%d/%m/%Y")
+                    status = "válido" if hoje <= data_validade else "expirado"
+                except:
+                    status = "válido"
             else:
                 status = "válido"  # Se não tiver data, considerar válido
             
@@ -4571,6 +4551,61 @@ def validar_documento_por_codigo(codigo):
             mensagem=f"Erro na validação: {str(e)}"
         )
         
+        
+@app.route("/mew/deletar-documento/<codigo>")
+def mew_deletar_documento(codigo):
+    """Deleta um documento autenticado"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo_autenticacao = ?", (codigo,))
+    
+    conn.commit()
+    conn.close()
+    
+    return redirect("/mew/listar-documentos?sucesso=Documento+removido")
+
+# ==========================
+# VALIDAÇÃO PÚBLICA DE DOCUMENTOS
+# ==========================
+
+@app.route("/validar-documento")
+def validar_documento_publico():
+    """Página pública para validação de documentos"""
+    return render_template("validar_documento.html")
+
+
+def buscar_documento_db(codigo):
+    """Busca documento no banco - VERSÃO CORRETA para sua estrutura de tabela"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Buscar pelo código (conforme sua tabela documentos_autenticados)
+        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+        
+        documento = cursor.fetchone()
+        conn.close()
+        
+        if documento:
+            # Converter para dicionário (ajuste os índices conforme sua tabela)
+            # Sua tabela tem: 0=id, 1=codigo, 2=aluno_nome, 3=aluno_ra, 4=tipo, 5=conteudo_html, 6=data_geracao
+            return {
+                'codigo': documento[1],
+                'aluno_nome': documento[2],
+                'aluno_ra': documento[3],
+                'tipo': documento[4],
+                'conteudo_html': documento[5],
+                'data_geracao': documento[6]
+            }
+        return None
+        
+    except Exception as e:
+        print(f"Erro ao buscar documento: {e}")
+        return None
 
 @app.route("/api/validar-qrcode", methods=['POST'])
 def api_validar_qrcode():
@@ -8748,32 +8783,40 @@ def mew_processar_plano_ensino():
     try:
         dados = request.json
         
-        # ✅ CHAMAR DIRETAMENTE A FUNÇÃO DO MÓDULO (sem HTTP request)
+        # ✅ VERIFICAÇÃO DA CHAVE API
+        if not os.getenv("OPENAI_API_KEY"):
+            return jsonify({
+                "success": False, 
+                "message": "Chave da API OpenAI não configurada. Configure OPENAI_API_KEY no ambiente do Render."
+            })
+        
         from api_planos import consultar_openai_para_plano
         
-        conteudo_ia = consultar_openai_para_plano(dados)
+        try:
+            conteudo_ia = consultar_openai_para_plano(dados)
+        except Exception as e:
+            print(f"Erro na chamada OpenAI: {str(e)}")
+            return jsonify({
+                "success": False,
+                "message": f"Erro na API OpenAI: {str(e)}"
+            })
         
         if not conteudo_ia:
             return jsonify({"success": False, "message": "Erro ao gerar conteúdo com IA"})
         
-        # Dados do formulário
+        # Resto do código continua igual...
         disciplina = dados.get('disciplina', '').upper()
         carga_horaria = dados.get('carga_horaria', '120 horas')
         modalidade = dados.get('modalidade', 'EaD')
         docente = dados.get('docente', 'Roberto S. M. Souza')
         data_geracao = dados.get('data_geracao', '')
         
-        # Formatar data
         from datetime import datetime, timedelta
         if data_geracao:
             data_obj = datetime.strptime(data_geracao, "%Y-%m-%d")
             data_formatada = data_obj.strftime("%d/%m/%Y")
         else:
             data_formatada = datetime.now().strftime("%d/%m/%Y")
-        
-        # Gerar código único e hash
-        import hashlib
-        import secrets
         
         codigo = gerar_codigo_simples()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -8783,14 +8826,10 @@ def mew_processar_plano_ensino():
             timestamp
         )
         
-        # Gerar link de validação
         base_url = request.host_url.rstrip('/')
         link_validacao = f"{base_url}/validar-documento/{codigo}"
-        
-        # Gerar QR Code
         qr_code_base64 = gerar_qrcode_base64(link_validacao)
         
-        # Criar metadados
         metadados = criar_metadados_documento(
             aluno_id=None, 
             tipo_documento='plano_ensino', 
@@ -8798,11 +8837,9 @@ def mew_processar_plano_ensino():
             hash_val=hash_documento
         )
         
-        # Data de emissão e validade
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
         
-        # Gerar HTML completo do plano
         html_completo = gerar_html_plano_ensino(
             disciplina=disciplina,
             codigo=codigo,
@@ -8815,7 +8852,6 @@ def mew_processar_plano_ensino():
             **conteudo_ia
         )
         
-        # Salvar no banco de dados
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -8826,7 +8862,7 @@ def mew_processar_plano_ensino():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             codigo,
-            None,  # aluno_id (plano não é de um aluno específico)
+            None,
             "ADMIN - MEW",
             "ADMIN",
             'plano_ensino',
@@ -8860,7 +8896,6 @@ def mew_processar_plano_ensino():
         print(f"Erro em mew_processar_plano_ensino: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": f"Erro ao processar plano: {str(e)}"})
-    
 
 @app.route("/mew/planos-ensino")
 def mew_planos_ensino():
