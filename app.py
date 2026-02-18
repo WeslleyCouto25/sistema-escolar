@@ -1333,7 +1333,7 @@ body {
     
     # 👇 NOVO CÓDIGO - substitui TODO o bloco antigo
     codigo_autenticacao = f"{ra_aluno}-{disciplina_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    dados_qr = f"https://campusvirtualfacop.com.br/validar-documento/{codigo_autenticacao}"
+    dados_qr = f"https://campusvirtualfacop.com.br/validar-documento/DECL-{codigo_autenticacao}"
     qrcode_base64 = gerar_qrcode_base64(dados_qr)
     
     from flask import render_template_string
