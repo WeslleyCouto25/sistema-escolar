@@ -2,3 +2,4 @@ Flask
 gunicorn
 mercadopago
 Werkzeug
+python-dotenv==1.0.1
