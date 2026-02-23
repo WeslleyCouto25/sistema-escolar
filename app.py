@@ -18,6 +18,8 @@ from io import BytesIO
 import hashlib
 import json
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+load_dotenv() 
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
@@ -8852,7 +8854,6 @@ def mew_gerar_plano_ensino():
     
     return render_template("mew/gerar_plano_ensino.html", hoje=hoje)
 
-
 @app.route("/mew/processar-plano-ensino", methods=["POST"])
 def mew_processar_plano_ensino():
     """Processa a geração do plano de ensino com IA e salva no banco"""
@@ -8861,53 +8862,88 @@ def mew_processar_plano_ensino():
     
     try:
         dados = request.json
+        print(f"📥 Dados recebidos: {dados}")
         
-        # ✅ VERIFICAÇÃO DA CHAVE API
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print(" OPENAI_API_KEY não encontrada no ambiente")
             return jsonify({
                 "success": False, 
                 "message": "Chave da API OpenAI não configurada. Configure OPENAI_API_KEY no ambiente do Render."
             })
         
-        from api_planos import consultar_openai_para_plano
+        print(f"API Key encontrada: {api_key[:5]}... (tamanho: {len(api_key)})")
         
+        # Importar função
         try:
+            from api_planos import consultar_openai_para_plano
+            print("Função consultar_openai_para_plano importada com sucesso")
+        except ImportError as e:
+            print(f"Erro ao importar consultar_openai_para_plano: {e}")
+            return jsonify({
+                "success": False,
+                "message": f"Erro ao importar módulo da API: {str(e)}"
+            })
+        
+        # Chamar API OpenAI
+        try:
+            print("Chamando consultar_openai_para_plano...")
             conteudo_ia = consultar_openai_para_plano(dados)
+            print(f"Conteúdo IA recebido: {list(conteudo_ia.keys()) if conteudo_ia else 'VAZIO'}")
         except Exception as e:
             print(f"Erro na chamada OpenAI: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return jsonify({
                 "success": False,
                 "message": f"Erro na API OpenAI: {str(e)}"
             })
         
         if not conteudo_ia:
-            return jsonify({"success": False, "message": "Erro ao gerar conteúdo com IA"})
+            print("Conteúdo IA vazio ou None")
+            return jsonify({"success": False, "message": "Erro ao gerar conteúdo com IA - retorno vazio"})
         
-        # Resto do código continua igual...
+        # Extrair dados do formulário
         disciplina = dados.get('disciplina', '').upper()
         carga_horaria = dados.get('carga_horaria', '120 horas')
         modalidade = dados.get('modalidade', 'EaD')
         docente = dados.get('docente', 'Roberto S. M. Souza')
         data_geracao = dados.get('data_geracao', '')
         
+        print(f"📝 Processando dados: {disciplina}, {modalidade}, {carga_horaria}")
+        
         from datetime import datetime, timedelta
+        
+        # Processar data
         if data_geracao:
-            data_obj = datetime.strptime(data_geracao, "%Y-%m-%d")
-            data_formatada = data_obj.strftime("%d/%m/%Y")
+            try:
+                data_obj = datetime.strptime(data_geracao, "%Y-%m-%d")
+                data_formatada = data_obj.strftime("%d/%m/%Y")
+            except:
+                data_formatada = datetime.now().strftime("%d/%m/%Y")
         else:
             data_formatada = datetime.now().strftime("%d/%m/%Y")
         
+        # Gerar código único
         codigo = gerar_codigo_simples()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        
+        print(f"Código gerado: {codigo}")
+        
         hash_documento = gerar_hash_documento(
             f"plano_ensino_{disciplina}_{data_geracao}",
             "ADMIN",
             timestamp
         )
         
+        # Gerar QR Code
         base_url = request.host_url.rstrip('/')
         link_validacao = f"{base_url}/validar-documento/{codigo}"
         qr_code_base64 = gerar_qrcode_base64(link_validacao)
+        
+        if not qr_code_base64:
+            print("QR Code não gerado, usando placeholder")
+            qr_code_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         
         metadados = criar_metadados_documento(
             aluno_id=None, 
@@ -8919,44 +8955,94 @@ def mew_processar_plano_ensino():
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
         
-        html_completo = gerar_html_plano_ensino(
-            disciplina=disciplina,
-            codigo=codigo,
-            hash_completa=hash_documento,
-            carga_horaria=carga_horaria,
-            modalidade=modalidade,
-            docente=docente,
-            data_formatada=data_formatada,
-            qr_code_base64=qr_code_base64,
-            **conteudo_ia
-        )
+        # Gerar HTML do plano
+        print("🔄 Gerando HTML do plano de ensino...")
+        try:
+            html_completo = gerar_html_plano_ensino(
+                disciplina=disciplina,
+                codigo=codigo,
+                hash_completa=hash_documento,
+                carga_horaria=carga_horaria,
+                modalidade=modalidade,
+                docente=docente,
+                data_formatada=data_formatada,
+                qr_code_base64=qr_code_base64,
+                **conteudo_ia
+            )
+            print(f"HTML gerado, tamanho: {len(html_completo)} caracteres")
+        except Exception as e:
+            print(f"Erro ao gerar HTML: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "message": f"Erro ao gerar HTML do plano: {str(e)}"
+            })
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO documentos_autenticados 
-            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
-             qr_code, hash_documento, data_emissao, data_validade, metadados)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            codigo,
-            None,
-            "ADMIN - MEW",
-            "ADMIN",
-            'plano_ensino',
-            html_completo,
-            data_emissao,
-            qr_code_base64,
-            hash_documento,
-            data_emissao,
-            data_validade,
-            metadados
-        ))
-        
-        documento_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        # Salvar no banco
+        print("🔄 Salvando no banco de dados...")
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Garantir que a tabela tem as colunas necessárias
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS documentos_autenticados (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo TEXT UNIQUE,
+                    aluno_id INTEGER,
+                    aluno_nome TEXT,
+                    aluno_ra TEXT,
+                    tipo TEXT,
+                    conteudo_html TEXT,
+                    data_geracao TEXT,
+                    qr_code TEXT,
+                    hash_documento TEXT,
+                    data_emissao TEXT,
+                    data_validade TEXT,
+                    metadados TEXT,
+                    disciplina_id INTEGER
+                )
+            ''')
+            
+            cursor.execute('''
+                INSERT INTO documentos_autenticados 
+                (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+                 qr_code, hash_documento, data_emissao, data_validade, metadados)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                codigo,
+                None,
+                "ADMIN - MEW",
+                "ADMIN",
+                'plano_ensino',
+                html_completo,
+                data_emissao,
+                qr_code_base64,
+                hash_documento,
+                data_emissao,
+                data_validade,
+                metadados
+            ))
+            
+            documento_id = cursor.lastrowid
+            conn.commit()
+            print(f"Documento salvo com ID: {documento_id}")
+            
+        except Exception as e:
+            print(f"Erro ao salvar no banco: {e}")
+            import traceback
+            traceback.print_exc()
+            if conn:
+                conn.close()
+            return jsonify({
+                "success": False,
+                "message": f"Erro ao salvar no banco de dados: {str(e)}"
+            })
+        finally:
+            if conn:
+                conn.close()
         
         return jsonify({
             "success": True,
@@ -8975,6 +9061,8 @@ def mew_processar_plano_ensino():
         print(f"Erro em mew_processar_plano_ensino: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": f"Erro ao processar plano: {str(e)}"})
+
+
 
 @app.route("/mew/planos-ensino")
 def mew_planos_ensino():
@@ -10134,6 +10222,20 @@ Coordenação Acadêmica FACOP/SiGEU"""
         if 'conn' in locals():
             conn.close()
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
+    
+@app.route("/mew/testar-chave-api")
+def testar_chave_api():
+    """Rota temporária para testar se a chave API está configurada"""
+    if not session.get("mew_admin"):
+        return "Não autorizado"
+    
+    chave = os.getenv("OPENAI_API_KEY")
+    if chave:
+        # Mostra apenas os primeiros 5 caracteres por segurança
+        return f"API Key configurada: {chave[:5]}... (tamanho: {len(chave)})"
+    else:
+        return "API Key NÃO configurada no ambiente"
+    
     
 if __name__ == "__main__":
     init_db()

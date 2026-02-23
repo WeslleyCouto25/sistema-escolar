@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-API para Geração de Planos de Ensino com IA - FACOP/SiGEU
-VERSÃO INTEGRADA COM O SISTEMA PRINCIPAL
-"""
-
 from flask import Blueprint, request, jsonify
 from openai import OpenAI
 import os
@@ -12,6 +6,8 @@ import random
 import string
 from datetime import datetime
 import hashlib
+from dotenv import load_dotenv
+load_dotenv() 
 
 # Configurar OpenAI
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -229,40 +225,61 @@ def consultar_openai_para_plano(dados):
     """Consulta o ChatGPT com o prompt completo e trata a resposta"""
     try:
         # Verificar se a API key existe
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print(" OPENAI_API_KEY não encontrada nas variáveis de ambiente")
             raise Exception("OPENAI_API_KEY não configurada no ambiente")
         
+        print(f" API Key encontrada: {api_key[:5]}... (tamanho: {len(api_key)})")
+        
+        # Criar cliente com a chave explicitamente
+        client = OpenAI(api_key=api_key)
+        
         prompt = gerar_prompt_completo(dados)
-        print(f"📘 Gerando plano para disciplina: {dados['disciplina']}")
+        print(f" Gerando plano para disciplina: {dados['disciplina']}")
+        print(f" Tamanho do prompt: {len(prompt)} caracteres")
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Use modelo mais estável
+            model="gpt-3.5-turbo-16k",  # Modelo com mais tokens
             messages=[
-                {"role": "system", "content": "Você é um professor doutor da FACOP/SiGEU. Gere planos de ensino seguindo TODAS as regras. RETORNE APENAS JSON VÁLIDO, SEM TEXTOS EXTRAS."},
+                {"role": "system", "content": "Você é um professor doutor da FACOP/SiGEu especialista em planejamento educacional. Gere planos de ensino detalhados seguindo TODAS as regras. RETORNE APENAS JSON VÁLIDO, SEM TEXTOS EXTRAS."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,
-            max_tokens=3500,
-            timeout=30
+            max_tokens=4000,
+            timeout=60
         )
         
+        print(" Resposta recebida da OpenAI")
         conteudo = response.choices[0].message.content
+        print(f" Resposta (primeiros 200 chars): {conteudo[:200]}...")
         
         # Extrair JSON
         inicio_json = conteudo.find('{')
         fim_json = conteudo.rfind('}') + 1
         
         if inicio_json == -1 or fim_json == 0:
+            print("❌ Resposta não contém JSON válido")
+            print(f"Resposta completa: {conteudo}")
             raise Exception("Resposta da API não contém JSON válido")
         
         json_str = conteudo[inicio_json:fim_json]
-        plano_json = json.loads(json_str)
+        print(f" JSON extraído, tamanho: {len(json_str)} caracteres")
         
-        # Resto do código...
+        try:
+            plano_json = json.loads(json_str)
+            print(" JSON parseado com sucesso")
+        except json.JSONDecodeError as e:
+            print(f"❌ Erro ao fazer parse do JSON: {e}")
+            print(f"JSON problemático: {json_str[:500]}")
+            raise
+        
         return plano_json
         
     except Exception as e:
-        print(f"❌ ERRO em consultar_openai_para_plano: {e}")
+        print(f" ERRO em consultar_openai_para_plano: {e}")
+        import traceback
+        traceback.print_exc()
         raise Exception(f"Erro ao gerar plano: {str(e)}")
 
 # ============================================
@@ -290,6 +307,6 @@ def gerar_conteudo_plano():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
 
-# ✅ CORREÇÃO: Adicionar consultar_openai_para_plano ao __all__ para permitir importação direta
 __all__ = ['planos_bp', 'consultar_openai_para_plano']
