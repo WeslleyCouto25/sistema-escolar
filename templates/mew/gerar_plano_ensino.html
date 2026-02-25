@@ -305,6 +305,14 @@
                 <i>ℹ️</i> <strong>Gerador Automático com IA (Sem Fallback):</strong> Todos os campos (Objetivos, Ementa, Conteúdo Programático, Habilidades, Bibliografia) são gerados pela OpenAI. Metodologia e Avaliação são fixas conforme padrão institucional.
             </div>
             
+            <div class="info-box" style="background: #f0fff4; border-left-color: #28a745;">
+                <i>📄</i> <strong>Organização do Documento (4 PÁGINAS):</strong><br>
+                • Página 1: Identificação, Objetivos (Geral e Específicos), Ementa<br>
+                • Página 2: Conteúdo Programático, Habilidades<br>
+                • Página 3: Metodologia, Avaliação<br>
+                • Página 4: Bibliografia (Básica e Complementar) + Enquadramento Curricular + Assinatura
+            </div>
+            
             <form id="formPlano">
                 <div class="form-row">
                     <div class="form-group">
@@ -356,12 +364,24 @@
                 </div>
                 
                 <div class="form-group">
-                    <label><i>📚</i> Enquadramento Curricular</label>
-                    <textarea class="form-control" id="enquadramento_curricular" name="enquadramento_curricular" rows="3">Matemática Aplicada<br>Física Geral<br>Química Ambiental<br>Geologia Aplicada<br>Hidrologia Básica</textarea>
+                    <label><i>📚</i> Enquadramento Curricular *</label>
+                    <textarea class="form-control" id="enquadramento_curricular" name="enquadramento_curricular" rows="4" required>Matemática Aplicada
+Física Geral
+Química Ambiental
+Geologia Aplicada
+Hidrologia Básica</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #fff3cd; border-left-color: #ffc107;">
+                        <i>💡</i> Liste as disciplinas relacionadas, uma por linha. Este conteúdo aparecerá na Página 4 do documento.
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i>🔗</i> Pré-requisitos (opcional)</label>
+                    <input type="text" class="form-control" id="pre_requisitos" name="pre_requisitos" value="Não há pré-requisitos formais">
                 </div>
                 
                 <div style="margin-top: 30px;">
-                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO DE ENSINO COM IA</button>
+                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO DE ENSINO COM IA (4 PÁGINAS)</button>
                     <a href="/mew/planos-ensino" class="btn btn-secondary"><i>📋</i> Ver Planos Gerados</a>
                 </div>
             </form>
@@ -374,7 +394,25 @@
             
             <div id="resultInfo"></div>
             
-            <div class="result-actions" id="resultActions"></div>
+            <div class="result-actions" id="resultActions">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <a href="#" id="visualizarLink" target="_blank" class="btn btn-primary">
+                        <i>👁️</i> Visualizar Plano (4 Páginas)
+                    </a>
+                    <a href="/mew/planos-ensino" class="btn btn-secondary">
+                        <i>📋</i> Ver Todos os Planos
+                    </a>
+                    <button onclick="window.location.reload()" class="btn btn-secondary">
+                        <i>➕</i> Gerar Novo Plano
+                    </button>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                    <strong>📄 Organização:</strong> Página 1 (Identificação, Objetivos, Ementa) | 
+                    Página 2 (Conteúdo Programático, Habilidades) | 
+                    Página 3 (Metodologia, Avaliação) | 
+                    Página 4 (Bibliografia + Enquadramento)
+                </div>
+            </div>
         </div>
     </div>
     
@@ -391,9 +429,15 @@
             // Validar campos obrigatórios
             const disciplina = document.getElementById('disciplina').value;
             const ementa = document.getElementById('ementa').value;
+            const enquadramento = document.getElementById('enquadramento_curricular').value;
             
             if (!disciplina || !ementa) {
                 showAlert('Disciplina e ementa são obrigatórios', 'error');
+                return;
+            }
+            
+            if (!enquadramento) {
+                showAlert('Enquadramento curricular é obrigatório', 'error');
                 return;
             }
             
@@ -410,7 +454,8 @@
                 modalidade: document.getElementById('modalidade').value,
                 docente: document.getElementById('docente').value,
                 data_geracao: document.getElementById('data_geracao').value,
-                enquadramento_curricular: document.getElementById('enquadramento_curricular').value
+                enquadramento_curricular: enquadramento,
+                pre_requisitos: document.getElementById('pre_requisitos').value
             };
             
             try {
@@ -437,19 +482,7 @@
                     
                     document.getElementById('resultInfo').innerHTML = infoHtml;
                     
-                    let actionsHtml = `
-                        <a href="${result.url_visualizar}" target="_blank" class="btn btn-primary">
-                            <i>👁️</i> Visualizar Documento
-                        </a>
-                        <a href="/mew/planos-ensino" class="btn btn-secondary">
-                            <i>📋</i> Ver Todos os Planos
-                        </a>
-                        <button onclick="window.location.reload()" class="btn btn-secondary">
-                            <i>➕</i> Gerar Novo Plano
-                        </button>
-                    `;
-                    
-                    document.getElementById('resultActions').innerHTML = actionsHtml;
+                    document.getElementById('visualizarLink').href = result.url_visualizar;
                     
                     showAlert('Plano de ensino gerado com sucesso!', 'success');
                 } else {

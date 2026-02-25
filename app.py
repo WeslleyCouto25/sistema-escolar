@@ -8971,6 +8971,7 @@ def mew_processar_plano_ensino():
                 docente=docente,
                 data_formatada=data_formatada,
                 qr_code_base64=qr_code_base64,
+                enquadramento_curricular=dados.get('enquadramento_curricular', ''),
                 **conteudo_ia
             )
             print(f"HTML gerado, tamanho: {len(html_completo)} caracteres")
@@ -10263,6 +10264,10 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     bibliografia_complementar = kwargs.get('bibliografia_complementar', '')
     enquadramento_curricular = kwargs.get('enquadramento_curricular', '')
     
+    # Garantir que enquadramento tenha formatação adequada
+    if enquadramento_curricular and '<br>' not in enquadramento_curricular:
+        enquadramento_curricular = enquadramento_curricular.replace('\n', '<br>')
+        
     # HTML do plano (3 páginas) - mesmo template do sistema original
     html = f'''<!DOCTYPE html>
 <html lang="pt-BR">
@@ -11325,7 +11330,7 @@ body {{
         Documento gerado em {data_formatada} • Hash: {hash_completa[:16]}...
     </div>
     
-    <div class="pagina-numero">PÁGINA 1/3</div>
+    <div class="pagina-numero">PÁGINA 1/4</div>
 </div>
 
 <!-- SEGUNDA PÁGINA -->
@@ -11409,7 +11414,7 @@ body {{
         Documento gerado em {data_formatada} • Hash: {hash_completa[:16]}...
     </div>
     
-    <div class="pagina-numero">PÁGINA 2/3</div>
+    <div class="pagina-numero">PÁGINA 2/4</div>
 </div>
 
 <!-- TERCEIRA PÁGINA -->
@@ -11474,6 +11479,94 @@ body {{
         {SISTEMA_AVALIACAO_FIXO}
     </div>
     
+    <!-- ASSINATURA -->
+    <div class="assinatura-area">
+        <div class="assinatura-linha"></div>
+        <div class="assinatura-nome">Coordenação Acadêmica</div>
+        <div class="assinatura-cargo">FACOP/SiGEU - Validado Digitalmente</div>
+    </div>
+    
+    <!-- VALIDAÇÃO DIGITAL - CANTO ESQUERDO INFERIOR -->
+    <div class="validacao-digital-box">
+        {codigo}
+    </div>
+    
+    <!-- SELO GRANDE -->
+    <div class="selo-grande">
+        <div>VALIDADO</div>
+        <div style="font-size: 5pt;">POR CT EDUCACIONAL</div>
+    </div>
+    
+    <!-- RODAPÉ TÉCNICO -->
+    <div class="rodape-tecnico">
+        <strong>FACOP/SiGEU</strong> - Sistema de Gestão Educacional Unificado<br>
+        Documento gerado em {data_formatada} • valide: https://campusvirtualfacop.com.br/validar-documento • Hash: {hash_completa[:16]}...
+    </div>
+    
+    <!-- QR CODE BOX -->
+    <div style="position: absolute; bottom: 23mm; left: 15mm; width: 30mm; height: 30mm; border: 0.5pt solid #ccc; background: #fafafa; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5;">
+        <div style="font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2mm;">Validação Digital</div>
+        <div style="width: 20mm; height: 20mm;">
+            <img src="{qr_code_base64}" alt="QR Code" style="width: 100%; height: 100%; object-fit: contain;">
+        </div>
+    </div>
+    
+    <div class="pagina-numero">PÁGINA 3/4</div>
+</div>
+
+
+<!-- QUARTA PÁGINA -->
+<div class="folha">
+    <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
+    <div class="borda-seguranca"></div>
+    <div class="cantoneira top-left"></div>
+    <div class="cantoneira top-right"></div>
+    <div class="cantoneira bottom-left"></div>
+    <div class="cantoneira bottom-right"></div>
+    
+    <!-- MICROTEXTOS DE BORDA -->
+    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+    <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 | {codigo}</div>
+    <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
+    <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
+    
+    <!-- MARCAS D'ÁGUA -->
+    <div class="marca-dagua-principal">FACOP SiGEu</div>
+    <div class="marca-dagua-pattern"></div>
+    
+    <!-- MICROTEXTOS DE SEGURANÇA -->
+    <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
+    <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
+    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+    <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
+    
+    <!-- FAIXA IDENTIFICADORA -->
+    <div class="faixa-identificadora"></div>
+    
+    <!-- CABEÇALHO -->
+    <div class="cabecalho">
+        <div class="logo-area">
+            <img src="/static/img/logo_declaracao.png" alt="Logo" onerror="this.style.display='none'">
+            <div class="instituicao-info">
+                <div class="instituicao-nome">FACOP/SiGEU</div>
+                <div class="instituicao-sub">Faculdade do Centro Oeste Paulista<br>Sistema Integrado de Gestão Educacional Unificado</div>
+            </div>
+        </div>
+        <div class="selo-autenticidade">
+            <div>VALIDADO</div>
+            <div style="font-size: 5pt; margin-top: 1mm;">DIGITAL</div>
+        </div>
+    </div>
+    
+    <!-- NÚMERO DE CONTROLE -->
+    <div class="numero-controle-box">{codigo}</div>
+    
+    <!-- TÍTULO -->
+    <div class="titulo-documento">
+        <div class="titulo-principal">BIBLIOGRAFIA</div>
+        <div class="titulo-sub">BÁSICA E COMPLEMENTAR</div>
+    </div>
+    
     <!-- BIBLIOGRAFIA BÁSICA -->
     <div class="box-avaliacao box-avaliacao6">
         {bibliografia_basica}
@@ -11516,8 +11609,9 @@ body {{
         </div>
     </div>
     
-    <div class="pagina-numero">PÁGINA 3/3</div>
+    <div class="pagina-numero">PÁGINA 3/4</div>
 </div>
+
 
 <div class="botoes">
     <button onclick="window.print()" class="btn">🖨 IMPRIMIR PDF (3 PÁGINAS)</button>
