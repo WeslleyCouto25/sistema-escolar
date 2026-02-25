@@ -170,19 +170,9 @@ Liste habilidades específicas que o aluno desenvolverá na disciplina.
 Formato OBRIGATÓRIO: "I - primeira habilidade. II - segunda habilidade. III - terceira habilidade." (numerais romanos seguidos de hífen)
 Mínimo 10, máximo 14 habilidades.
 
-### 6. BIBLIOGRAFIA (FORMATO ABNT)
 
-**Básica** (EXATAMENTE 5 obras):
-- Livros REAIS de editoras reconhecidas (EXISTENTES)
-- Pelo menos 1 obra em inglês
-Formato EXATO (substitua pelos dados da obra OBRIGATÓRIO): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
-Separe cada obra com <br>
-
-**Complementar** (EXATAMENTE 3 obras):
-- Livros REAIS de editoras reconhecidas (EXISTENTES)
-- Pelo menos 1 obra em inglês
-Formato EXATO (substitua pelos dados da obra OBRIGATÓRIO): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
-Separe cada obra com <br>
+### 6. BIBLIOGRAFIA (NÃO PRECISA GERAR - SERÁ FIXA)
+    # A bibliografia será preenchida automaticamente pelo sistema
 
 ## FORMATO DE SAÍDA (JSON EXATO)
 {{
@@ -190,9 +180,7 @@ Separe cada obra com <br>
     "objetivos_especificos": "1. Primeiro objetivo. 2. Segundo objetivo. 3. Terceiro objetivo. 4. Quarto objetivo. 5. Quinto objetivo.",
     "ementa_expandida": "1. Tópico 1. 2. Tópico 2. 3. Tópico 3. ... 20. Tópico 20.",
     "conteudo_programatico": "UNIDADE I – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n• Subtópico 6\\n\\nUNIDADE II – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n• Subtópico 6\\n\\nUNIDADE III – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n\\nUNIDADE IV – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5",
-    "habilidades": "I - Primeira habilidade. II - Segunda habilidade. III - Terceira habilidade. IV - Quarta habilidade. V - Quinta habilidade. VI - Sexta habilidade. VII - Sétima habilidade. VIII - Oitava habilidade. IX - Nona habilidade. X - Décima habilidade.",
-    "bibliografia_basica": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.",
-    "bibliografia_complementar": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano."
+    "habilidades": "I - Primeira habilidade. II - Segunda habilidade. III - Terceira habilidade. IV - Quarta habilidade. V - Quinta habilidade. VI - Sexta habilidade. VII - Sétima habilidade. VIII - Oitava habilidade. IX - Nona habilidade. X - Décima habilidade."
 }}
 
 DISCIPLINA: {dados['disciplina']}
@@ -245,9 +233,7 @@ def consultar_openai_para_plano(dados):
         'objetivos_especificos',
         'ementa_expandida', 
         'conteudo_programatico', 
-        'habilidades', 
-        'bibliografia_basica', 
-        'bibliografia_complementar'
+        'habilidades'
     ]
     
     erros = []

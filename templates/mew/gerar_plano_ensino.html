@@ -302,7 +302,7 @@
             </div>
             
             <div class="info-box">
-                <i>ℹ️</i> <strong>Gerador Automático com IA (Sem Fallback):</strong> Todos os campos (Objetivos, Ementa, Conteúdo Programático, Habilidades, Bibliografia) são gerados pela OpenAI. Metodologia e Avaliação são fixas conforme padrão institucional.
+                <i>ℹ️</i> <strong>Gerador Automático com IA:</strong> A IA gera Objetivos, Ementa Expandida, Conteúdo Programático e Habilidades. Você preenche a Bibliografia específica da disciplina.
             </div>
             
             <div class="info-box" style="background: #f0fff4; border-left-color: #28a745;">
@@ -375,6 +375,30 @@ Hidrologia Básica</textarea>
                     </div>
                 </div>
                 
+                <!-- NOVO CAMPO: Bibliografia Básica -->
+                <div class="form-group">
+                    <label><i>📖</i> Bibliografia Básica *</label>
+                    <textarea class="form-control" id="bibliografia_basica" name="bibliografia_basica" rows="5" required placeholder="Digite as 5 obras da bibliografia básica no formato ABNT...">SOBRENOME, Nome. Título do Livro 1. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 2. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 3. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 4. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 5. Edição. Cidade: Editora, ano.</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
+                        <i>💡</i> Digite uma obra por linha no formato ABNT. Use <strong> para destacar o título se desejar.
+                    </div>
+                </div>
+                
+                <!-- NOVO CAMPO: Bibliografia Complementar -->
+                <div class="form-group">
+                    <label><i>📖</i> Bibliografia Complementar *</label>
+                    <textarea class="form-control" id="bibliografia_complementar" name="bibliografia_complementar" rows="4" required placeholder="Digite as 3 obras da bibliografia complementar...">SOBRENOME, Nome. Título do Livro 6. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 7. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
+                        <i>💡</i> Digite uma obra por linha.
+                    </div>
+                </div>
+                
                 <div class="form-group">
                     <label><i>🔗</i> Pré-requisitos (opcional)</label>
                     <input type="text" class="form-control" id="pre_requisitos" name="pre_requisitos" value="Não há pré-requisitos formais">
@@ -430,6 +454,8 @@ Hidrologia Básica</textarea>
             const disciplina = document.getElementById('disciplina').value;
             const ementa = document.getElementById('ementa').value;
             const enquadramento = document.getElementById('enquadramento_curricular').value;
+            const bibliografiaBasica = document.getElementById('bibliografia_basica').value;
+            const bibliografiaComplementar = document.getElementById('bibliografia_complementar').value;
             
             if (!disciplina || !ementa) {
                 showAlert('Disciplina e ementa são obrigatórios', 'error');
@@ -441,11 +467,16 @@ Hidrologia Básica</textarea>
                 return;
             }
             
+            if (!bibliografiaBasica || !bibliografiaComplementar) {
+                showAlert('Bibliografia básica e complementar são obrigatórias', 'error');
+                return;
+            }
+            
             // Mostrar loading
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('resultBox').style.display = 'none';
             
-            // Coletar dados
+            // Coletar dados (AGORA COM BIBLIOGRAFIA)
             const formData = {
                 disciplina: disciplina,
                 curso: document.getElementById('curso').value,
@@ -455,7 +486,10 @@ Hidrologia Básica</textarea>
                 docente: document.getElementById('docente').value,
                 data_geracao: document.getElementById('data_geracao').value,
                 enquadramento_curricular: enquadramento,
-                pre_requisitos: document.getElementById('pre_requisitos').value
+                pre_requisitos: document.getElementById('pre_requisitos').value,
+                // NOVOS CAMPOS DE BIBLIOGRAFIA
+                bibliografia_basica: bibliografiaBasica,
+                bibliografia_complementar: bibliografiaComplementar
             };
             
             try {

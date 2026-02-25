@@ -8972,6 +8972,8 @@ def mew_processar_plano_ensino():
                 data_formatada=data_formatada,
                 qr_code_base64=qr_code_base64,
                 enquadramento_curricular=dados.get('enquadramento_curricular', ''),
+                bibliografia_basica=dados.get('bibliografia_basica', ''),  # 👈 NOVO
+                bibliografia_complementar=dados.get('bibliografia_complementar', ''),  
                 **conteudo_ia
             )
             print(f"HTML gerado, tamanho: {len(html_completo)} caracteres")
@@ -9100,18 +9102,55 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                              modalidade, docente, data_formatada, qr_code_base64, **kwargs):
     """Gera o HTML completo do plano de ensino com QR Code"""
     
-    # Extrair campos do kwargs
+    from api_planos import METODOLOGIA_FIXA, SISTEMA_AVALIACAO_FIXO
+    
+    # Extrair campos do kwargs (vindos da IA)
     objetivo_geral = kwargs.get('objetivo_geral', '')
     objetivos_especificos = kwargs.get('objetivos_especificos', '')
     ementa = kwargs.get('ementa_expandida', '')
     conteudo_programatico = kwargs.get('conteudo_programatico', '')
-    metodologia = kwargs.get('metodologia', '')
-    criterios_aprovacao = kwargs.get('criterios_aprovacao', '')
+    habilidades = kwargs.get('habilidades', '')
+    enquadramento_curricular = kwargs.get('enquadramento_curricular', '')
+    
+    # 👇 BIBLIOGRAFIA AGORA VEM DO FORMULÁRIO (NÃO DA IA)
     bibliografia_basica = kwargs.get('bibliografia_basica', '')
     bibliografia_complementar = kwargs.get('bibliografia_complementar', '')
-    encontros_sincronos = kwargs.get('encontros_sincronos', '')
-    plataforma = kwargs.get('plataforma', '')
-    pre_requisitos = kwargs.get('pre_requisitos_formatado', 'Não há pré-requisitos formais.')
+    
+    # Processar bibliografia básica (converter texto simples em HTML)
+    if bibliografia_basica and '<div' not in bibliografia_basica:
+        linhas = bibliografia_basica.strip().split('\n')
+        bibliografia_basica_html = ''
+        for linha in linhas:
+            if linha.strip():
+                # Adicionar <strong> ao título se não tiver
+                if '<strong>' not in linha:
+                    partes = linha.split('.', 1)
+                    if len(partes) > 1:
+                        linha = partes[0] + '.<strong>' + partes[1] + '</strong>'
+                bibliografia_basica_html += f'<div class="bibliografia-item">{linha.strip()}</div>\n'
+        bibliografia_basica = bibliografia_basica_html
+    
+    # Processar bibliografia complementar
+    if bibliografia_complementar and '<div' not in bibliografia_complementar:
+        linhas = bibliografia_complementar.strip().split('\n')
+        bibliografia_complementar_html = ''
+        for linha in linhas:
+            if linha.strip():
+                if '<strong>' not in linha:
+                    partes = linha.split('.', 1)
+                    if len(partes) > 1:
+                        linha = partes[0] + '.<strong>' + partes[1] + '</strong>'
+                bibliografia_complementar_html += f'<div class="bibliografia-item">{linha.strip()}</div>\n'
+        bibliografia_complementar = bibliografia_complementar_html
+    
+    # Garantir que enquadramento tenha formatação adequada
+    if enquadramento_curricular and '<br>' not in enquadramento_curricular:
+        enquadramento_curricular = enquadramento_curricular.replace('\n', '<br>')
+    
+    # Campos opcionais
+    encontros_sincronos = kwargs.get('encontros_sincronos', 'Conforme cronograma')
+    plataforma = kwargs.get('plataforma', 'AVA - Ambiente Virtual de Aprendizagem')
+    pre_requisitos = kwargs.get('pre_requisitos', 'Não há pré-requisitos formais.')
     
     # HTML do plano (mesmo template do sistema original)
     html = f'''<!DOCTYPE html>
