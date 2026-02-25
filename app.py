@@ -9117,31 +9117,12 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     bibliografia_complementar = kwargs.get('bibliografia_complementar', '')
     
     # Processar bibliografia básica (converter texto simples em HTML)
-    if bibliografia_basica and '<div' not in bibliografia_basica:
-        linhas = bibliografia_basica.strip().split('\n')
-        bibliografia_basica_html = ''
-        for linha in linhas:
-            if linha.strip():
-                # Adicionar <strong> ao título se não tiver
-                if '<strong>' not in linha:
-                    partes = linha.split('.', 1)
-                    if len(partes) > 1:
-                        linha = partes[0] + '.<strong>' + partes[1] + '</strong>'
-                bibliografia_basica_html += f'<div class="bibliografia-item">{linha.strip()}</div>\n'
-        bibliografia_basica = bibliografia_basica_html
-    
-    # Processar bibliografia complementar
-    if bibliografia_complementar and '<div' not in bibliografia_complementar:
-        linhas = bibliografia_complementar.strip().split('\n')
-        bibliografia_complementar_html = ''
-        for linha in linhas:
-            if linha.strip():
-                if '<strong>' not in linha:
-                    partes = linha.split('.', 1)
-                    if len(partes) > 1:
-                        linha = partes[0] + '.<strong>' + partes[1] + '</strong>'
-                bibliografia_complementar_html += f'<div class="bibliografia-item">{linha.strip()}</div>\n'
-        bibliografia_complementar = bibliografia_complementar_html
+    if bibliografia_basica:
+        bibliografia_basica = bibliografia_basica.replace('\n', '<br>')
+
+# Processar bibliografia complementar
+    if bibliografia_complementar:
+        bibliografia_complementar = bibliografia_complementar.replace('\n', '<br>')
     
     # Garantir que enquadramento tenha formatação adequada
     if enquadramento_curricular and '<br>' not in enquadramento_curricular:
