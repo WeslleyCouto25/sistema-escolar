@@ -108,7 +108,7 @@ VOCÊ É UM ESPECIALISTA EM PLANOS DE ENSINO DA FACOP/SiGEU.
 
 ## DADOS DA DISCIPLINA
 - **Disciplina**: {dados['disciplina']}
-- **Curso**: {dados.get('curso', 'ENGENHARIA AMBIENTAL E SANITÁRIA')}
+- **Curso**: {dados.get('curso', 'DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')}
 - **Ementa Base**: {dados['ementa']}
 - **Carga Horária**: {dados.get('carga_horaria', '80H')}
 
