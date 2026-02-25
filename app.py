@@ -8909,7 +8909,7 @@ def mew_processar_plano_ensino():
         
         # Extrair dados do formulário
         disciplina = dados.get('disciplina', '').upper()
-        departamento = dados.get('departamento', 'DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')  # 👈 NOVO CAMPO
+        departamento = dados.get('departamento', 'DEP. CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')  # 👈 NOVO CAMPO
         carga_horaria = dados.get('carga_horaria', '120 horas')
         modalidade = dados.get('modalidade', 'EaD')
         docente = dados.get('docente', 'Roberto S. M. Souza')
