@@ -175,13 +175,13 @@ Mínimo 10, máximo 14 habilidades.
 **Básica** (EXATAMENTE 5 obras):
 - Livros REAIS de editoras reconhecidas (EXISTENTES)
 - Pelo menos 1 obra em inglês
-Formato EXATO (substitua pelos dados da obra obrigatoriamente - todos): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+Formato EXATO (substitua pelos dados da obra obrigatoriamente): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
 Separe cada obra com <br>
 
 **Complementar** (EXATAMENTE 3 obras):
 - Livros REAIS de editoras reconhecidas (EXISTENTES)
 - Pelo menos 1 obra em inglês
-Formato EXATO (substitua pelos dados da obra obrigatoriamente - todos): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+Formato EXATO (substitua pelos dados da obra obrigatoriamente): SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
 Separe cada obra com <br>
 
 ## FORMATO DE SAÍDA (JSON EXATO)
