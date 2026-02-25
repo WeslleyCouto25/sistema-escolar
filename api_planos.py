@@ -184,7 +184,7 @@ Mínimo 10, máximo 14 habilidades.
 }}
 
 DISCIPLINA: {dados['disciplina']}
-CURSO: {dados.get('curso', 'ENGENHARIA AMBIENTAL E SANITÁRIA')}
+CURSO: {dados.get('curso', 'DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')}
 EMENTA BASE: {dados['ementa']}
 
 GERAR JSON AGORA. NÃO INCLUA TEXTO ANTES OU DEPOIS DO JSON. USE ESTRITAMENTE O FORMATO ACIMA.
