@@ -8909,7 +8909,7 @@ def mew_processar_plano_ensino():
         
         # Extrair dados do formulário
         disciplina = dados.get('disciplina', '').upper()
-        departamento = dados.get('departamento', 'DEP. CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')  # 👈 NOVO CAMPO
+        departamento = dados.get('departamento', 'DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')  # 👈 NOVO CAMPO
         carga_horaria = dados.get('carga_horaria', '120 horas')
         modalidade = dados.get('modalidade', 'EaD')
         docente = dados.get('docente', 'Roberto S. M. Souza')
@@ -10022,13 +10022,13 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             <!-- 5) METODOLOGIA -->
             <table class="info-table">
                 <tr><th colspan="2">5) METODOLOGIA</th></tr>
-                <tr><td colspan="2" style="text-align: justify;">{metodologia}</td></tr>
+                <tr><td colspan="2" style="text-align: justify;">{METODOLOGIA_FIXA}</td></tr>
             </table>
 
             <!-- 6) AVALIAÇÃO -->
             <table class="info-table">
                 <tr><th colspan="2">6) CRITÉRIOS DE AVALIAÇÃO</th></tr>
-                <tr><td colspan="2">{criterios_aprovacao}</td></tr>
+                <tr><td colspan="2">{SISTEMA_AVALIACAO_FIXO}</td></tr>
             </table>
 
             <!-- 7) BIBLIOGRAFIA -->
