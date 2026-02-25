@@ -9,281 +9,269 @@ import hashlib
 from dotenv import load_dotenv
 load_dotenv() 
 
-# Configurar OpenAI
+# Configurar OpenAI (MESMA CHAVE)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Criar blueprint
 planos_bp = Blueprint('planos', __name__)
 
 # ============================================
+# CONTEÚDOS ESTÁTICOS (FIXOS)
+# ============================================
+
+METODOLOGIA_FIXA = """
+<div style="font-family: 'Arial', 'Times New Roman', serif; text-align: justify; line-height: 1.6;">
+    <p style="margin-bottom: 12pt;"><strong>Metodologia:</strong></p>
+    <p style="margin-bottom: 8pt;">As aulas a distância serão realizadas em videoaulas, material disponível no Ambiente Virtual de Aprendizagem (AVA), atividades de apoio para exploração e enriquecimento do conteúdo trabalhado, fóruns de discussão, atividades de sistematização, avaliações e laboratórios práticos virtuais.</p>
+    
+    <p style="margin-bottom: 8pt; margin-top: 12pt;"><strong>Recursos Didáticos:</strong></p>
+    <ul style="margin-left: 20pt; margin-bottom: 10pt;">
+        <li>Livro didático;</li>
+        <li>Videoaula;</li>
+        <li>Fóruns;</li>
+        <li>Estudos Dirigidos (Estudo de caso);</li>
+        <li>Experimentos em laboratório virtual;</li>
+        <li>Biblioteca virtual;</li>
+        <li>Atividades em campo.</li>
+    </ul>
+</div>
+"""
+
+SISTEMA_AVALIACAO_FIXO = """
+<div style="font-family: 'Arial', 'Times New Roman', serif; text-align: justify; line-height: 1.6;">
+    <p style="margin-bottom: 12pt; text-align: justify;">
+        <span style="font-weight: 700; color: #1a237e;">CONCLUSÃO:</span> Aprovação com média final igual ou superior a 6,0 (seis) e frequência 
+        mínima de 75% (setenta e cinco por cento) das atividades programadas.
+    </p>
+    
+    <p style="margin-bottom: 6pt; text-align: justify;">
+        <span style="font-weight: 700; color: #1a237e;">SISTEMA DE AVALIAÇÃO:</span> A disciplina contempla 4 (quatro) avaliações parciais 
+        (AV1, AV2, AV3, AV4) com valor de 4,0 (quatro) pontos cada e 1 (uma) Prova Final Escrita (PFE) 
+        com valor de 6,0 (seis) pontos.
+    </p>
+    
+    <p style="margin-bottom: 6pt; text-align: justify; background: #ebf8ff; padding: 8pt 12pt; border-left: 4px solid #3182ce; border-radius: 0 6px 6px 0;">
+        <span style="font-weight: 700;">MÉDIA PARCIAL (MP):</span> MP = (AV1 + AV2 + AV3 + AV4) ÷ 4
+    </p>
+    
+    <p style="margin-bottom: 6pt; text-align: justify; background: #ebf8ff; padding: 8pt 12pt; border-left: 4px solid #3182ce; border-radius: 0 6px 6px 0;">
+        <span style="font-weight: 700;">MÉDIA FINAL (MF):</span> MF = (MP × 4 + PFE × 6) ÷ 10
+    </p>
+    
+    <p style="margin-bottom: 6pt; text-align: justify; margin-top: 10pt;">
+        <span style="font-weight: 700; color: #1a237e;">CONCEITOS:</span>
+    </p>
+    <ul style="margin-left: 20pt; margin-bottom: 10pt; text-align: justify; list-style-type: square; color: #2c5282;">
+        <li style="margin-bottom: 4pt;">< 5,0 pontos → <span style="font-weight: 700;">INSUFICIENTE</span> - Não demonstra domínio dos conteúdos</li>
+        <li style="margin-bottom: 4pt;">5,0 a 6,9 pontos → <span style="font-weight: 700;">REGULAR</span> - Demonstra domínio parcial</li>
+        <li style="margin-bottom: 4pt;">7,0 a 8,9 pontos → <span style="font-weight: 700;">BOM</span> - Demonstra domínio satisfatório</li>
+        <li style="margin-bottom: 4pt;">9,0 a 10,0 pontos → <span style="font-weight: 700;">EXCELENTE</span> - Demonstra domínio pleno</li>
+    </ul>
+    
+    <p style="margin-bottom: 6pt; text-align: justify;">
+        <span style="font-weight: 700; color: #1a237e;">AVALIAÇÃO SUBSTITUTIVA:</span> Ofertada ao estudante que, por motivo justificado, 
+        não realizou uma das avaliações parciais, substituindo integralmente a nota ausente.
+    </p>
+    
+    <p style="margin-bottom: 6pt; text-align: justify; background: #fffaf0; padding: 8pt 12pt; border-left: 4px solid #dd6b20; border-radius: 0 6px 6px 0;">
+        <span style="font-weight: 700;">AVALIAÇÃO SUPLEMENTAR:</span> Caso o aluno não alcance no mínimo 60% da pontuação distribuída, 
+        haverá a Avaliação Suplementar com todo o conteúdo da disciplina. 
+        Média final = (Resultado Final + Nota Prova Suplementar) / 2. Aprovação ≥ 60 pontos.
+    </p>
+</div>
+"""
+
+# ============================================
 # FUNÇÕES AUXILIARES
 # ============================================
 
-def gerar_distribuicao_unidades():
-    """
-    Gera distribuição ALEATÓRIA de subtópicos por unidade (5 a 8 por unidade)
-    Total mínimo: 20 subtópicos, máximo: 30 subtópicos
-    """
-    u1 = random.randint(5, 8)
-    u2 = random.randint(5, 8)
-    u3 = random.randint(5, 8)
-    u4 = random.randint(5, 8)
-    
-    while u1 + u2 + u3 + u4 < 20 or u1 + u2 + u3 + u4 > 30:
-        u1 = random.randint(5, 8)
-        u2 = random.randint(5, 8)
-        u3 = random.randint(5, 8)
-        u4 = random.randint(5, 8)
-    
-    return [u1, u2, u3, u4]
+def gerar_codigo_autenticacao():
+    """Gera código único de autenticação"""
+    data = datetime.now().strftime("%Y%m%d")
+    random_num = ''.join(random.choices(string.digits, k=6))
+    return f"FACOP/SiGEU-{data}-{random_num}"
 
-def formatar_criterios_avaliacao(modalidade, tem_relatorio=False, tem_ficha=False):
-    """Formata os critérios de avaliação"""
-    html = """
-    <div style="font-family: 'Inter', 'Times New Roman', serif; text-align: justify; line-height: 1.6;">
-        <p style="margin-bottom: 12pt; text-align: justify;">
-            <span style="font-weight: 700; color: #0a3b2a;">CONCLUSÃO:</span> Aprovação com média final igual ou superior a 6,0 (seis) e frequência 
-            mínima de 75% (setenta e cinco por cento) das atividades programadas.
-        </p>
-        
-        <p style="margin-bottom: 6pt; text-align: justify;">
-            <span style="font-weight: 700; color: #0a3b2a;">SISTEMA DE AVALIAÇÃO:</span> A disciplina contempla 4 (quatro) avaliações parciais 
-            (AV1, AV2, AV3, AV4) com valor de 4,0 (quatro) pontos cada e 1 (uma) Prova Final Escrita (PFE) 
-            com valor de 6,0 (seis) pontos.
-        </p>
-        
-        <p style="margin-bottom: 6pt; text-align: justify; background: #ecf7f0; padding: 8pt 12pt; border-left: 4px solid #267a4e; border-radius: 0 6px 6px 0;">
-            <span style="font-weight: 700;">MÉDIA PARCIAL (MP):</span> MP = (AV1 + AV2 + AV3 + AV4) ÷ 4
-        </p>
-        
-        <p style="margin-bottom: 6pt; text-align: justify; background: #ecf7f0; padding: 8pt 12pt; border-left: 4px solid #267a4e; border-radius: 0 6px 6px 0;">
-            <span style="font-weight: 700;">MÉDIA FINAL (MF):</span> MF = (MP × 4 + PFE × 6) ÷ 10
-        </p>
-    """
-    
-    if tem_relatorio:
-        html += """
-        <p style="margin-bottom: 6pt; text-align: justify;">
-            <span style="font-weight: 700; color: #0a3b2a;">RELATÓRIO CIENTÍFICO:</span> Compõe 40% da nota das avaliações parciais. O relatório 
-            segue as normas ABNT e contempla: introdução, fundamentação teórica, metodologia, resultados, 
-            discussão e considerações finais.
-        </p>
-        """
-    
-    if tem_ficha:
-        html += """
-        <p style="margin-bottom: 6pt; text-align: justify;">
-            <span style="font-weight: 700; color: #0a3b2a;">FICHA DE ACOMPANHAMENTO:</span> Instrumento de avaliação processual para atividades 
-            práticas, considerando: cumprimento de protocolos (30%), manuseio de equipamentos (20%), 
-            registro e análise de dados (30%) e postura profissional (20%).
-        </p>
-        """
-    
-    html += """
-        <p style="margin-bottom: 6pt; text-align: justify; margin-top: 10pt;">
-            <span style="font-weight: 700; color: #0a3b2a;">CONCEITOS:</span>
-        </p>
-        <ul style="margin-left: 20pt; margin-bottom: 10pt; text-align: justify; list-style-type: square; color: #1f4e3c;">
-            <li style="margin-bottom: 4pt;">< 5,0 pontos → <span style="font-weight: 700;">INSUFICIENTE</span> - Não demonstra domínio dos conteúdos</li>
-            <li style="margin-bottom: 4pt;">5,0 a 6,9 pontos → <span style="font-weight: 700;">REGULAR</span> - Demonstra domínio parcial</li>
-            <li style="margin-bottom: 4pt;">7,0 a 8,9 pontos → <span style="font-weight: 700;">BOM</span> - Demonstra domínio satisfatório</li>
-            <li style="margin-bottom: 4pt;">9,0 a 10,0 pontos → <span style="font-weight: 700;">EXCELENTE</span> - Demonstra domínio pleno</li>
-        </ul>
-        
-        <p style="margin-bottom: 6pt; text-align: justify;">
-            <span style="font-weight: 700; color: #0a3b2a;">AVALIAÇÃO SUBSTITUTIVA:</span> Ofertada ao estudante que, por motivo justificado, 
-            não realizou uma das avaliações parciais, substituindo integralmente a nota ausente.
-        </p>
-    </div>
-    """
-    
-    return html
+def gerar_hash_completa(codigo, data):
+    """Gera hash SHA-256"""
+    conteudo_hash = f"{codigo}:{data}:facop:sigeu:2026"
+    hash_obj = hashlib.sha256(conteudo_hash.encode())
+    return hash_obj.hexdigest().upper()
 
-def gerar_prompt_completo(dados):
-    """Gera o prompt com TODAS as especificações"""
-    
-    modalidade = dados.get('modalidade', 'EaD')
-    tem_relatorio = dados.get('relatorio_cientifico', False)
-    tem_ficha = dados.get('ficha_acompanhamento', False)
-    dias_semana = dados.get('dias_semana', 'terças e quintas-feiras')
-    horario_inicio = dados.get('horario_inicio', '19h00')
-    horario_fim = dados.get('horario_fim', '21h30')
-    pre_requisitos = dados.get('pre_requisitos', 'Não há pré-requisitos formais para esta disciplina.')
-    
-    distribuicao = gerar_distribuicao_unidades()
-    total_subtopicos = sum(distribuicao)
+# ============================================
+# PROMPT SIMPLIFICADO (SEM FALLBACK)
+# ============================================
+def gerar_prompt_simplificado(dados):
+    """Gera prompt para a IA gerar APENAS os campos necessários - VERSÃO CORRIGIDA"""
     
     prompt = f"""
-VOCÊ É O PROFESSOR DOUTOR DA FACOP/SiGEU, ESPECIALISTA EM PLANEJAMENTO EDUCACIONAL COM 30 ANOS DE EXPERIÊNCIA.
+VOCÊ É UM ESPECIALISTA EM PLANOS DE ENSINO DA FACOP/SiGEU.
 
 ## DADOS DA DISCIPLINA
 - **Disciplina**: {dados['disciplina']}
-- **Ementa Básica (tópicos a serem expandidos)**: {dados['ementa']}
-- **Carga Horária**: {dados.get('carga_horaria', '120 horas')}
-- **Modalidade**: {modalidade}
-- **Pré-requisitos**: {pre_requisitos}
+- **Curso**: {dados.get('curso', 'ENGENHARIA AMBIENTAL E SANITÁRIA')}
+- **Ementa Base**: {dados['ementa']}
+- **Carga Horária**: {dados.get('carga_horaria', '80H')}
 
-============================================================================
-## REGRAS ABSOLUTAS - NUNCA VIOLAR
-============================================================================
+## INSTRUÇÕES ESPECÍFICAS - CUMPRA EXATAMENTE
 
-### [REGRIA 01] EMENTA - FORMATO DE TÓPICOS NUMERADOS
-A ementa DEVE ser apresentada EXCLUSIVAMENTE no seguinte formato:
+### 1. OBJETIVO GERAL (1 parágrafo curto)
+Descreva o objetivo geral da disciplina em 1 parágrafo objetivo, focado no que o estudante será capaz de fazer ao final do curso.
 
-"1. Título do primeiro tópico. 2. Título do segundo tópico. 3. Título do terceiro tópico. ... (até 20-30 tópicos)"
+### 2. OBJETIVOS ESPECÍFICOS (EXATAMENTE 5 itens numerados)
+Liste 5 objetivos específicos que o estudante deve alcançar, numerados de 1 a 5.
+Formato: "1. Primeiro objetivo. 2. Segundo objetivo. 3. Terceiro objetivo. 4. Quarto objetivo. 5. Quinto objetivo."
+Cada objetivo deve começar com verbo no infinitivo.
 
-REGRAS OBRIGATÓRIAS:
-1. Mínimo de 20 (VINTE) tópicos numerados
-2. Máximo de 30 (TRINTA) tópicos numerados
-3. NÚMERO ATUAL DE TÓPICOS A GERAR: {total_subtopicos + random.randint(16, 22)} (entre 20-30)
-4. Cada tópico deve ser uma frase curta, direta, representando um conteúdo específico
-5. NÃO usar ponto e vírgula dentro dos tópicos
-6. NÃO usar citações (Autor, Ano)
-7. TODOS os tópicos devem estar separados por ". " (ponto e espaço)
-8. A ementa completa deve ser UMA ÚNICA STRING com todos os tópicos numerados sequencialmente
+### 3. EMENTA (EXATAMENTE 20 itens numerados)
+Crie uma ementa expandida com EXATAMENTE 20 itens numerados (1. ao 20.).
+Formato OBRIGATÓRIO: "1. Primeiro tópico. 2. Segundo tópico. 3. Terceiro tópico. ... 20. Vigésimo tópico."
+Cada tópico deve ser uma frase curta e objetiva sobre um conteúdo específico da disciplina.
+NÃO use ponto e vírgula. NÃO use citações. Apenas os 20 tópicos numerados separados por ". ".
 
-### [REGRIA 02] CONTEÚDO PROGRAMÁTICO - 4 UNIDADES COM DISTRIBUIÇÃO ALEATÓRIA
-CRIE EXATAMENTE 4 UNIDADES com a seguinte distribuição de subtópicos:
+### 4. CONTEÚDO PROGRAMÁTICO (4 unidades com quantidades EXATAS)
+Crie 4 unidades com a seguinte estrutura EXATA:
 
-<b>UNIDADE I – [NOME DA UNIDADE]</b>: EXATAMENTE {distribuicao[0]} subtópicos
-<b>UNIDADE II – [NOME DA UNIDADE]</b>: EXATAMENTE {distribuicao[1]} subtópicos
-<b>UNIDADE III – [NOME DA UNIDADE]</b>: EXATAMENTE {distribuicao[2]} subtópicos
-<b>UNIDADE IV – [NOME DA UNIDADE]</b>: EXATAMENTE {distribuicao[3]} subtópicos
+UNIDADE I – [TÍTULO DA UNIDADE]
+• Subtópico 1
+• Subtópico 2
+• Subtópico 3
+• Subtópico 4
+• Subtópico 5
+• Subtópico 6
 
-IMPORTANTE: Não utilize a palavra "Subtópico" antes dos itens. Liste apenas os conteúdos diretamente.
-FORMATO EXATO:
-<b>UNIDADE I – Título da Unidade</b>
-• Primeiro conteúdo
-• Segundo conteúdo
-• Terceiro conteúdo
-(assim por diante)
+UNIDADE II – [TÍTULO DA UNIDADE]
+• Subtópico 1
+• Subtópico 2
+• Subtópico 3
+• Subtópico 4
+• Subtópico 5
+• Subtópico 6
 
-### [REGRIA 03] METODOLOGIA - TÉCNICA, DIRETA, 300 PALAVRAS EXATAS
-"""
-    if modalidade == 'Presencial':
-        prompt += "METODOLOGIA PRESENCIAL (300 palavras):\n\n1. Aulas expositivas dialogadas..."
-    elif modalidade == 'EaD':
-        prompt += f"METODOLOGIA EAD (300 palavras):\n\n1. Ambiente Virtual de Aprendizagem..."
-    elif modalidade == 'Híbrido':
-        prompt += "METODOLOGIA HÍBRIDA (300 palavras):\n\nComponente presencial (40%)..."
+UNIDADE III – [TÍTULO DA UNIDADE]
+• Subtópico 1
+• Subtópico 2
+• Subtópico 3
+• Subtópico 4
+• Subtópico 5
 
-    prompt += f"""
+UNIDADE IV – [TÍTULO DA UNIDADE]
+• Subtópico 1
+• Subtópico 2
+• Subtópico 3
+• Subtópico 4
+• Subtópico 5
 
-### [REGRIA 04] SISTEMA DE AVALIAÇÃO - FÓRMULAS EXATAS
-**Estrutura**: 4 avaliações parciais (AV1, AV2, AV3, AV4) = 4,0 pontos cada | Prova Final Escrita (PFE) = 6,0 pontos
-**Média Parcial**: MP = (AV1 + AV2 + AV3 + AV4) ÷ 4
-**Média Final**: MF = (MP × 4 + PFE × 6) ÷ 10
+TOTAL EXATO: 22 subtópicos (6+6+5+5). NÃO altere as quantidades.
 
-### [REGRIA 05] BIBLIOGRAFIA - FORMATO ABNT RIGOROSO COM TÍTULOS EM NEGRITO
-**Básica** (5 obras OBRIGATÓRIAS):
-- Devem ser livros reais, publicados por editoras reconhecidas.
-- Podem estar em português ou inglês.
-- OBRIGATÓRIO: pelo menos 1 (uma) obra em inglês.
-- Não inventar títulos fictícios.
-Formato:
-SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+IMPORTANTE: Use o símbolo • (bullet point) antes de cada subtópico. Use quebras de linha reais entre os itens.
 
-**Complementar** (3 obras OBRIGATÓRIAS):
-- Devem ser obras reais e verificáveis.
-- Podem estar em português ou inglês.
-- OBRIGATÓRIO: pelo menos 1 (uma) obra em inglês.
-- Não inventar títulos fictícios.
-Formato:
-SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+### 5. HABILIDADES (10 a 14 itens em numeração romana)
+Liste habilidades específicas que o aluno desenvolverá na disciplina.
+Formato OBRIGATÓRIO: "I - primeira habilidade. II - segunda habilidade. III - terceira habilidade." (numerais romanos seguidos de hífen)
+Mínimo 10, máximo 14 habilidades.
 
+### 6. BIBLIOGRAFIA (FORMATO ABNT)
 
-### [REGRIA 06] OBJETIVOS ESPECÍFICOS - FORMATO SEM MARCADORES
-Liste os objetivos específicos em HTML, separados por <br>, SEM usar <ul> ou <li>.
-Exemplo: "Compreender os fundamentos teóricos.<br>Aplicar metodologias ativas.<br>Analisar casos práticos."
+**Básica** (EXATAMENTE 5 obras):
+- Livros REAIS de editoras reconhecidas (EXISTENTES)
+- Pelo menos 1 obra em inglês
+Formato EXATO: SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+Separe cada obra com <br>
 
-============================================================================
-## FORMATO DE SAÍDA - JSON EXATO
-============================================================================
+**Complementar** (EXATAMENTE 3 obras):
+- Livros REAIS de editoras reconhecidas (EXISTENTES)
+- Pelo menos 1 obra em inglês
+Formato EXATO: SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
+Separe cada obra com <br>
 
+## FORMATO DE SAÍDA (JSON EXATO)
 {{
-    "ementa_expandida": "1. Tópico 1. 2. Tópico 2. 3. Tópico 3. ...",
-    "objetivo_geral": "...",
-    "objetivos_especificos": "Objetivo 1.<br>Objetivo 2.<br>Objetivo 3.",
-    "conteudo_programatico": "<b>UNIDADE I – Título</b>\\n• Conteúdo 1\\n• Conteúdo 2\\n\\n<b>UNIDADE II – Título</b>\\n• Conteúdo 1\\n• Conteúdo 2\\n\\n...",
-    "metodologia": "...",
-    "criterios_aprovacao": "...",
-    "bibliografia_basica": "AUTOR, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>...",
-    "bibliografia_complementar": "AUTOR, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>...",
-    "encontros_sincronos": "...",
-    "plataforma": "...",
-    "pre_requisitos_formatado": "{pre_requisitos}"
+    "objetivo_geral": "Texto do objetivo geral da disciplina...",
+    "objetivos_especificos": "1. Primeiro objetivo. 2. Segundo objetivo. 3. Terceiro objetivo. 4. Quarto objetivo. 5. Quinto objetivo.",
+    "ementa_expandida": "1. Tópico 1. 2. Tópico 2. 3. Tópico 3. ... 20. Tópico 20.",
+    "conteudo_programatico": "UNIDADE I – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n• Subtópico 6\\n\\nUNIDADE II – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n• Subtópico 6\\n\\nUNIDADE III – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5\\n\\nUNIDADE IV – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\n• Subtópico 5",
+    "habilidades": "I - Primeira habilidade. II - Segunda habilidade. III - Terceira habilidade. IV - Quarta habilidade. V - Quinta habilidade. VI - Sexta habilidade. VII - Sétima habilidade. VIII - Oitava habilidade. IX - Nona habilidade. X - Décima habilidade.",
+    "bibliografia_basica": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.",
+    "bibliografia_complementar": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano."
 }}
 
-============================================================================
 DISCIPLINA: {dados['disciplina']}
-MODALIDADE: {modalidade}
-GERAR PLANO DE ENSINO COMPLETO AGORA.
+CURSO: {dados.get('curso', 'ENGENHARIA AMBIENTAL E SANITÁRIA')}
+EMENTA BASE: {dados['ementa']}
+
+GERAR JSON AGORA. NÃO INCLUA TEXTO ANTES OU DEPOIS DO JSON. USE ESTRITAMENTE O FORMATO ACIMA.
 """
     return prompt
 
+# ============================================
+# FUNÇÃO PRINCIPAL - CONSULTAR OPENAI (SEM FALLBACK)
+# ============================================
 def consultar_openai_para_plano(dados):
-    """Consulta o ChatGPT com o prompt completo e trata a resposta"""
+    """Consulta o ChatGPT para gerar os campos necessários - SEM FALLBACK"""
+    
+    prompt = gerar_prompt_simplificado(dados)
+    
+    print(f"\n📘 Gerando plano para: {dados['disciplina']}")
+    print("⏳ Consultando OpenAI...\n")
+    
+    response = client.chat.completions.create(
+        model="gpt-4-1106-preview",
+        messages=[
+            {
+                "role": "system",
+                "content": "Você é um especialista em planos de ensino da FACOP/SiGEU. Retorne APENAS JSON válido com os campos solicitados. NÃO inclua markdown, NÃO inclua texto explicativo, APENAS o JSON puro."
+            },
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,
+        max_tokens=4000,
+        response_format={"type": "json_object"}
+    )
+    
+    conteudo = response.choices[0].message.content
+    
+    # Parse do JSON
     try:
-        # Verificar se a API key existe
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            print(" OPENAI_API_KEY não encontrada nas variáveis de ambiente")
-            raise Exception("OPENAI_API_KEY não configurada no ambiente")
-        
-        print(f" API Key encontrada: {api_key[:5]}... (tamanho: {len(api_key)})")
-        
-        # Criar cliente com a chave explicitamente
-        client = OpenAI(api_key=api_key)
-        
-        prompt = gerar_prompt_completo(dados)
-        print(f" Gerando plano para disciplina: {dados['disciplina']}")
-        print(f" Tamanho do prompt: {len(prompt)} caracteres")
-        
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo-16k",  # Modelo com mais tokens
-            messages=[
-                {"role": "system", "content": "Você é um professor doutor da FACOP/SiGEu especialista em planejamento educacional. Gere planos de ensino detalhados seguindo TODAS as regras. RETORNE APENAS JSON VÁLIDO, SEM TEXTOS EXTRAS."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=4000,
-            timeout=60
-        )
-        
-        print(" Resposta recebida da OpenAI")
-        conteudo = response.choices[0].message.content
-        print(f" Resposta (primeiros 200 chars): {conteudo[:200]}...")
-        
-        # Extrair JSON
-        inicio_json = conteudo.find('{')
-        fim_json = conteudo.rfind('}') + 1
-        
-        if inicio_json == -1 or fim_json == 0:
-            print("❌ Resposta não contém JSON válido")
-            print(f"Resposta completa: {conteudo}")
-            raise Exception("Resposta da API não contém JSON válido")
-        
-        json_str = conteudo[inicio_json:fim_json]
-        print(f" JSON extraído, tamanho: {len(json_str)} caracteres")
-        
-        try:
-            plano_json = json.loads(json_str)
-            print(" JSON parseado com sucesso")
-        except json.JSONDecodeError as e:
-            print(f"❌ Erro ao fazer parse do JSON: {e}")
-            print(f"JSON problemático: {json_str[:500]}")
-            raise
-        
-        return plano_json
-        
-    except Exception as e:
-        print(f" ERRO em consultar_openai_para_plano: {e}")
-        import traceback
-        traceback.print_exc()
-        raise Exception(f"Erro ao gerar plano: {str(e)}")
+        plano_json = json.loads(conteudo)
+    except json.JSONDecodeError as e:
+        raise Exception(f"Erro ao decodificar JSON da OpenAI: {str(e)}. Resposta: {conteudo[:200]}")
+    
+    # VALIDAÇÃO RIGOROSA - TODOS OS CAMPOS SÃO OBRIGATÓRIOS
+    campos_obrigatorios = [
+        'objetivo_geral',
+        'objetivos_especificos',
+        'ementa_expandida', 
+        'conteudo_programatico', 
+        'habilidades', 
+        'bibliografia_basica', 
+        'bibliografia_complementar'
+    ]
+    
+    erros = []
+    for campo in campos_obrigatorios:
+        if campo not in plano_json:
+            # Tentar encontrar campo similar (case insensitive)
+            campo_encontrado = None
+            for chave in plano_json.keys():
+                if chave.lower() == campo.lower():
+                    campo_encontrado = chave
+                    plano_json[campo] = plano_json[chave]
+                    break
+            
+            if not campo_encontrado:
+                erros.append(f"Campo '{campo}' ausente no JSON retornado. Chaves disponíveis: {list(plano_json.keys())}")
+        elif not plano_json[campo] or plano_json[campo].strip() == "":
+            erros.append(f"Campo '{campo}' está vazio")
+        elif campo == 'ementa_expandida' and len(plano_json[campo].split('. ')) < 18:
+            erros.append(f"Ementa com menos de 20 itens: {len(plano_json[campo].split('. '))} itens encontrados")
+    
+    if erros:
+        raise Exception("Erros de validação nos dados da IA:\n" + "\n".join(erros))
+    
+    return plano_json
 
 # ============================================
-# ROTAS DA API (mantidas para compatibilidade, mas não usadas internamente)
+# ROTAS DA API (para integração)
 # ============================================
 
 @planos_bp.route('/gerar-conteudo-plano', methods=['POST'])
@@ -296,10 +284,6 @@ def gerar_conteudo_plano():
         
         conteudo_ia = consultar_openai_para_plano(dados)
         
-        # Formatar objetivos específicos
-        if 'objetivos_especificos' in conteudo_ia:
-            conteudo_ia['objetivos_especificos'] = conteudo_ia['objetivos_especificos'].replace('<ul>', '').replace('</ul>', '').replace('<li>', '').replace('</li>', '<br>')
-        
         return jsonify({
             'success': True,
             'conteudo': conteudo_ia
@@ -307,6 +291,6 @@ def gerar_conteudo_plano():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
 
-__all__ = ['planos_bp', 'consultar_openai_para_plano']
+# Exportar funções para uso no app.py
+__all__ = ['planos_bp', 'consultar_openai_para_plano', 'METODOLOGIA_FIXA', 'SISTEMA_AVALIACAO_FIXO', 'gerar_codigo_autenticacao', 'gerar_hash_completa']

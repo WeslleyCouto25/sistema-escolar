@@ -1,195 +1,415 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MEW - Planos de Ensino Gerados</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/mew.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .documentos-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
+        :root {
+            --primary: #1a237e;
+            --primary-dark: #0d1b6b;
+            --secondary: #0a3b2a;
+            --accent: #f0b400;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --success: #28a745;
+            --info: #17a2b8;
+            --light-gray: #f8f9fa;
+            --gray: #6c757d;
+            --dark: #343a40;
         }
-        .documento-card {
-            background: white;
-            border-radius: 10px;
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .mew-container {
+            max-width: 1300px;
+            margin: 0 auto;
             padding: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            border: 1px solid #e0e0e0;
-            transition: all 0.3s;
         }
-        .documento-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-        }
-        .documento-header {
+        
+        .header-mew {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
-        .documento-tipo {
-            background: #1e4a3b;
+        
+        .header-mew h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .header-mew h1 i {
+            font-size: 28px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
             color: white;
-            padding: 5px 10px;
+            padding: 8px 20px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eaeef2;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--gray);
+            margin-top: 5px;
+        }
+        
+        .table-responsive {
+            overflow-x: auto;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th {
+            background: var(--primary);
+            color: white;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: left;
+        }
+        
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid #eaeef2;
+            font-size: 14px;
+        }
+        
+        .table tr:hover {
+            background: #f5f5f5;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-primary {
+            background: rgba(26,35,126,0.1);
+            color: var(--primary);
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border: none;
             border-radius: 5px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .documento-codigo {
-            font-family: monospace;
-            font-size: 12px;
-            color: #666;
-        }
-        .documento-disciplina {
-            font-size: 16px;
-            font-weight: bold;
-            color: #1e4a3b;
-            margin-bottom: 10px;
-        }
-        .documento-data {
             font-size: 13px;
-            color: #888;
-            margin-bottom: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
         }
-        .documento-acoes {
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+        
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: #000;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn i {
+            margin-right: 5px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .search-box {
+            margin-bottom: 20px;
             display: flex;
             gap: 10px;
         }
-        .btn-sm {
-            padding: 8px 12px;
-            font-size: 13px;
+        
+        .search-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #e0e0e0;
             border-radius: 5px;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
+            font-size: 14px;
         }
-        .btn-view { background: #1e4a3b; color: white; }
-        .btn-print { background: #6c757d; color: white; }
-        .btn-delete { background: #dc3545; color: white; }
-        .btn-validate { background: #ffc107; color: #333; }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: var(--gray);
+        }
+        
+        .empty-state i {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
     </style>
 </head>
 <body>
-    <div class="topbar">
-        <div class="navbar-header">
-            <div class="logo-text">MEW - Planos de Ensino</div>
+    <div class="mew-container">
+        <div class="header-mew">
+            <h1>
+                <i>📚</i> MEW - Planos de Ensino Gerados
+            </h1>
+            <div class="user-info">
+                <span><i>👤</i> Administrador</span>
+                <a href="/mew/logout" class="logout-btn"><i>🚪</i> Sair</a>
+            </div>
         </div>
-        <div class="spacer"></div>
-        <div class="user-menu">
-            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
-            <a href="/mew/logout" class="logout-btn">Sair</a>
-        </div>
-    </div>
-
-    <div class="main-container">
-        <nav class="sidebar">
-            <div class="user-profile">
-                <div class="profile-img">
-                    <i class="fas fa-user-cog"></i>
-                </div>
-                <div class="profile-text">
-                    <div class="name">Administrador MEW</div>
-                    <div class="ra">Gestor</div>
-                </div>
-            </div>
-
-            <div class="main-menu">
-                <a href="/mew/dashboard" class="menu-item">
-                    <i class="fas fa-home"></i>
-                    <span class="text">Dashboard</span>
-                </a>
-                <a href="/mew/gerar-plano-ensino" class="menu-item">
-                    <i class="fas fa-clipboard-list"></i>
-                    <span class="text">Novo Plano</span>
-                </a>
-                <a href="/mew/planos-ensino" class="menu-item active">
-                    <i class="fas fa-folder-open"></i>
-                    <span class="text">Meus Planos</span>
-                    <span class="badge">{{ total_planos }}</span>
-                </a>
-                <a href="/mew/gerenciar-documentos" class="menu-item">
-                    <i class="fas fa-file-alt"></i>
-                    <span class="text">Gerenciar Documentos</span>
-                </a>
-            </div>
-        </nav>
-
-        <main class="content-area">
-            <h1 class="page-title">📋 Planos de Ensino Gerados</h1>
-            <p class="page-subtitle">Total de {{ total_planos }} planos gerados</p>
-
-            <div style="margin: 20px 0;">
-                <a href="/mew/gerar-plano-ensino" class="btn" style="background: #1e4a3b; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">
-                    <i class="fas fa-plus"></i> Gerar Novo Plano
-                </a>
-            </div>
-
-            {% if planos %}
-            <div class="documentos-grid">
-                {% for plano in planos %}
-                <div class="documento-card">
-                    <div class="documento-header">
-                        <span class="documento-tipo">
-                            {% if plano.tipo == 'plano_ensino' %}📋 Plano de Ensino{% else %}📄 {{ plano.tipo }}{% endif %}
-                        </span>
-                        <span class="documento-codigo">{{ plano.codigo[:12] }}...</span>
-                    </div>
-                    <div class="documento-disciplina">
-                        {% set conteudo = plano.conteudo_html %}
-                        {% set start = conteudo.find('<strong>') + 8 if '<strong>' in conteudo else -1 %}
-                        {% set end = conteudo.find('</strong>', start) if start > -1 else -1 %}
-                        {% if start > -1 and end > -1 %}
-                            {{ conteudo[start:end] }}
-                        {% else %}
-                            Plano de Ensino
-                        {% endif %}
-                    </div>
-                    <div class="documento-data">
-                        <i class="far fa-calendar-alt"></i> {{ plano.data_geracao }}
-                    </div>
-                    <div class="documento-acoes">
-                        <a href="/ver-documento/{{ plano.codigo }}" class="btn-sm btn-view" target="_blank">
-                            <i class="fas fa-eye"></i> Visualizar
-                        </a>
-                        <a href="/validar-documento/{{ plano.codigo }}" class="btn-sm btn-validate" target="_blank">
-                            <i class="fas fa-qrcode"></i> Validar
-                        </a>
-                        <a href="#" onclick="imprimirDocumento('{{ plano.codigo }}')" class="btn-sm btn-print">
-                            <i class="fas fa-print"></i>
-                        </a>
-                        <a href="/mew/deletar-documento/{{ plano.codigo }}" class="btn-sm btn-delete" onclick="return confirm('Tem certeza que deseja excluir este plano?')">
-                            <i class="fas fa-trash"></i>
-                        </a>
-                    </div>
-                </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
                 {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-value">{{ total_planos }}</div>
+                <div class="stat-label">Total de Planos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ planos_hoje|default(0) }}</div>
+                <div class="stat-label">Gerados Hoje</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ planos_enviados|default(0) }}</div>
+                <div class="stat-label">Enviados para Alunos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ planos_visualizados|default(0) }}</div>
+                <div class="stat-label">Visualizados</div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">
+                <i>📋</i> Planos de Ensino Gerados
+            </div>
+            
+            <div class="search-box">
+                <input type="text" class="search-input" id="searchInput" placeholder="Buscar por disciplina, código...">
+                <a href="/mew/gerar-plano-ensino" class="btn btn-primary"><i>➕</i> Novo Plano</a>
+            </div>
+            
+            {% if planos %}
+            <div class="table-responsive">
+                <table class="table" id="planosTable">
+                    <thead>
+                        <tr>
+                            <th>Disciplina</th>
+                            <th>Código</th>
+                            <th>Data</th>
+                            <th>Hash</th>
+                            <th>Envios</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for plano in planos %}
+                        <tr>
+                            <td>
+                                <strong>{{ plano.disciplina|default('N/A') }}</strong>
+                            </td>
+                            <td>
+                                <span class="badge badge-primary">{{ plano.codigo }}</span>
+                            </td>
+                            <td>{{ plano.data_geracao }}</td>
+                            <td>
+                                <span style="font-family: monospace; font-size: 11px;">
+                                    {{ plano.hash_documento[:10] }}...
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-primary">{{ plano.total_envios|default(0) }}</span>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="/ver-documento/{{ plano.codigo }}" target="_blank" class="btn btn-sm btn-info" title="Visualizar">
+                                        <i>👁️</i>
+                                    </a>
+                                    <a href="/mew/enviar-plano-aluno/{{ plano.id }}" class="btn btn-sm btn-warning" title="Enviar para Aluno">
+                                        <i>📤</i>
+                                    </a>
+                                    <a href="#" onclick="deletarPlano('{{ plano.id }}')" class="btn btn-sm btn-danger" title="Excluir">
+                                        <i>🗑️</i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
             {% else %}
-            <div style="text-align: center; padding: 50px; background: white; border-radius: 10px;">
-                <i class="fas fa-folder-open" style="font-size: 48px; color: #ccc;"></i>
-                <p style="margin-top: 20px; color: #666;">Nenhum plano de ensino gerado ainda.</p>
-                <a href="/mew/gerar-plano-ensino" class="btn" style="display: inline-block; margin-top: 20px; background: #1e4a3b; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none;">
-                    <i class="fas fa-plus"></i> Gerar Primeiro Plano
+            <div class="empty-state">
+                <i>📭</i>
+                <h3>Nenhum plano de ensino gerado</h3>
+                <p>Clique em "Novo Plano" para começar a gerar planos com IA</p>
+                <a href="/mew/gerar-plano-ensino" class="btn btn-primary" style="margin-top: 20px;">
+                    <i>➕</i> Gerar Primeiro Plano
                 </a>
             </div>
             {% endif %}
-        </main>
+        </div>
     </div>
-
+    
     <script>
-        function imprimirDocumento(codigo) {
-            const url = `/ver-documento/${codigo}`;
-            const printWindow = window.open(url, '_blank');
-            printWindow.onload = function() {
-                printWindow.print();
-            };
+        function deletarPlano(id) {
+            if (confirm('Tem certeza que deseja excluir este plano de ensino?')) {
+                fetch(`/mew/excluir-documento/${id}`, { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Erro: ' + data.message);
+                        }
+                    });
+            }
         }
+        
+        // Busca
+        document.getElementById('searchInput').addEventListener('keyup', function() {
+            const searchText = this.value.toLowerCase();
+            const rows = document.querySelectorAll('#planosTable tbody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchText) ? '' : 'none';
+            });
+        });
     </script>
 </body>
 </html>
