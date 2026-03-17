@@ -2682,7 +2682,7 @@ def solicitar_declaracao():
 # MEW - PAINEL ADMIN
 # ==========================
 
-'''@app.route("/mew/login", methods=["GET", "POST"])
+@app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
         email = request.form.get("email")
@@ -2699,9 +2699,9 @@ def mew_login():
             session["mew_admin"] = True
             return redirect("/mew/dashboard")
 
-    return render_template("mew/login.html")'''
+    return render_template("mew/login.html")
     
-@app.route("/mew/login", methods=["GET", "POST"])
+'''@app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
         email = request.form.get("email")
@@ -2711,7 +2711,7 @@ def mew_login():
             session["mew_admin"] = True
             return redirect("/mew/dashboard")
 
-    return render_template("mew/login.html")
+    return render_template("mew/login.html")'''
     
 
 
