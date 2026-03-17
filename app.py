@@ -5983,7 +5983,7 @@ def obter_configuracao_ano():
     from datetime import datetime
     return str(datetime.now().year)
 
-def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None):
+def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None, ira_manual='N/I', total_disciplinas_manual='0'):
     """Gera HTML do histórico escolar com QR CODE JÁ INCLUSO"""
     
     conn = get_db_connection()
@@ -6017,20 +6017,21 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     
     # ===== CORREÇÃO COMPLETA AQUI =====
     # Buscar IRA do banco de dados
-    cursor.execute("""
-        SELECT ira_ponderado, total_disciplinas_concluidas 
-        FROM ira_aluno 
-        WHERE aluno_id = ?
-    """, (aluno_id,))
-
-    ira_row = cursor.fetchone()
+        # ===== USAR VALORES MANUAIS DO FORMULÁRIO =====
+    # (ignorar completamente o banco de dados)
+    ira_display = ira_manual
     
-    # Inicializar variáveis com valores padrão
-    ira_display = "N/I"
+    # Converter total_disciplinas_manual para número
+    try:
+        total_disciplinas_valor = int(total_disciplinas_manual)
+    except:
+        total_disciplinas_valor = 0
+    
     ira_info = {
-        'disciplinas_aprovadas': 0,
+        'disciplinas_aprovadas': total_disciplinas_valor,
         'carga_total_aprovada': carga_total_aprovada
     }
+    # ==============================================
     
     # Se encontrou IRA no banco, usar os dados reais
     if ira_row and ira_row['ira_ponderado']:
