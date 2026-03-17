@@ -7197,7 +7197,6 @@ body {{
 # ==========================
 # ROTA PARA GERAR HISTÓRICO (SIMPLES)
 # ==========================
-
 @app.route('/mew/gerar-historico-automatico', methods=['POST'])
 def gerar_historico_automatico_route():
     """
@@ -7210,6 +7209,10 @@ def gerar_historico_automatico_route():
         data = request.get_json()
         aluno_id = data.get('aluno_id')
         ano_manual = data.get('ano_historico')
+        
+        # 👇 1. PEGAR OS VALORES MANUAIS DO FORMULÁRIO
+        ira_manual = data.get('ira_manual', 'N/I')
+        total_disciplinas_manual = data.get('total_disciplinas', '0')
         
         if not aluno_id:
             return jsonify({"success": False, "message": "Aluno não selecionado"})
@@ -7243,7 +7246,7 @@ def gerar_historico_automatico_route():
         dados_qr = link_validacao 
         qr_code_base64 = gerar_qrcode_base64(dados_qr)
         
-        # Gerar HTML do histórico (AGORA COM QR CODE INCLUSO)
+        # 👇 2. PASSAR OS VALORES MANUAIS PARA A FUNÇÃO
         html = gerar_historico_automatico(
             aluno_id, 
             disciplinas, 
@@ -7251,7 +7254,9 @@ def gerar_historico_automatico_route():
             qr_code_base64, 
             codigo, 
             hash_documento,
-            ano_manual
+            ano_manual,
+            ira_manual,              # 👈 NOVO
+            total_disciplinas_manual  # 👈 NOVO
         )
         
         # Criar metadados
@@ -7306,6 +7311,7 @@ def gerar_historico_automatico_route():
         print(f"Erro: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
+
 
 @app.route("/ver-documento/<codigo>")
 def ver_documento_completo(codigo):
