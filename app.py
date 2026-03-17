@@ -3,6 +3,7 @@ import sqlite3
 import json
 import time
 import random
+from flask import flash
 import string
 from datetime import datetime
 import hashlib
@@ -2691,16 +2692,21 @@ def mew_login():
         admin_email = os.environ.get("MEW_ADMIN_EMAIL")
         admin_password_hash = os.environ.get("MEW_ADMIN_PASSWORD_HASH")
 
-        if (
-            email == admin_email
-            and admin_password_hash
-            and check_password_hash(admin_password_hash, senha)
-        ):
+        # PRIMEIRO: verifica se o email está correto
+        if email != admin_email:
+            flash("Email incorreto", "error")
+            return render_template("mew/login.html")
+        
+        # SEGUNDO: verifica se a senha bate com o hash
+        if admin_password_hash and check_password_hash(admin_password_hash, senha):
             session["mew_admin"] = True
             return redirect("/mew/dashboard")
+        else:
+            flash("Senha incorreta", "error")
+            return render_template("mew/login.html")
 
     return render_template("mew/login.html")
-    
+
 '''@app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
@@ -6032,12 +6038,6 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         'carga_total_aprovada': carga_total_aprovada
     }
     # ==============================================
-    
-    # Se encontrou IRA no banco, usar os dados reais
-    if ira_row and ira_row['ira_ponderado']:
-        ira_display = f"{ira_row['ira_ponderado']:.2f}"
-        ira_info['disciplinas_aprovadas'] = ira_row['total_disciplinas_concluidas']
-    # ===================================
     
     # Buscar dados adicionais do aluno
     cursor.execute("""
