@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>Disciplina Concluída | FACOP SiGEU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== VARIÁVEIS GLOBAIS (mesmas do dashboard) ===== */
+        :root {
+            --primary: #0a2c4e;
+            --primary-light: #1e3a5f;
+            --primary-dark: #051e33;
+            --secondary: #b8860b;
+            --secondary-light: #daa520;
+            --accent: #8b0000;
+            --success: #2e7d32;
+            --warning: #ed6c02;
+            --info: #0288d1;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-800);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* ===== TOPBAR (idêntica ao dashboard) ===== */
+        .topbar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            height: 70px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            color: white;
+            box-shadow: var(--shadow-md);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-header {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 1.25rem;
+            letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 40px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .user-menu {
+            display: flex;
+            gap: 12px;
+        }
+
+        .logout-btn {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+
+        .logout-btn.active {
+            background: var(--secondary);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        /* ===== CONTAINER PRINCIPAL ===== */
+        .conclusion-container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            border: 1px solid var(--gray-200);
+        }
+
+        /* ===== HEADER ===== */
+        .conclusion-header {
+            background: linear-gradient(135deg, var(--success) 0%, #1b5e20 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .status-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+        }
+
+        .conclusion-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        /* ===== CONTENT ===== */
+        .conclusion-content {
+            padding: 40px;
+        }
+
+        .conclusion-content > p {
+            text-align: center;
+            color: var(--gray-600);
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        /* ===== PROGRESS STEPS (estilizado como o dashboard) ===== */
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 40px 0;
+            position: relative;
+            padding: 0 10px;
+        }
+
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 30px;
+            left: 5%;
+            right: 5%;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                var(--success) 0%, 
+                var(--success) 60%, 
+                var(--gray-300) 60%,
+                var(--gray-300) 80%,
+                var(--warning) 80%);
+            z-index: 1;
+            border-radius: 3px;
+        }
+
+        .step {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+
+        .step-icon {
+            width: 60px;
+            height: 60px;
+            background: white;
+            border: 3px solid var(--gray-300);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            color: var(--gray-500);
+            font-size: 1.5rem;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .step.completed .step-icon {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .step.active .step-icon {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        .step-text {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            font-weight: 500;
+        }
+
+        .step.active .step-text {
+            color: var(--warning);
+            font-weight: 600;
+        }
+
+        .step.completed .step-text {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        /* ===== TIMER INFO ===== */
+        .timer-info {
+            background: #fff9e6;
+            border-left: 4px solid var(--warning);
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .timer-info h3 {
+            color: var(--warning);
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timer-info h3 i {
+            font-size: 1.5rem;
+        }
+
+        .countdown {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--warning);
+            text-align: center;
+            margin: 20px 0;
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+
+        .timer-info p {
+            text-align: center;
+            font-size: 0.95rem;
+            color: var(--gray-600);
+        }
+
+        /* ===== ACTIONS BUTTONS ===== */
+        .actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-decoration: none;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-50);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1b5e20;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* ===== POPUP MODAL ===== */
+        .popup-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+
+        .popup-content {
+            background: white;
+            padding: 40px;
+            border-radius: var(--radius-lg);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-xl);
+            animation: popIn 0.5s ease-out;
+            border-top: 5px solid var(--warning);
+        }
+
+        .popup-content i {
+            font-size: 4rem;
+            color: var(--warning);
+            margin-bottom: 20px;
+        }
+
+        .popup-content h2 {
+            color: var(--primary);
+            margin-bottom: 15px;
+            font-size: 1.75rem;
+        }
+
+        .popup-content p {
+            color: var(--gray-600);
+            margin-bottom: 25px;
+            line-height: 1.6;
+        }
+
+        .popup-content strong {
+            color: var(--primary);
+        }
+
+        .popup-dica {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin: 25px 0;
+            border-left: 4px solid var(--success);
+        }
+
+        .popup-dica p {
+            margin: 0;
+            color: var(--success);
+        }
+
+        .popup-dica i {
+            font-size: 1.2rem;
+            color: var(--success);
+            margin-right: 8px;
+        }
+
+        .btn-popup {
+            padding: 12px 40px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-popup:hover {
+            background: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* ===== ANIMAÇÕES ===== */
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 0 16px;
+            }
+            
+            .logo-text {
+                font-size: 1rem;
+                padding: 6px 12px;
+            }
+            
+            .logout-btn span {
+                display: none;
+            }
+            
+            .logout-btn i {
+                margin: 0;
+            }
+            
+            .conclusion-container {
+                margin: 20px 16px;
+            }
+            
+            .conclusion-header {
+                padding: 30px 20px;
+            }
+            
+            .conclusion-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .conclusion-content {
+                padding: 25px;
+            }
+            
+            .progress-steps {
+                flex-wrap: wrap;
+                gap: 15px;
+            }
+            
+            .progress-steps::before {
+                display: none;
+            }
+            
+            .step {
+                min-width: 80px;
+            }
+            
+            .step-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+            
+            .countdown {
+                font-size: 1.5rem;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .step {
+                min-width: 60px;
+            }
+            
+            .step-text {
+                font-size: 0.7rem;
+            }
+            
+            .step-icon {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+        }
+
+        /* ===== UTILITIES ===== */
+        .text-center { text-align: center; }
+        .mt-4 { margin-top: 24px; }
+        .mb-4 { margin-bottom: 24px; }
+        .w-100 { width: 100%; }
+    </style>
+</head>
+<body>
+    <!-- Top Bar (igual ao dashboard) -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">FACOP • SiGEU</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-graduation-cap"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Sair</span>
+            </a>
+        </div>
+    </header>
+
+    <div class="conclusion-container">
+        <div class="conclusion-header">
+            <i class="fas fa-check-circle status-icon"></i>
+            <h1>{{ mensagem }}</h1>
+        </div>
+        
+        <div class="conclusion-content">
+            <p>
+                {{ detalhes }}
+            </p>
+            
+            <!-- Progresso da disciplina -->
+            <div class="progress-steps">
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-play-circle"></i>
+                    </div>
+                    <div class="step-text">Início</div>
+                </div>
+                
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="step-text">Cap. 1</div>
+                </div>
+                
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="step-text">Cap. 2</div>
+                </div>
+                
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="step-text">Cap. 3</div>
+                </div>
+                
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="step-text">Cap. 4</div>
+                </div>
+                
+                {% if "final" in mensagem|lower %}
+                <div class="step completed">
+                    <div class="step-icon">
+                        <i class="fas fa-file-signature"></i>
+                    </div>
+                    <div class="step-text">Final</div>
+                </div>
+                {% else %}
+                <div class="step active">
+                    <div class="step-icon">
+                        <i class="fas fa-clock pulse"></i>
+                    </div>
+                    <div class="step-text">Aguardando<br>Final</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if "aguardando" in detalhes|lower %}
+            <div class="timer-info">
+                <h3>
+                    <i class="fas fa-clock"></i> Prova Final Disponível em:
+                </h3>
+                <div class="countdown" id="countdown">
+                    {% if data_liberacao %}
+                    {{ data_liberacao }}
+                    {% else %}
+                    Em até 3 dias úteis
+                    {% endif %}
+                </div>
+                <p>
+                    A prova final será liberada automaticamente
+                </p>
+            </div>
+            {% endif %}
+            
+            <div class="actions">
+                <a href="/dashboard" class="btn btn-primary">
+                    <i class="fas fa-home"></i> Voltar ao Dashboard
+                </a>
+                
+                <a href="/situacao-academica" class="btn btn-secondary">
+                    <i class="fas fa-chart-bar"></i> Ver Situação Acadêmica
+                </a>
+                
+                {% if "aguardando" in detalhes|lower %}
+                <a href="/avaliacao-final" class="btn btn-success">
+                    <i class="fas fa-file-signature"></i> Verificar Prova Final
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Se estiver aguardando a prova final, mostrar popup
+        {% if "aguardando" in detalhes|lower %}
+        // Aguardar 2 segundos antes de mostrar o popup
+        setTimeout(function() {
+            // Verificar se já mostrou o popup hoje
+            const hoje = new Date().toDateString();
+            const popupMostradoHoje = localStorage.getItem('popup_conclusao_' + hoje);
+            
+            if (!popupMostradoHoje) {
+                const modal = document.createElement('div');
+                modal.className = 'popup-modal';
+                
+                const modalContent = document.createElement('div');
+                modalContent.className = 'popup-content';
+                
+                modalContent.innerHTML = `
+                    <i class="fas fa-bell"></i>
+                    <h2>📢 Aviso Importante!</h2>
+                    <p>
+                        <strong>Parabéns por completar todos os capítulos!</strong><br><br>
+                        Sua <strong>prova final</strong> estará disponível em <strong>até 3 dias úteis</strong>.<br>
+                        Fique atento ao menu <strong>"Avaliação Final"</strong> no seu dashboard.
+                    </p>
+                    <div class="popup-dica">
+                        <p>
+                            <i class="fas fa-lightbulb"></i> Dica: Revise o conteúdo dos capítulos para se preparar!
+                        </p>
+                    </div>
+                    <button onclick="fecharPopup()" class="btn-popup">
+                        Entendido
+                    </button>
+                `;
+                
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+                
+                // Marcar que já mostrou o popup hoje
+                localStorage.setItem('popup_conclusao_' + hoje, 'true');
+                
+                // Função para fechar o popup
+                window.fecharPopup = function() {
+                    document.body.removeChild(modal);
+                };
+                
+                // Fechar ao clicar fora
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        fecharPopup();
+                    }
+                });
+            }
+        }, 2000);
+        
+        // Se tiver data específica, criar contador
+        {% if data_liberacao %}
+        function criarContador(dataString) {
+            try {
+                // Converter data dd/mm/aaaa hh:mm para objeto Date
+                const partes = dataString.split(' ');
+                const dataPartes = partes[0].split('/');
+                const horaPartes = partes[1] ? partes[1].split(':') : [0, 0];
+                
+                const dataAlvo = new Date(
+                    parseInt(dataPartes[2]), // ano
+                    parseInt(dataPartes[1]) - 1, // mês (0-indexed)
+                    parseInt(dataPartes[0]), // dia
+                    parseInt(horaPartes[0]), // hora
+                    parseInt(horaPartes[1]) // minuto
+                );
+                
+                function atualizarContador() {
+                    const agora = new Date();
+                    const diff = dataAlvo - agora;
+                    
+                    if (diff <= 0) {
+                        document.getElementById('countdown').innerHTML = 
+                            '<span style="color: var(--success);">✅ Já disponível!</span>';
+                        return;
+                    }
+                    
+                    const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    const horas = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const minutos = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const segundos = Math.floor((diff % (1000 * 60)) / 1000);
+                    
+                    document.getElementById('countdown').innerHTML = 
+                        `<span style="color: var(--warning);">${dias}d ${horas}h ${minutos}m ${segundos}s</span>`;
+                }
+                
+                // Atualizar a cada segundo
+                atualizarContador();
+                setInterval(atualizarContador, 1000);
+            } catch(e) {
+                console.error('Erro ao criar contador:', e);
+            }
+        }
+        
+        // Iniciar contador
+        criarContador("{{ data_liberacao }}");
+        {% endif %}
+        {% endif %}
+    </script>
+</body>
+</html>

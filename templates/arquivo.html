@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard do Aluno</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            color: white;
+            padding: 15px 20px;
+            position: relative;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-cursando {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-concluido {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .card-header h3 {
+            margin: 0;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-content {
+            padding: 20px;
+        }
+
+        .course-name {
+            font-weight: 500;
+            color: var(--dark-gray);
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .card-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: var(--light-gray);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+
+        .disciplina-progress {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .nota-item {
+            background: rgba(0, 51, 102, 0.05);
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin: 8px 0;
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .section-title {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--light-gray);
+            padding-bottom: 10px;
+            margin: 30px 0 20px 0;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        .info-card h4 {
+            color: var(--dark-gray);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .disciplina-notas {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .disciplina-notas-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 0;
+        }
+
+        .disciplina-notas-header:hover {
+            background: rgba(0, 51, 102, 0.03);
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .disciplina-notas-content {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--light-gray);
+        }
+
+        .disciplina-notas-content.show {
+            display: block;
+        }
+
+        .expand-icon {
+            transition: transform 0.3s;
+        }
+
+        .rotate-180 {
+            transform: rotate(180deg);
+        }
+
+        .dados-aluno-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .dados-aluno-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .dado-item {
+            padding: 15px;
+            background: rgba(0, 51, 102, 0.05);
+            border-radius: 8px;
+        }
+
+        .dado-label {
+            font-size: 14px;
+            color: var(--medium-gray);
+            margin-bottom: 5px;
+        }
+
+        .dado-value {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        .notas-summary {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 15px;
+            min-width: 120px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .empty-notas {
+            text-align: center;
+            padding: 30px;
+            color: var(--medium-gray);
+        }
+
+        .empty-notas i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: var(--light-gray);
+        }
+
+        .dado-item {
+            padding: 15px;
+            background: rgba(0, 51, 102, 0.05);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .dado-item:hover {
+            background: rgba(0, 51, 102, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .dado-label {
+            font-size: 14px;
+            color: var(--medium-gray);
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .dado-value {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--dark-gray);
+        }
+
+        /* Estilo para badges de status financeiro */
+        .badge-success {
+            background-color: #28a745;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .badge-warning {
+            background-color: #ffc107;
+            color: #212529;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .badge-secondary {
+            background-color: #6c757d;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">PLATAFORMA ACADÊMICA</div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn active">
+                <i class="fas fa-graduation-cap"></i> Dashboard
+            </a>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="ra">RA: {{ aluno_ra }}</div>
+                </div>
+            </div>
+
+            <!-- Após o perfil do usuário, adicione essas opções -->
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item active">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+
+                <!-- Novas opções -->
+                <div id="dados-pessoais-section" class="mew-card" style="display: none;">
+                    <h2 class="section-title">👤 Meus Dados Pessoais</h2>
+
+                    <div class="dados-aluno-card">
+                        <div class="dados-aluno-grid">
+                            <div class="dado-item">
+                                <div class="dado-label">Nome Completo</div>
+                                <div class="dado-value">{{ aluno_nome }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Registro Acadêmico (RA)</div>
+                                <div class="dado-value">{{ aluno_ra }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Email</div>
+                                <div class="dado-value">{{ aluno_email }}</div>
+                            </div>
+                            {% if dados_pessoais %}
+                            <div class="dado-item">
+                                <div class="dado-label">CPF</div>
+                                <div class="dado-value">{{ dados_pessoais['cpf'] or 'Não informado' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">RG</div>
+                                <div class="dado-value">{{ dados_pessoais['rg'] or 'Não informado' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Telefone</div>
+                                <div class="dado-value">{{ dados_pessoais['telefone'] or 'Não informado' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Endereço</div>
+                                <div class="dado-value">{{ dados_pessoais['endereco'] or 'Não informado' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Cidade</div>
+                                <div class="dado-value">{{ dados_pessoais['cidade'] or 'Não informado' }}/{{
+                                    dados_pessoais['estado'] or '' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">CEP</div>
+                                <div class="dado-value">{{ dados_pessoais['cep'] or 'Não informado' }}</div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Curso de Referência</div>
+                                <div class="dado-value">{{ dados_pessoais['curso_referencia'] or 'Não informado' }}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="dado-item" style="grid-column: 1 / -1; text-align: center; padding: 30px;">
+                                <i class="fas fa-exclamation-triangle"
+                                    style="font-size: 48px; color: #ffc107; margin-bottom: 15px;"></i>
+                                <h3>Dados pessoais não cadastrados</h3>
+                                <p>Entre em contato com a administração para completar seu cadastro.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção: Situação Financeira -->
+                <div id="dados-financeiros-section" class="mew-card" style="display: none;">
+                    <h2 class="section-title">💰 Situação Financeira</h2>
+
+                    {% if situacao_financeira %}
+                    <div class="dados-aluno-card">
+                        <div class="dados-aluno-grid">
+                            <div class="dado-item">
+                                <div class="dado-label">Forma de Pagamento</div>
+                                <div class="dado-value">
+                                    {% if situacao_financeira['forma_pagamento'] == 'avista' %}
+                                    À Vista
+                                    {% elif situacao_financeira['forma_pagamento'] == 'cartao' %}
+                                    Cartão de Crédito
+                                    {% elif situacao_financeira['forma_pagamento'] == 'boleto_pix' %}
+                                    Boleto/PIX
+                                    {% else %}
+                                    {{ situacao_financeira['forma_pagamento'] }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Status</div>
+                                <div class="dado-value">
+                                    {% if situacao_financeira['status'] == 'pago' %}
+                                    <span class="badge-success">Pago</span>
+                                    {% elif situacao_financeira['status'] == 'pendente' %}
+                                    <span class="badge-warning">Pendente</span>
+                                    {% elif situacao_financeira['status'] == 'parcial' %}
+                                    <span class="badge-secondary">Parcialmente Pago</span>
+                                    {% else %}
+                                    <span>{{ situacao_financeira['status'] }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Parcelas</div>
+                                <div class="dado-value">
+                                    {{ situacao_financeira['parcelas_pagas'] }}/{{ situacao_financeira['parcelas_total']
+                                    }}
+                                </div>
+                            </div>
+                            <div class="dado-item">
+                                <div class="dado-label">Valor Total</div>
+                                <div class="dado-value">
+                                    R$ {{ "%.2f"|format(situacao_financeira['valor_total']|float) if
+                                    situacao_financeira['valor_total'] else '0,00' }}
+                                </div>
+                            </div>
+                            {% if situacao_financeira['data_vencimento'] %}
+                            <div class="dado-item">
+                                <div class="dado-label">Próximo Vencimento</div>
+                                <div class="dado-value">{{ situacao_financeira['data_vencimento'] }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div
+                            style="margin-top: 30px; background: rgba(0, 51, 102, 0.05); padding: 20px; border-radius: 8px;">
+                            <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+                                <i class="fas fa-chart-pie"></i> Resumo Financeiro
+                            </h4>
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                        <span>Progresso do Pagamento:</span>
+                                        <span>{{ (situacao_financeira['parcelas_pagas'] /
+                                            situacao_financeira['parcelas_total'] * 100)|round|int }}%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill"
+                                            style="width: {{ (situacao_financeira['parcelas_pagas'] / situacao_financeira['parcelas_total'] * 100) }}%;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-credit-card" style="font-size: 48px; color: var(--light-gray);"></i>
+                        <h3>Informações financeiras não disponíveis</h3>
+                        <p>Entre em contato com a administração para regularizar sua situação financeira.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="menu-section">Minhas Disciplinas</div>
+                {% for d in disciplinas %}
+                <a href="/disciplina/{{ d['id'] }}" class="menu-item">
+                    <i class="fas fa-book"></i>
+                    <span class="text">{{ d['nome'][:20] }}{% if d['nome']|length > 20 %}...{% endif %}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <h1 class="page-title">📊 Dashboard do Aluno</h1>
+            <p class="page-subtitle">Bem-vindo, {{ aluno_nome }}! Aqui estão suas disciplinas e desempenho.</p>
+
+            <!-- Seção: Meus Dados -->
+            <h2 class="section-title">👤 Meus Dados</h2>
+            <div class="dados-aluno-card">
+                <div class="dados-aluno-grid">
+                    <div class="dado-item">
+                        <div class="dado-label">Nome Completo</div>
+                        <div class="dado-value">{{ aluno_nome }}</div>
+                    </div>
+                    <div class="dado-item">
+                        <div class="dado-label">Registro Acadêmico (RA)</div>
+                        <div class="dado-value">{{ aluno_ra }}</div>
+                    </div>
+                    <div class="dado-item">
+                        <div class="dado-label">Email</div>
+                        <div class="dado-value">{{ aluno_email }}</div>
+                    </div>
+                    <div class="dado-item">
+                        <div class="dado-label">Disciplinas Matriculadas</div>
+                        <div class="dado-value">{{ disciplinas|length }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção: Minhas Disciplinas -->
+            <h2 class="section-title">📚 Minhas Disciplinas</h2>
+
+            {% if disciplinas %}
+            <div class="cards-container">
+                {% for d in disciplinas %}
+                {% set progresso = calcular_progresso(session.get('aluno_id'), d['id']) %}
+                {% set total_capitulos = contar_capitulos(d['id']) %}
+                {% set provas_feitas = contar_provas_realizadas(session.get('aluno_id'), d['id']) %}
+
+                <div class="card">
+                    <div class="card-header"
+                        style="background: {% if progresso == 100 %}#28a745{% else %}var(--primary-color){% endif %};">
+                        <h3><i class="fas fa-book"></i> {{ d['nome'][:30] }}{% if d['nome']|length > 30 %}...{% endif %}
+                        </h3>
+                        <div
+                            class="status-badge {% if progresso == 100 %}status-concluido{% else %}status-cursando{% endif %}">
+                            {% if progresso == 100 %}Concluído{% else %}Cursando{% endif %}
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <div class="course-name">{{ d['nome'] }}</div>
+
+                        <div class="progress-container">
+                            <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                                <span>Progresso:</span>
+                                <span>{{ progresso }}%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ progresso }}%;"></div>
+                            </div>
+                        </div>
+
+                        <div style="font-size: 14px; color: var(--medium-gray); margin-top: 15px;">
+                            <i class="fas fa-layer-group"></i> Capítulos: {{ total_capitulos }}<br>
+                            <i class="fas fa-clipboard-check"></i> Provas feitas: {{ provas_feitas }}/{{ total_capitulos
+                            }}
+                        </div>
+
+                        <div class="card-actions">
+                            <a href="/disciplina/{{ d['id'] }}" class="btn btn-primary"
+                                style="flex: 1; text-align: center;">
+                                <i class="fas fa-play-circle"></i> Acessar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-book"></i>
+                <h3>Nenhuma disciplina matriculada</h3>
+                <p>Entre em contato com a administração para ser matriculado em disciplinas.</p>
+            </div>
+            {% endif %}
+
+            <!-- Seção: Minhas Notas -->
+            <h2 class="section-title">📊 Minhas Notas</h2>
+
+            {% if notas %}
+            <div class="mew-card">
+                <!-- Score Global -->
+                <div class="info-grid">
+                    <div class="info-card">
+                        <h4><i class="fas fa-chart-line"></i> Média Geral</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--primary-color);">{{ media_geral }}/10
+                        </p>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-clipboard-check"></i> Provas Realizadas</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--accent-color);">{{
+                            total_provas_realizadas }}</p>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-book"></i> Material Pendente</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--secondary-color);">{{
+                            material_pendente }}</p>
+                    </div>
+
+                    <div class="info-card">
+                        <h4><i class="fas fa-file-alt"></i> Declarações Pendentes</h4>
+                        <p style="font-size: 32px; font-weight: bold; color: var(--secondary-color);">{{
+                            declaracoes_pendentes }}</p>
+                    </div>
+                </div>
+
+                <!-- Detalhes por Disciplina -->
+                <div style="margin-top: 40px;">
+                    <h4 style="color: var(--dark-gray); margin-bottom: 20px;">📝 Detalhes das Notas por Disciplina</h4>
+
+                    {% set notas_por_disciplina = {} %}
+                    {% for nota in notas %}
+                    {% if nota['disciplina_id'] not in notas_por_disciplina %}
+                    {% set _ = notas_por_disciplina.update({nota['disciplina_id']: []}) %}
+                    {% endif %}
+                    {% set _ = notas_por_disciplina[nota['disciplina_id']].append(nota) %}
+                    {% endfor %}
+
+                    {% if notas_por_disciplina %}
+                    {% for disciplina_id, notas_disciplina in notas_por_disciplina.items() %}
+                    {% set disciplina_info = namespace(nome='', media=0, total_capitulos=0) %}
+                    {% for d in disciplinas %}
+                    {% if d['id'] == disciplina_id %}
+                    {% set disciplina_info.nome = d['nome'] %}
+                    {% set disciplina_info.total_capitulos = contar_capitulos(d['id']) %}
+                    {% endif %}
+                    {% endfor %}
+
+                    {% set soma_notas = 0 %}
+                    {% for nota in notas_disciplina %}
+                    {% set soma_notas = soma_notas + nota['nota'] %}
+                    {% endfor %}
+                    {% set disciplina_info.media = (soma_notas / notas_disciplina|length) if notas_disciplina|length > 0
+                    else 0 %}
+
+                    <div class="disciplina-notas">
+                        <div class="disciplina-notas-header" onclick="toggleDisciplinaNotas({{ disciplina_id }})">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-book" style="color: var(--primary-color);"></i>
+                                <div>
+                                    <strong>{{ disciplina_info.nome }}</strong>
+                                    <div style="font-size: 14px; color: var(--medium-gray); margin-top: 3px;">
+                                        {{ notas_disciplina|length }}/{{ disciplina_info.total_capitulos }} capítulos
+                                        avaliados
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 15px;">
+                                <div style="text-align: right;">
+                                    <div style="font-size: 24px; font-weight: bold; color: var(--primary-color);">
+                                        {{ "%.1f"|format(disciplina_info.media) }}/10
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--medium-gray);">Média da disciplina</div>
+                                </div>
+                                <i class="fas fa-chevron-down expand-icon" id="icon-{{ disciplina_id }}"></i>
+                            </div>
+                        </div>
+
+                        <div class="disciplina-notas-content" id="notas-{{ disciplina_id }}">
+                            <div class="notas-summary">
+                                <div class="summary-item">
+                                    <div style="font-size: 14px; color: var(--medium-gray);">Capítulos</div>
+                                    <div style="font-size: 24px; font-weight: bold; color: var(--primary-color);">
+                                        {{ notas_disciplina|length }}
+                                    </div>
+                                </div>
+                                <div class="summary-item">
+                                    <div style="font-size: 14px; color: var(--medium-gray);">Média</div>
+                                    <div style="font-size: 24px; font-weight: bold; color: var(--primary-color);">
+                                        {{ "%.1f"|format(disciplina_info.media) }}
+                                    </div>
+                                </div>
+                                <div class="summary-item">
+                                    <div style="font-size: 14px; color: var(--medium-gray);">Progresso</div>
+                                    <div style="font-size: 24px; font-weight: bold; color: var(--accent-color);">
+                                        {{ ((notas_disciplina|length / disciplina_info.total_capitulos) * 100)|round|int
+                                        }}%
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% for nota in notas_disciplina %}
+                            <div class="nota-item">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong>Capítulo {{ nota['capitulo'] }}</strong>
+                                        <div style="font-size: 14px; color: var(--medium-gray); margin-top: 3px;">
+                                            {{ disciplina_info.nome }}
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 15px;">
+                                        <div
+                                            style="font-size: 20px; font-weight: bold; 
+                                                        color: {% if nota['nota'] >= 7 %}#28a745{% elif nota['nota'] >= 5 %}#ffc107{% else %}#dc3545{% endif %};">
+                                            {{ nota['nota'] }}/10
+                                        </div>
+                                        <div style="font-size: 14px; color: var(--medium-gray);">
+                                            {% if nota['nota'] >= 7 %}✅{% elif nota['nota'] >= 5 %}⚠️{% else %}❌{% endif
+                                            %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="empty-notas">
+                        <i class="fas fa-clipboard-list"></i>
+                        <h3>Nenhuma nota registrada por disciplina</h3>
+                        <p>Você ainda não realizou nenhuma mini-prova.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <h3>Nenhuma nota registrada</h3>
+                <p>Você ainda não realizou nenhuma mini-prova.</p>
+                <a href="/dashboard" class="btn btn-primary" style="margin-top: 15px;">
+                    <i class="fas fa-play-circle"></i> Começar uma Disciplina
+                </a>
+            </div>
+            {% endif %}
+
+            <!-- Seção: Minhas Solicitações -->
+            {% if solicitacoes_material or solicitacoes_declaracoes %}
+            <h2 class="section-title">📋 Minhas Solicitações</h2>
+
+            <div class="mew-card">
+                <h4 style="color: var(--dark-gray); margin-bottom: 15px;">📚 Materiais Didáticos</h4>
+                {% if solicitacoes_material %}
+                {% for sm in solicitacoes_material %}
+                <div
+                    style="background: rgba(0, 51, 102, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <strong>{{ sm['material'] }}</strong>
+                            <div style="font-size: 14px; color: var(--medium-gray);">
+                                {{ sm['disciplina_nome'] or 'N/A' }} • {{ sm['data_solicitacao'] }}
+                            </div>
+                        </div>
+                        <div>
+                            {% if sm['entregue'] == 1 %}
+                            <span
+                                style="background: var(--success-color); color: white; padding: 3px 10px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-check"></i> Entregue
+                            </span>
+                            {% else %}
+                            <span
+                                style="background: var(--secondary-color); color: white; padding: 3px 10px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-clock"></i> Pendente
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p style="color: var(--medium-gray); text-align: center; padding: 20px;">
+                    Nenhuma solicitação de material.
+                </p>
+                {% endif %}
+
+                <h4 style="color: var(--dark-gray); margin-top: 25px; margin-bottom: 15px;">📄 Declarações</h4>
+                {% if solicitacoes_declaracoes %}
+                {% for sd in solicitacoes_declaracoes %}
+                <div
+                    style="background: rgba(0, 51, 102, 0.05); padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <strong>{{ sd['tipo'] }}</strong>
+                            <div style="font-size: 14px; color: var(--medium-gray);">
+                                {{ sd['detalhes'] }} • {{ sd['data_solicitacao'] }}
+                            </div>
+                        </div>
+                        <div>
+                            {% if sd['entregue'] == 1 %}
+                            <span
+                                style="background: var(--success-color); color: white; padding: 3px 10px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-check"></i> Entregue
+                            </span>
+                            {% else %}
+                            <span
+                                style="background: var(--secondary-color); color: white; padding: 3px 10px; border-radius: 20px; font-size: 12px;">
+                                <i class="fas fa-clock"></i> Pendente
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p style="color: var(--medium-gray); text-align: center; padding: 20px;">
+                    Nenhuma solicitação de declaração.
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <script>
+        function toggleDisciplinaNotas(disciplinaId) {
+            const content = document.getElementById('notas-' + disciplinaId);
+            const icon = document.getElementById('icon-' + disciplinaId);
+
+            content.classList.toggle('show');
+            icon.classList.toggle('rotate-180');
+        }
+
+        // Abrir a primeira disciplina por padrão
+        document.addEventListener('DOMContentLoaded', function () {
+            const primeiraDisciplina = document.querySelector('.disciplina-notas');
+            if (primeiraDisciplina) {
+                const disciplinaId = primeiraDisciplina.querySelector('.disciplina-notas-header').getAttribute('onclick').match(/\d+/)[0];
+                toggleDisciplinaNotas(disciplinaId);
+            }
+        });
+    </script>
+</body>
+
+</html>

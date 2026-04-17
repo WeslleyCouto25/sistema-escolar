@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disciplinas Isoladas | FACOP/SiGEU</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* ESTILOS GERAIS */
+        :root {
+            --primary-color: #1a237e;
+            --primary-dark: #0d1b5e;
+            --secondary-color: #ff6f00;
+            --secondary-dark: #e65100;
+            --accent-color: #4caf50;
+            --accent-dark: #388e3c;
+            --rock-color: #795548;
+            --rock-dark: #5d4037;
+            --rock-light: #d7ccc8;
+            --light-blue: #e8eaf6;
+            --dark-blue: #283593;
+            --dark-gray: #2c3e50;
+            --medium-gray: #546e7a;
+            --light-gray: #f8f9fa;
+            --white: #ffffff;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 15px 35px rgba(0, 0, 0, 0.12);
+            --border-radius: 12px;
+            --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+            --purple: #800080;
+            --purple-light: #9c27b0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.7;
+            color: var(--dark-gray);
+            background: var(--white);
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* HEADER */
+        .main-header {
+            background: var(--white);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo {
+            height: 60px;
+            width: auto;
+        }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-main {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--primary-color);
+            line-height: 1.1;
+        }
+
+        .logo-subtitle {
+            font-size: 12px;
+            color: var(--medium-gray);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--white);
+            background: linear-gradient(45deg, var(--purple), var(--primary-color));
+            text-decoration: none;
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .back-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(128, 0, 128, 0.3);
+        }
+
+        /* HERO SECTION */
+        .hero-section {
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-blue), var(--purple));
+            color: white;
+            padding: 100px 0;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23ffffff' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
+            opacity: 0.3;
+        }
+
+        .hero-title {
+            font-size: 3.2rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            max-width: 700px;
+            margin: 0 auto 30px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 12px 24px;
+            border-radius: 50px;
+            margin: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* CONTENT SECTIONS */
+        .section {
+            padding: 80px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(45deg, var(--purple), var(--primary-color));
+            border-radius: 2px;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--medium-gray);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* CARDS */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 35px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border: 1px solid #e0e0e0;
+            text-align: center;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--purple);
+        }
+
+        .card-icon {
+            font-size: 48px;
+            margin-bottom: 25px;
+            color: var(--purple);
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        /* PRICE SECTION */
+        .price-section {
+            background: linear-gradient(135deg, var(--light-gray), var(--light-blue));
+        }
+
+        .price-card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 40px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid var(--purple);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .price-card::before {
+            content: 'OFERTA ESPECIAL';
+            position: absolute;
+            top: 20px;
+            right: -40px;
+            background: var(--purple);
+            color: white;
+            padding: 8px 40px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transform: rotate(45deg);
+        }
+
+        .price-amount {
+            font-size: 4rem;
+            font-weight: 800;
+            color: var(--purple);
+            margin: 20px 0;
+            line-height: 1;
+        }
+
+        .price-period {
+            font-size: 1rem;
+            color: var(--medium-gray);
+            margin-bottom: 30px;
+        }
+
+        .price-features {
+            list-style: none;
+            margin: 30px 0;
+            text-align: left;
+        }
+
+        .price-features li {
+            margin-bottom: 15px;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .price-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* AREAS SECTION */
+        .areas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+
+        .area-card {
+            background: var(--white);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border-left: 4px solid var(--purple);
+        }
+
+        .area-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .area-card h4 {
+            color: var(--purple);
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        /* CTA SECTION */
+        .cta-section {
+            background: linear-gradient(135deg, var(--purple), var(--primary-dark));
+            color: white;
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .cta-title {
+            font-size: 2.2rem;
+            margin-bottom: 20px;
+        }
+
+        .cta-subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 18px 35px;
+            border-radius: 50px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: var(--transition);
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        .btn-primary {
+            background: white;
+            color: var(--purple);
+        }
+
+        .btn-primary:hover {
+            background: var(--light-gray);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-3px);
+        }
+
+        /* FOOTER */
+        .main-footer {
+            background: linear-gradient(135deg, var(--primary-dark), #0a1640);
+            color: white;
+            padding: 60px 0 30px;
+        }
+
+        .footer-content {
+            text-align: center;
+            opacity: 0.9;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.8;
+            transition: var(--transition);
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            color: var(--rock-light);
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.4rem;
+            }
+            
+            .section-title {
+                font-size: 2rem;
+            }
+            
+            .price-amount {
+                font-size: 3rem;
+            }
+            
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="container header-content">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
+                <div class="logo-text">
+                    <div class="logo-main">FACOP/SiGEU</div>
+                    <div class="logo-subtitle">Disciplinas Isoladas</div>
+                </div>
+            </div>
+            <a href="/" class="back-button">
+                <i class="fas fa-arrow-left"></i> Voltar para Dashboard
+            </a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <h1 class="hero-title">Disciplinas Isoladas FACOP/SiGEU</h1>
+            <p class="hero-subtitle">
+                Estude apenas as disciplinas que você precisa, sem precisar cursar uma graduação completa.
+                Flexibilidade total com certificação reconhecida pelo MEC.
+            </p>
+            <div class="hero-badge">
+                <i class="fas fa-award"></i> Certificação FACOP - Código MEC: 1135
+            </div>
+            <div class="hero-badge">
+                <i class="fas fa-clock"></i> Carga horária flexível: 60h, 80h, 120h
+            </div>
+            <div class="hero-badge">
+                <i class="fas fa-graduation-cap"></i> Créditos aproveitáveis em cursos regulares
+            </div>
+        </div>
+    </section>
+
+    <!-- O Que São Section -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">O Que São Disciplinas Isoladas?</h2>
+                <p class="section-subtitle">
+                    Entenda como funciona essa modalidade inovadora de estudo
+                </p>
+            </div>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <h3 class="card-title">Conceito</h3>
+                    <p>
+                        Disciplinas isoladas são matérias específicas que podem ser cursadas separadamente,
+                        sem a necessidade de matrícula em um curso completo de graduação ou pós-graduação.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <h3 class="card-title">Para Quem É?</h3>
+                    <p>
+                        Ideal para quem quer complementar formação, fazer aproveitamento de estudos,
+                        cursar disciplinas específicas de interesse ou atualizar conhecimentos em áreas específicas.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-certificate"></i>
+                    </div>
+                    <h3 class="card-title">Certificação</h3>
+                    <p>
+                        Ao concluir a disciplina, você recebe um certificado de conclusão válido nacionalmente,
+                        emitido pela FACOP (instituição mantenedora credenciada pelo MEC).
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Áreas de Estudo Section -->
+    <section class="section" style="background: var(--light-gray);">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Áreas de Estudo Disponíveis</h2>
+                <p class="section-subtitle">
+                    Oferecemos disciplinas isoladas em diversas áreas do conhecimento
+                </p>
+            </div>
+            
+            <div class="areas-grid">
+                <div class="area-card">
+                    <h4><i class="fas fa-gavel"></i> Direito</h4>
+                    <p>Direito Constitucional, Direito Civil, Direito Penal, Direito do Trabalho, Direito Administrativo, Direito Tributário</p>
+                </div>
+                
+                <div class="area-card">
+                    <h4><i class="fas fa-briefcase"></i> Administração</h4>
+                    <p>Gestão Empresarial, Marketing Digital, Recursos Humanos, Finanças, Empreendedorismo, Gestão de Projetos</p>
+                </div>
+                
+                <div class="area-card">
+                    <h4><i class="fas fa-heartbeat"></i> Saúde</h4>
+                    <p>Anatomia Humana, Farmacologia, Enfermagem, Saúde Coletiva, Nutrição, Psicologia da Saúde</p>
+                </div>
+                
+                <div class="area-card">
+                    <h4><i class="fas fa-laptop-code"></i> Tecnologia</h4>
+                    <p>Programação Python, Banco de Dados, Desenvolvimento Web, Análise de Sistemas, Segurança da Informação</p>
+                </div>
+                
+                <div class="area-card">
+                    <h4><i class="fas fa-chalkboard-teacher"></i> Educação</h4>
+                    <p>Psicologia da Educação, Metodologias Ativas, Didática, Educação Inclusiva, Gestão Escolar</p>
+                </div>
+                
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Contabilidade</h4>
+                    <p>Contabilidade Geral, Análise de Balanços, Contabilidade Tributária, Auditoria, Controladoria</p>
+                </div>
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Ciência da Computação</h4>
+                    <p>Tecnologia, Banco de Dados, Backend, Frontend</p>
+                </div>
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Saúde Aplicada</h4>
+                    <p>Enfermagem, Bioinformática, Informática Biomédica, Bioengenharia, Medicina Baseada em Evidências, Saúde</p>
+                </div>
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Licenciaturas</h4>
+                    <p>Ciêncis Biológicas, Matemática, Pedagogia, História, Filosofia, Artes, Educação Física</p>
+                </div>
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Bacharelados</h4>
+                    <p>Educação Física, Biomedicina, Engenharia Mecânica, Engenharia Elétrica, Engenharia de Produção</p>
+                </div>
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Tecnólogos</h4>
+                    <p>Gestão de Processos, Gestão Financeira, Análise e Desenvolvimento de Sistemas</p>
+                </div>
+
+
+                <div class="area-card">
+                    <h4><i class="fas fa-calculator"></i> Humanidades</h4>
+                    <p>Psicologia, Psicopedagogia, Ciências Históricas, Ciências da Vida, Extensão, Estágios</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 40px;">
+                <p style="font-size: 1.1rem; color: var(--medium-gray);">
+                    <strong>Importante:</strong> Não limitamos às disciplinas listadas acima. 
+                    Consulte-nos sobre qualquer disciplina de seu interesse!
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Preços Section -->
+    <section class="section price-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Investimento</h2>
+                <p class="section-subtitle">
+                    Valores acessíveis com diversas opções de pagamento
+                </p>
+            </div>
+            
+            <div class="price-card">
+                <h3 style="color: var(--purple); margin-bottom: 10px;">Valor por Disciplina</h3>
+                <p style="color: var(--medium-gray); margin-bottom: 20px;">
+                    Preço base para cada disciplina isolada
+                </p>
+                
+                <div class="price-amount">R$ 499,99</div>
+                <div class="price-period">por disciplina</div>
+                
+                <ul class="price-features">
+                    <li><strong>Carga horária:</strong> 60 horas (base)</li>
+                    <li><strong>Opções adicionais:</strong> 
+                        <br>- 80 horas: + R$ 100,00
+                        <br>- 120 horas: + R$ 200,00
+                    </li>
+                    <li><strong>Material didático:</strong> Completo e digital (incluído)</li>
+                    <li><strong>Avaliações:</strong> Online com correção automática</li>
+                    <li><strong>Certificado:</strong> Digital e físico (com adicional para físico)</li>
+                    <li><strong>Suporte:</strong> Tutoria especializada durante todo o curso</li>
+                    <li><strong>Acesso à plataforma:</strong> 6 meses (renovável)</li>
+                </ul>
+                
+                <div style="background: var(--light-gray); padding: 20px; border-radius: var(--border-radius); margin: 30px 0;">
+                    <h4 style="color: var(--primary-color); margin-bottom: 15px;">
+                        <i class="fas fa-percentage"></i> Formas de Pagamento
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; text-align: left;">
+                        <div>
+                            <strong>À Vista (PIX)</strong>
+                            <p style="color: var(--accent-color); font-weight: bold;">10% de desconto: R$ 449,99</p>
+                        </div>
+                        <div>
+                            <strong>Cartão de Crédito</strong>
+                            <p>Em até 12x de R$ 49,99</p>
+                        </div>
+                        <div>
+                            <strong>Boleto Bancário</strong>
+                            <p>À vista ou parcelado no banco</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="background: #e8f5e9; padding: 20px; border-radius: var(--border-radius); border-left: 4px solid var(--accent-color);">
+                    <h4 style="color: var(--accent-dark); margin-bottom: 10px;">
+                        <i class="fas fa-gift"></i> Promoções Especiais
+                    </h4>
+                    <ul style="list-style: none; margin: 0; padding: 0;">
+                        <li style="margin-bottom: 8px;">✅ <strong>Pacote 3 disciplinas:</strong> 15% de desconto</li>
+                        <li style="margin-bottom: 8px;">✅ <strong>Ex-alunos FACOP/SiGEU:</strong> 20% de desconto</li>
+                        <li>✅ <strong>Grupos acima de 5 pessoas:</strong> 25% de desconto</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Vantagens Section -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Vantagens Exclusivas</h2>
+                <p class="section-subtitle">
+                    Por que escolher nossas disciplinas isoladas?
+                </p>
+            </div>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <h3 class="card-title">Flexibilidade Total</h3>
+                    <p>Estude no seu ritmo, com acesso 24h à plataforma. Início imediato após matrícula.</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-file-contract"></i>
+                    </div>
+                    <h3 class="card-title">Reconhecimento MEC</h3>
+                    <p>Certificação emitida pela FACOP, instituição mantenedora credenciada pelo MEC (Código 1135).</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <h3 class="card-title">Aproveitamento Futuro</h3>
+                    <p>Créditos podem ser aproveitados em cursos regulares da FACOP posteriormente.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2 class="cta-title">Pronto para Começar?</h2>
+            <p class="cta-subtitle">
+                Entre em contato conosco para mais informações, consulta de disciplinas específicas
+                ou para realizar sua matrícula.
+            </p>
+            
+            <div class="cta-buttons">
+                <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20disciplinas%20isoladas%20da%20FACOP/SiGEU" 
+                   target="_blank" class="btn btn-primary">
+                    <i class="fab fa-whatsapp"></i> Falar no WhatsApp
+                </a>
+                
+                <a href="tel:+5521990020262" class="btn btn-secondary">
+                    <i class="fas fa-phone"></i> Ligar Agora
+                </a>
+            </div>
+            
+            <div style="margin-top: 40px; opacity: 0.8;">
+                <p>
+                    <i class="fas fa-clock"></i> Atendimento: Segunda a Sábado, 8h às 22h
+                </p>
+                <p style="margin-top: 10px;">
+                    <i class="fas fa-envelope"></i> E-mail: contato@sigeu.edu.br
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container">
+            <div class="footer-content">
+                <p style="font-size: 1.1rem; margin-bottom: 20px;">
+                    <strong>FACOP/SiGEU - Disciplinas Isoladas</strong>
+                </p>
+                <p style="margin-bottom: 20px;">
+                    Credenciada pela Portaria MEC nº 1.135/2024<br>
+                    CNPJ: 04.344.730/0003-22
+                </p>
+                
+                <div class="footer-links">
+                    <a href="/">
+                        <i class="fas fa-home"></i> Dashboard Principal
+                    </a>
+                    <a href="#">
+                        <i class="fas fa-file-contract"></i> Termos de Uso
+                    </a>
+                    <a href="#">
+                        <i class="fas fa-shield-alt"></i> Política de Privacidade
+                    </a>
+                </div>
+                
+                <p style="margin-top: 30px; font-size: 0.9rem;">
+                    © 2026 FACOP/SiGEU. Todos os direitos reservados.<br>
+                    Esta página é informativa. Valores sujeitos a alteração sem aviso prévio.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Adicionar efeito de contador para o preço
+        document.addEventListener('DOMContentLoaded', function() {
+            // Efeito de digitação no hero (opcional)
+            const heroTitle = document.querySelector('.hero-title');
+            const originalText = heroTitle.textContent;
+            heroTitle.textContent = '';
+            
+            let i = 0;
+            function typeWriter() {
+                if (i < originalText.length) {
+                    heroTitle.textContent += originalText.charAt(i);
+                    i++;
+                    setTimeout(typeWriter, 50);
+                }
+            }
+            
+            // Iniciar efeito após 500ms
+            setTimeout(typeWriter, 500);
+            
+            // Adicionar animação aos cards ao rolar
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+            
+            const observer = new IntersectionObserver(function(entries) {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+            
+            // Aplicar aos cards
+            document.querySelectorAll('.card, .area-card').forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                observer.observe(card);
+            });
+        });
+    </script>
+</body>
+</html>

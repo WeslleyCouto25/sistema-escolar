@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MEW - Editar Aluno</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .form-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .section-title {
+            margin-top: 25px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+            color: var(--dark-color);
+            font-size: 18px;
+        }
+        
+        .info-alerta {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">MEW - Editar Aluno</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/mew/alunos" class="logout-btn">← Voltar para Alunos</a>
+            <a href="/mew/dashboard" class="logout-btn">Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="margin-left: 0;">
+            <h1 class="page-title">✏️ Editar Aluno: {{ aluno.nome }}</h1>
+            
+            <div class="info-alerta">
+                <i class="fas fa-info-circle"></i> RA: <strong>{{ aluno.ra }}</strong> • Email: <strong>{{ aluno.email }}</strong>
+            </div>
+
+            <div class="mew-card">
+                <form method="post">
+
+                    <!-- DADOS BÁSICOS -->
+                    <h3 class="section-title">📝 Dados Básicos</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome Completo:</label>
+                            <input type="text" name="nome" value="{{ aluno.nome }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email:</label>
+                            <input type="email" name="email" value="{{ aluno.email }}" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Senha (deixe em branco para manter atual):</label>
+                            <input type="password" name="senha" placeholder="Digite nova senha ou deixe em branco">
+                        </div>
+                        <div class="form-group">
+                            <label>RA (não editável):</label>
+                            <input type="text" value="{{ aluno.ra }}" disabled style="background-color: #f0f0f0;">
+                        </div>
+                    </div>
+
+                    <!-- DADOS PESSOAIS -->
+                    <h3 class="section-title">📋 Dados Pessoais</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>CPF</label>
+                            <input type="text" name="cpf"
+                                   value="{{ dados_pessoais.cpf if dados_pessoais else '' }}"
+                                   placeholder="000.000.000-00">
+                        </div>
+                        <div class="form-group">
+                            <label>RG</label>
+                            <input type="text" name="rg"
+                                   value="{{ dados_pessoais.rg if dados_pessoais else '' }}"
+                                   placeholder="00.000.000-0 (qualquer tamanho)">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Telefone</label>
+                        <input type="text" name="telefone"
+                               value="{{ dados_pessoais.telefone if dados_pessoais else '' }}"
+                               placeholder="(11) 99999-9999">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Endereço</label>
+                        <input type="text" name="endereco"
+                               value="{{ dados_pessoais.endereco if dados_pessoais else '' }}"
+                               placeholder="Rua, Número, Complemento">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 2;">
+                            <label>Cidade</label>
+                            <input type="text" name="cidade"
+                                   value="{{ dados_pessoais.cidade if dados_pessoais else '' }}"
+                                   placeholder="Cidade">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>Estado</label>
+                            <input type="text" name="estado"
+                                   value="{{ dados_pessoais.estado if dados_pessoais else '' }}"
+                                   placeholder="UF" maxlength="2">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label>CEP</label>
+                            <input type="text" name="cep"
+                                   value="{{ dados_pessoais.cep if dados_pessoais else '' }}"
+                                   placeholder="00000-000">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Curso de Referência</label>
+                        <input type="text" name="curso_referencia"
+                               value="{{ dados_pessoais.curso_referencia if dados_pessoais else '' }}"
+                               placeholder="Ex: Engenharia, Administração, etc.">
+                    </div>
+
+                    <!-- ========= NOVOS CAMPOS DE DADOS PESSOAIS ========= -->
+                    <h3 class="section-title">👪 Dados Adicionais</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome do Pai</label>
+                            <input type="text" name="nome_pai" 
+                                   value="{{ dados_pessoais.nome_pai if dados_pessoais else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Nome da Mãe</label>
+                            <input type="text" name="nome_mae"
+                                   value="{{ dados_pessoais.nome_mae if dados_pessoais else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Data de Nascimento</label>
+                            <input type="date" name="data_nascimento"
+                                   value="{{ dados_pessoais.data_nascimento if dados_pessoais and dados_pessoais.data_nascimento else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Sexo</label>
+                            <select name="sexo">
+                                <option value="">Selecione</option>
+                                <option value="M" {% if dados_pessoais and dados_pessoais.sexo == 'M' %}selected{% endif %}>Masculino</option>
+                                <option value="F" {% if dados_pessoais and dados_pessoais.sexo == 'F' %}selected{% endif %}>Feminino</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Naturalidade</label>
+                            <input type="text" name="naturalidade" placeholder="Cidade de nascimento"
+                                   value="{{ dados_pessoais.naturalidade if dados_pessoais else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>Nacionalidade</label>
+                            <input type="text" name="nacionalidade" 
+                                   value="{{ dados_pessoais.nacionalidade if dados_pessoais else 'Brasileira' }}">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Estado Civil</label>
+                            <select name="estado_civil">
+                                <option value="">Selecione</option>
+                                <option value="Solteiro(a)" {% if dados_pessoais and dados_pessoais.estado_civil == 'Solteiro(a)' %}selected{% endif %}>Solteiro(a)</option>
+                                <option value="Casado(a)" {% if dados_pessoais and dados_pessoais.estado_civil == 'Casado(a)' %}selected{% endif %}>Casado(a)</option>
+                                <option value="Divorciado(a)" {% if dados_pessoais and dados_pessoais.estado_civil == 'Divorciado(a)' %}selected{% endif %}>Divorciado(a)</option>
+                                <option value="Viúvo(a)" {% if dados_pessoais and dados_pessoais.estado_civil == 'Viúvo(a)' %}selected{% endif %}>Viúvo(a)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Email Alternativo</label>
+                            <input type="email" name="email_alternativo"
+                                   value="{{ dados_pessoais.email_alternativo if dados_pessoais else '' }}">
+                        </div>
+                    </div>
+
+                    <!-- SITUAÇÃO FINANCEIRA -->
+                    <h3 class="section-title">💰 Situação Financeira</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Forma de Pagamento</label>
+                            <select name="forma_pagamento" id="formaPagamento">
+                                <option value="">Selecione...</option>
+                                <option value="avista" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'avista' %}selected{% endif %}>À Vista</option>
+                                <option value="cartao" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'cartao' %}selected{% endif %}>Cartão</option>
+                                <option value="boleto_pix" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'boleto_pix' %}selected{% endif %}>Boleto/PIX (2x)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Valor Total (R$)</label>
+                            <input type="text" name="valor_total" id="valorTotal" 
+                                   value="{% if situacao_financeira and situacao_financeira.valor_total %}{{ situacao_financeira.valor_total }}{% endif %}"
+                                   placeholder="Ex: 1500,00">
+                        </div>
+                    </div>
+
+                    <div class="form-row" id="parcelasSection" style="{% if not situacao_financeira or situacao_financeira.forma_pagamento != 'boleto_pix' %}display: none;{% endif %}">
+                        <div class="form-group">
+                            <label>Parcelas Pagas</label>
+                            <select name="parcelas_pagas">
+                                <option value="1" {% if situacao_financeira and situacao_financeira.parcelas_pagas == 1 %}selected{% endif %}>1ª parcela (Parcial)</option>
+                                <option value="2" {% if situacao_financeira and situacao_financeira.parcelas_pagas == 2 %}selected{% endif %}>2ª parcela (Pago)</option>
+                            </select>
+                            <small style="color: #666;">Para boleto/PIX em 2x</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Status Financeiro</label>
+                            <select name="status_financeiro">
+                                <option value="pendente" {% if situacao_financeira and situacao_financeira.status == 'pendente' %}selected{% endif %}>Pendente</option>
+                                <option value="parcial" {% if situacao_financeira and situacao_financeira.status == 'parcial' %}selected{% endif %}>Parcial</option>
+                                <option value="pago" {% if situacao_financeira and situacao_financeira.status == 'pago' %}selected{% endif %}>Pago</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- GERENCIAR DISCIPLINAS -->
+                    <h3 class="section-title">📚 Gerenciar Disciplinas</h3>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label>
+                            <input type="checkbox" name="gerenciar_disciplinas" value="1">
+                            <strong>Ativar gerenciamento de disciplinas</strong>
+                        </label>
+                        <p style="font-size: 13px; color: #666; margin-top: 5px;">
+                            Marque esta opção para poder adicionar ou remover disciplinas do aluno.
+                        </p>
+                    </div>
+
+                    <!-- BOTÕES -->
+                    <div class="form-buttons">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar Alterações
+                        </button>
+
+                        <a href="/mew/alunos" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                        
+                        <a href="/mew/aluno/{{ aluno.id }}/disciplinas" class="btn btn-info">
+                            <i class="fas fa-book"></i> Gerenciar Disciplinas
+                        </a>
+                    </div>
+
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('formaPagamento').addEventListener('change', function() {
+            const parcelasSection = document.getElementById('parcelasSection');
+            const valorInput = document.getElementById('valorTotal');
+            
+            if (this.value === 'boleto_pix') {
+                parcelasSection.style.display = 'flex';
+                // Define valores padrão para boleto
+                if (!valorInput.value) {
+                    valorInput.value = '1500,00';
+                }
+            } else {
+                parcelasSection.style.display = 'none';
+                // Define valores padrão para outras formas
+                if (!valorInput.value && (this.value === 'avista' || this.value === 'cartao')) {
+                    valorInput.value = '1400,00';
+                }
+            }
+        });
+        
+        // Formatação automática dos campos
+        document.addEventListener('DOMContentLoaded', function() {
+            // Formatar CPF
+            const cpfInput = document.querySelector('input[name="cpf"]');
+            if (cpfInput) {
+                cpfInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length > 11) value = value.substring(0, 11);
+                    
+                    if (value.length <= 11) {
+                        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                        value = value.replace(/(\d{3})(\d)/, '$1.$2');
+                        value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+                    }
+                    
+                    e.target.value = value;
+                });
+            }
+            
+            // Formatar telefone
+            const telInput = document.querySelector('input[name="telefone"]');
+            if (telInput) {
+                telInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length > 11) value = value.substring(0, 11);
+                    
+                    if (value.length === 11) {
+                        value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                    } else if (value.length === 10) {
+                        value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+                    }
+                    
+                    e.target.value = value;
+                });
+            }
+            
+            // Formatar CEP
+            const cepInput = document.querySelector('input[name="cep"]');
+            if (cepInput) {
+                cepInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length > 8) value = value.substring(0, 8);
+                    
+                    if (value.length === 8) {
+                        value = value.replace(/(\d{5})(\d{3})/, '$1-$2');
+                    }
+                    
+                    e.target.value = value;
+                });
+            }
+            
+            // FORMATAR RG - CORRIGIDO: SEM LIMITE DE TAMANHO
+            const rgInput = document.querySelector('input[name="rg"]');
+            if (rgInput) {
+                rgInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
+                    
+                    // APENAS FORMATA, SEM LIMITAR O TAMANHO
+                    if (value.length <= 8) {
+                        // Formato antigo: 00.000.000
+                        value = value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+                    } else if (value.length === 9) {
+                        // Formato novo: 00.000.000-0
+                        value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{1})/, '$1.$2.$3-$4');
+                    } else if (value.length === 10) {
+                        // Para RGs com 10 dígitos (alguns estados)
+                        value = value.replace(/(\d{2})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                    } else if (value.length >= 11) {
+                        // Para RGs maiores, insere pontos nos lugares certos
+                        value = value.replace(/(\d{2})(\d{3})(\d{3})(\d+)/, '$1.$2.$3-$4');
+                    }
+                    
+                    e.target.value = value;
+                });
+            }
+        });
+    </script>
+</body>
+</html>

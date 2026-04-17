@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEW - Gerar Plano de Ensino com IA</title>
+    <link rel="stylesheet" href="/static/css/mew.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a237e;
+            --primary-dark: #0d1b6b;
+            --secondary: #0a3b2a;
+            --accent: #f0b400;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --success: #28a745;
+            --info: #17a2b8;
+            --light-gray: #f8f9fa;
+            --gray: #6c757d;
+            --dark: #343a40;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f5f5;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .mew-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header-mew {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 25px 30px;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .header-mew h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .header-mew h1 i {
+            font-size: 28px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eaeef2;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 14px;
+        }
+        
+        .form-group label i {
+            color: var(--primary);
+            width: 20px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26,35,126,0.1);
+        }
+        
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid var(--primary);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 14px;
+            color: var(--dark);
+        }
+        
+        .info-box i {
+            color: var(--primary);
+            margin-right: 8px;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(26,35,126,0.3);
+        }
+        
+        .btn-secondary {
+            background: var(--gray);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .btn i {
+            margin-right: 8px;
+        }
+        
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 16px;
+            color: var(--primary);
+            font-weight: 600;
+        }
+        
+        .result-box {
+            display: none;
+            background: var(--light-gray);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        
+        .result-header {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 15px;
+        }
+        
+        .result-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="mew-container">
+        <div class="header-mew no-print">
+            <h1>
+                <i>📚</i> MEW - Gerar Plano de Ensino com IA
+            </h1>
+            <div class="user-info">
+                <span><i>👤</i> Administrador</span>
+                <a href="/mew/logout" class="logout-btn"><i>🚪</i> Sair</a>
+            </div>
+        </div>
+        
+        <div class="alert" id="alertMessage"></div>
+        
+        <div class="card no-print">
+            <div class="card-title">
+                <i>📝</i> Configuração do Plano de Ensino
+            </div>
+            
+            <div class="info-box">
+                <i>ℹ️</i> <strong>Gerador Automático com IA:</strong> A IA gera Objetivos, Ementa Expandida, Conteúdo Programático e Habilidades. Você preenche a Bibliografia específica da disciplina.
+            </div>
+            
+            <div class="info-box" style="background: #f0fff4; border-left-color: #28a745;">
+                <i>📄</i> <strong>Organização do Documento (4 PÁGINAS):</strong><br>
+                • Página 1: Identificação, Objetivos (Geral e Específicos), Ementa<br>
+                • Página 2: Conteúdo Programático, Habilidades<br>
+                • Página 3: Metodologia, Avaliação<br>
+                • Página 4: Bibliografia (Básica e Complementar) + Enquadramento Curricular + Assinatura
+            </div>
+            
+            <form id="formPlano">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i>📘</i> Disciplina *</label>
+                        <input type="text" class="form-control" id="disciplina" name="disciplina" required placeholder="Ex: Sistemas Hidráulicos e de Drenagem">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i>🎓</i> Curso</label>
+                        <input type="text" class="form-control" id="curso" name="curso" value="DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i>📋</i> Ementa Básica *</label>
+                    <textarea class="form-control" id="ementa" name="ementa" required placeholder="Descreva os principais tópicos da ementa..."></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i>⏱️</i> Carga Horária</label>
+                        <select class="form-control" id="carga_horaria" name="carga_horaria">
+                            <option value="60 horas">60 horas</option>
+                            <option value="80 horas" selected>80 horas</option>
+                            <option value="120 horas">120 horas</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i>💻</i> Modalidade</label>
+                        <select class="form-control" id="modalidade" name="modalidade">
+                            <option value="EaD" selected>EaD</option>
+                            <option value="Presencial">Presencial</option>
+                            <option value="Híbrido">Híbrido</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i>👨‍🏫</i> Docente</label>
+                        <input type="text" class="form-control" id="docente" name="docente" value="Roberto S. M. Souza">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label><i>📅</i> Data de Geração</label>
+                        <input type="date" class="form-control" id="data_geracao" name="data_geracao" value="{{ hoje }}">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i>📚</i> Enquadramento Curricular *</label>
+                    <textarea class="form-control" id="enquadramento_curricular" name="enquadramento_curricular" rows="4" required>Matemática Aplicada
+Física Geral
+Química Ambiental
+Geologia Aplicada
+Hidrologia Básica</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #fff3cd; border-left-color: #ffc107;">
+                        <i>💡</i> Liste as disciplinas relacionadas, uma por linha. Este conteúdo aparecerá na Página 4 do documento.
+                    </div>
+                </div>
+                
+                <!-- NOVO CAMPO: Bibliografia Básica -->
+                <div class="form-group">
+                    <label><i>📖</i> Bibliografia Básica *</label>
+                    <textarea class="form-control" id="bibliografia_basica" name="bibliografia_basica" rows="5" required placeholder="Digite as 5 obras da bibliografia básica no formato ABNT...">SOBRENOME, Nome. Título do Livro 1. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 2. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 3. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 4. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 5. Edição. Cidade: Editora, ano.</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
+                        <i>💡</i> Digite uma obra por linha no formato ABNT. Use <strong> para destacar o título se desejar.
+                    </div>
+                </div>
+                
+                <!-- NOVO CAMPO: Bibliografia Complementar -->
+                <div class="form-group">
+                    <label><i>📖</i> Bibliografia Complementar *</label>
+                    <textarea class="form-control" id="bibliografia_complementar" name="bibliografia_complementar" rows="4" required placeholder="Digite as 3 obras da bibliografia complementar...">SOBRENOME, Nome. Título do Livro 6. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 7. Edição. Cidade: Editora, ano.
+SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
+                        <i>💡</i> Digite uma obra por linha.
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i>🔗</i> Pré-requisitos (opcional)</label>
+                    <input type="text" class="form-control" id="pre_requisitos" name="pre_requisitos" value="Não há pré-requisitos formais">
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO DE ENSINO COM IA (4 PÁGINAS)</button>
+                    <a href="/mew/planos-ensino" class="btn btn-secondary"><i>📋</i> Ver Planos Gerados</a>
+                </div>
+            </form>
+        </div>
+        
+        <div class="result-box" id="resultBox">
+            <div class="result-header" id="resultHeader">
+                ✅ Plano de Ensino Gerado com Sucesso!
+            </div>
+            
+            <div id="resultInfo"></div>
+            
+            <div class="result-actions" id="resultActions">
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <a href="#" id="visualizarLink" target="_blank" class="btn btn-primary">
+                        <i>👁️</i> Visualizar Plano (4 Páginas)
+                    </a>
+                    <a href="/mew/planos-ensino" class="btn btn-secondary">
+                        <i>📋</i> Ver Todos os Planos
+                    </a>
+                    <button onclick="window.location.reload()" class="btn btn-secondary">
+                        <i>➕</i> Gerar Novo Plano
+                    </button>
+                </div>
+                <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
+                    <strong>📄 Organização:</strong> Página 1 (Identificação, Objetivos, Ementa) | 
+                    Página 2 (Conteúdo Programático, Habilidades) | 
+                    Página 3 (Metodologia, Avaliação) | 
+                    Página 4 (Bibliografia + Enquadramento)
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Gerando plano de ensino com IA...</div>
+        <div style="margin-top: 10px; font-size: 14px; color: #666;">Aguardando resposta da OpenAI (até 30 segundos)</div>
+    </div>
+    
+    <script>
+        document.getElementById('formPlano').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            // Validar campos obrigatórios
+            const disciplina = document.getElementById('disciplina').value;
+            const ementa = document.getElementById('ementa').value;
+            const enquadramento = document.getElementById('enquadramento_curricular').value;
+            const bibliografiaBasica = document.getElementById('bibliografia_basica').value;
+            const bibliografiaComplementar = document.getElementById('bibliografia_complementar').value;
+            
+            if (!disciplina || !ementa) {
+                showAlert('Disciplina e ementa são obrigatórios', 'error');
+                return;
+            }
+            
+            if (!enquadramento) {
+                showAlert('Enquadramento curricular é obrigatório', 'error');
+                return;
+            }
+            
+            if (!bibliografiaBasica || !bibliografiaComplementar) {
+                showAlert('Bibliografia básica e complementar são obrigatórias', 'error');
+                return;
+            }
+            
+            // Mostrar loading
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            document.getElementById('resultBox').style.display = 'none';
+            
+            // Coletar dados (AGORA COM BIBLIOGRAFIA)
+            const formData = {
+                disciplina: disciplina,
+                curso: document.getElementById('curso').value,
+                ementa: ementa,
+                carga_horaria: document.getElementById('carga_horaria').value,
+                modalidade: document.getElementById('modalidade').value,
+                docente: document.getElementById('docente').value,
+                data_geracao: document.getElementById('data_geracao').value,
+                enquadramento_curricular: enquadramento,
+                pre_requisitos: document.getElementById('pre_requisitos').value,
+                // NOVOS CAMPOS DE BIBLIOGRAFIA
+                bibliografia_basica: bibliografiaBasica,
+                bibliografia_complementar: bibliografiaComplementar
+            };
+            
+            try {
+                const response = await fetch('/mew/processar-plano-ensino', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                document.getElementById('loadingOverlay').style.display = 'none';
+                
+                if (result.success) {
+                    // Mostrar resultado
+                    document.getElementById('resultBox').style.display = 'block';
+                    
+                    let infoHtml = `
+                        <p><strong>📘 Disciplina:</strong> ${result.disciplina}</p>
+                        <p><strong>🔑 Código:</strong> ${result.codigo}</p>
+                        <p><strong>📅 Emissão:</strong> ${result.data_emissao}</p>
+                        <p><strong>🔐 Hash:</strong> ${result.hash.substring(0, 30)}...</p>
+                    `;
+                    
+                    document.getElementById('resultInfo').innerHTML = infoHtml;
+                    
+                    document.getElementById('visualizarLink').href = result.url_visualizar;
+                    
+                    showAlert('Plano de ensino gerado com sucesso!', 'success');
+                } else {
+                    showAlert('Erro: ' + result.message, 'error');
+                }
+            } catch (error) {
+                document.getElementById('loadingOverlay').style.display = 'none';
+                showAlert('Erro de conexão: ' + error.message, 'error');
+            }
+        };
+        
+        function showAlert(message, type) {
+            const alertEl = document.getElementById('alertMessage');
+            alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
+            alertEl.textContent = message;
+            alertEl.style.display = 'block';
+            
+            setTimeout(() => {
+                alertEl.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

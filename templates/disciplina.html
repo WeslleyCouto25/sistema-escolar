@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>{{ disciplina['nome'] }} | FACOP SiGEU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== VARIÁVEIS GLOBAIS (mesmas do dashboard) ===== */
+        :root {
+            --primary: #0a2c4e;
+            --primary-light: #1e3a5f;
+            --primary-dark: #051e33;
+            --secondary: #b8860b;
+            --secondary-light: #daa520;
+            --accent: #8b0000;
+            --success: #2e7d32;
+            --warning: #ed6c02;
+            --info: #0288d1;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-800);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== TOPBAR (idêntica ao dashboard) ===== */
+        .topbar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            height: 70px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            color: white;
+            box-shadow: var(--shadow-md);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-header {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 1.25rem;
+            letter-spacing: 0.5px;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 40px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        .user-menu {
+            display: flex;
+            gap: 12px;
+        }
+
+        .logout-btn {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+
+        .logout-btn.active {
+            background: var(--secondary);
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+
+        /* ===== MAIN CONTAINER (igual ao dashboard) ===== */
+        .main-container {
+            display: flex;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* ===== SIDEBAR (igual ao dashboard) ===== */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            overflow-y: auto;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .user-profile {
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .profile-img {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid var(--secondary);
+        }
+
+        .profile-img i {
+            font-size: 40px;
+            color: white;
+        }
+
+        .profile-text .name {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .profile-text .ra {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            background: rgba(255,255,255,0.15);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .main-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px;
+        }
+
+        .menu-section {
+            padding: 20px 20px 10px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.7;
+            font-weight: 600;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            gap: 12px;
+            margin: 2px 8px;
+            border-radius: var(--radius-md);
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .menu-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .menu-item.active {
+            background: rgba(255,255,255,0.15);
+            border-left: 4px solid var(--secondary);
+            font-weight: 600;
+        }
+
+        .menu-item i {
+            width: 24px;
+            text-align: center;
+        }
+
+        /* ===== CONTENT AREA ===== */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: var(--gray-100);
+        }
+
+        /* ===== DISCIPLINE HEADER ===== */
+        .discipline-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+            border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .discipline-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23ffffff' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
+            opacity: 0.1;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 30px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.2s;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(-5px);
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+            color: white;
+            letter-spacing: -0.5px;
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 30px;
+            line-height: 1.6;
+            max-width: 800px;
+        }
+
+        .discipline-stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-md);
+            padding: 15px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 140px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== PROGRESS TRACKER ===== */
+        .progress-tracker {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 40px 0;
+            padding: 20px;
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--gray-200);
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex: 1;
+        }
+
+        .step-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 3px solid var(--gray-300);
+            color: var(--gray-500);
+            font-weight: 600;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            z-index: 2;
+        }
+
+        .progress-step.completed .step-icon {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .progress-step.current .step-icon {
+            background: white;
+            color: var(--primary);
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 4px rgba(184, 134, 11, 0.15);
+        }
+
+        .step-label {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .progress-step.completed .step-label {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .progress-step.current .step-label {
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 25px;
+            left: 50%;
+            right: -50%;
+            height: 3px;
+            background: var(--gray-300);
+            z-index: 1;
+        }
+
+        .progress-line.completed {
+            background: var(--success);
+        }
+
+        /* ===== CHAPTER CARDS ===== */
+        .chapter-container {
+            margin-bottom: 25px;
+        }
+
+        .chapter-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 30px;
+            margin-bottom: 20px;
+            border-left: 5px solid var(--primary);
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--gray-200);
+        }
+
+        .chapter-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--secondary-light);
+        }
+
+        .chapter-number {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 5rem;
+            font-weight: 800;
+            color: rgba(10, 44, 78, 0.05);
+            line-height: 1;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .chapter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .chapter-title {
+            flex: 1;
+        }
+
+        .chapter-title h3 {
+            margin: 0 0 5px 0;
+            color: var(--primary);
+            font-size: 1.4rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chapter-title h3 i {
+            color: var(--secondary);
+        }
+
+        .chapter-subtitle {
+            color: var(--gray-500);
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        .chapter-toggle {
+            color: var(--primary);
+            font-size: 1.2rem;
+            transition: transform 0.3s;
+        }
+
+        .chapter-toggle.rotated {
+            transform: rotate(180deg);
+        }
+
+        .chapter-content {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .chapter-content.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== CONTENT SECTIONS ===== */
+        .learning-objectives {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+            border-left: 4px solid var(--secondary);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            margin: 20px 0;
+        }
+
+        .learning-objectives h5 {
+            color: var(--primary);
+            margin: 0 0 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+        }
+
+        .learning-objectives ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .learning-objectives li {
+            margin-bottom: 8px;
+            color: var(--gray-700);
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 25px;
+        }
+
+        @media (min-width: 1024px) {
+            .content-grid {
+                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            }
+        }
+
+        .content-section {
+            background: var(--gray-50);
+            border-radius: var(--radius-lg);
+            padding: 25px;
+            border: 1px solid var(--gray-200);
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--primary);
+            margin: 0 0 20px 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .section-title i {
+            font-size: 1.3rem;
+        }
+
+        .resource-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: white;
+            border-radius: 40px;
+            color: var(--gray-700);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin: 5px;
+            border: 1px solid var(--gray-300);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* ===== VIDEO & PDF WRAPPERS ===== */
+        .video-wrapper {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: var(--radius-md);
+            margin-top: 15px;
+            box-shadow: var(--shadow-md);
+        }
+
+        .video-wrapper iframe,
+        .video-wrapper video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .pdf-wrapper {
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-top: 15px;
+            box-shadow: var(--shadow-md);
+            height: 600px;
+            border: 1px solid var(--gray-200);
+        }
+
+        .pdf-wrapper iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .video-unavailable {
+            text-align: center;
+            padding: 40px 20px;
+            background: white;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--gray-200);
+        }
+
+        .video-unavailable i {
+            font-size: 3rem;
+            color: var(--gray-400);
+            margin-bottom: 15px;
+        }
+
+        /* ===== CHAPTER ACTIONS ===== */
+        .chapter-actions {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding-top: 25px;
+            border-top: 2px dashed var(--gray-200);
+            flex-wrap: wrap;
+        }
+
+        .btn-prova {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: var(--shadow-sm);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-prova-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-prova-primary:hover {
+            background: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-prova-secondary {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-prova-secondary:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* ===== BLOCKED CHAPTER ===== */
+        .blocked-chapter {
+            opacity: 0.8;
+            position: relative;
+            background: var(--gray-50);
+        }
+
+        .blocked-chapter .chapter-header {
+            cursor: not-allowed;
+        }
+
+        .blocked-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.97);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(2px);
+        }
+
+        .blocked-overlay i {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        .blocked-overlay p {
+            color: var(--gray-700);
+            font-weight: 500;
+            text-align: center;
+            margin: 0;
+            padding: 0 30px;
+            max-width: 300px;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: var(--radius-lg);
+            border: 2px dashed var(--gray-300);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: var(--gray-400);
+            margin-bottom: 20px;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5rem;
+            color: var(--gray-700);
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            color: var(--gray-500);
+            margin-bottom: 25px;
+            max-width: 500px;
+            margin: 0 auto 30px auto;
+        }
+
+        /* ===== FOOTER ===== */
+        footer {
+            background: var(--primary-dark);
+            color: white;
+            padding: 40px 0 20px 0;
+            margin-top: 60px;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+        }
+
+        .footer-section h4 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-section h4 i {
+            color: var(--secondary);
+        }
+
+        .footer-section p {
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-links li {
+            margin-bottom: 12px;
+        }
+
+        .footer-links a {
+            color: rgba(255, 255, 255, 0.7);
+            text-decoration: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .footer-links a:hover {
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .footer-links a i {
+            color: var(--secondary);
+            width: 20px;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+        }
+
+        .footer-bottom i {
+            color: #ff6b6b;
+        }
+
+        /* ===== RESPONSIVIDADE ===== */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 240px;
+            }
+            
+            .content-area {
+                padding: 20px;
+            }
+            
+            .header-content {
+                padding: 0 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 0 16px;
+            }
+            
+            .logo-text {
+                font-size: 1rem;
+                padding: 6px 12px;
+            }
+            
+            .logout-btn span {
+                display: none;
+            }
+            
+            .logout-btn i {
+                margin: 0;
+            }
+            
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            
+            .user-profile {
+                padding: 20px;
+            }
+            
+            .profile-img {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .profile-img i {
+                font-size: 30px;
+            }
+            
+            .content-area {
+                padding: 16px;
+            }
+            
+            .page-title {
+                font-size: 1.8rem;
+            }
+            
+            .discipline-stats {
+                justify-content: center;
+            }
+            
+            .progress-tracker {
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            
+            .progress-step {
+                min-width: 80px;
+            }
+            
+            .progress-line {
+                display: none;
+            }
+            
+            .chapter-card {
+                padding: 20px;
+            }
+            
+            .chapter-number {
+                font-size: 4rem;
+                right: 20px;
+            }
+            
+            .chapter-actions {
+                flex-direction: column;
+            }
+            
+            .btn-prova {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stat-card {
+                min-width: 100%;
+            }
+            
+            .chapter-title h3 {
+                font-size: 1.2rem;
+            }
+            
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ===== UTILITIES ===== */
+        .text-center { text-align: center; }
+        .mt-4 { margin-top: 24px; }
+        .mb-4 { margin-bottom: 24px; }
+        .w-100 { width: 100%; }
+        .secure-video {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Bar (igual ao dashboard) -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">FACOP • SiGEU</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn">
+                <i class="fas fa-graduation-cap"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/logout" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Sair</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Discipline Header -->
+    <div class="discipline-header">
+        <div class="header-content">
+            <a href="/dashboard" class="back-link">
+                <i class="fas fa-arrow-left"></i> Voltar ao dashboard
+            </a>
+
+            <h1 class="page-title">📘 {{ disciplina['nome'] }}</h1>
+            <p class="page-subtitle">Explore os materiais acadêmicos e realize as avaliações de cada capítulo para
+                consolidar seu aprendizado.</p>
+
+            <div class="discipline-stats">
+                <div class="stat-card">
+                    <span class="stat-number">{{ capitulos|length }}</span>
+                    <span class="stat-label">Capítulos</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">{{ capitulos|selectattr('prova_id')|list|length }}</span>
+                    <span class="stat-label">Provas</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">{{ capitulos|selectattr('video_url')|list|length }}</span>
+                    <span class="stat-label">Vídeo Aulas</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">{{ capitulos|selectattr('pdf_url')|list|length }}</span>
+                    <span class="stat-label">Materiais PDF</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+                <div class="profile-text">
+                    <div class="name">{{ session.get('aluno_nome', 'Aluno') }}</div>
+                    <div class="ra">RA: {{ session.get('aluno_ra', '00000000') }}</div>
+                </div>
+            </div>
+
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span class="text">Dashboard</span>
+                </a>
+                <a href="/disciplina/{{ disciplina['id'] }}" class="menu-item active">
+                    <i class="fas fa-book"></i>
+                    <span class="text">{{ disciplina['nome'][:20] }}...</span>
+                </a>
+                <div class="menu-section">Capítulos</div>
+                {% for c in capitulos %}
+                <a href="#chapter-{{ loop.index }}" class="menu-item chapter-nav" data-chapter="{{ loop.index }}">
+                    <i class="fas fa-bookmark"></i>
+                    <span class="text">Cap. {{ loop.index }}: {{ c['titulo'][:15] }}...</span>
+                </a>
+                {% endfor %}
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <!-- Progress Tracker -->
+            <div class="progress-tracker">
+                {% for c in capitulos %}
+                <div class="progress-step {% if loop.index == 1 %}current{% else %}{% if loop.previtem %}completed{% endif %}{% endif %}"
+                    id="step-{{ loop.index }}">
+                    <div class="step-icon">
+                        {% if loop.index == 1 %}
+                        <i class="fas fa-play"></i>
+                        {% elif loop.previtem %}
+                        <i class="fas fa-check"></i>
+                        {% else %}
+                        {{ loop.index }}
+                        {% endif %}
+                    </div>
+                    <div class="step-label">Capítulo {{ loop.index }}</div>
+                    {% if not loop.last %}
+                    <div class="progress-line {% if loop.previtem %}completed{% endif %}"></div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Chapters Content -->
+            {% set dias_liberacao = [3, 6, 9, 12] %}
+            {% set capitulos_liberados = capitulos_liberados|default(0) %}
+
+            {% if capitulos %}
+            {% for c in capitulos %}
+            {% set cap_numero = loop.index %}
+            <div class="chapter-container" id="chapter-{{ loop.index }}">
+                <div class="chapter-card {% if cap_numero > capitulos_liberados %}blocked-chapter{% endif %}">
+                    {% if cap_numero > capitulos_liberados %}
+                    <div class="blocked-overlay">
+                        <i class="fas fa-lock"></i>
+                        <p>Disponível em {{ dias_liberacao[loop.index0] }} dias após o início da disciplina</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="chapter-number">{{ loop.index }}</div>
+
+                    <div class="chapter-header"
+                        onclick="{% if cap_numero <= capitulos_liberados %}toggleChapter({{ loop.index }}){% endif %}">
+                        <div class="chapter-title">
+                            <h3><i class="fas fa-bookmark" style="color: var(--secondary); margin-right: 10px;"></i>
+                                Capítulo {{ loop.index }}: {{ c['titulo'] }}</h3>
+                            <p class="chapter-subtitle">Clique para expandir e acessar os materiais deste capítulo</p>
+                        </div>
+                        <div class="chapter-toggle" id="toggle-{{ loop.index }}">
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                    </div>
+
+                    <div class="chapter-content" id="content-{{ loop.index }}">
+                        {% if c['video_url'] or c['pdf_url'] %}
+                        <div class="learning-objectives">
+                            <h5><i class="fas fa-bullseye"></i> Objetivos de Aprendizagem</h5>
+                            <ul>
+                                <li>Compreender os conceitos fundamentais e teóricos apresentados</li>
+                                <li>Aplicar o conhecimento em situações práticas contextuais</li>
+                                <li>Desenvolver habilidades de análise crítica</li>
+                                <li>Preparar-se para a avaliação do capítulo</li>
+                            </ul>
+                        </div>
+
+                        <div class="content-grid">
+                            {% if c['video_url'] %}
+                            <div class="content-section">
+                                <h4 class="section-title">
+                                    <i class="fas fa-video" style="color: #FF0000;"></i> Vídeo Aula
+                                </h4>
+                                <p style="color: var(--gray-600); margin-bottom: 15px;">Assista à explicação
+                                    detalhada dos conceitos:</p>
+
+                                {% if 'drive.google.com' in c['video_url'] %}
+                                <!-- Google Drive -->
+                                {% set drive_url = c['video_url'].replace('/view', '/preview').replace('/edit',
+                                '/preview') %}
+                                <div class="video-wrapper">
+                                    <iframe src="{{ drive_url }}" frameborder="0" allow="autoplay; encrypted-media"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                                {% elif 'youtube.com' in c['video_url'] %}
+                                <!-- YouTube -->
+                                {% if 'youtube.com/watch?v=' in c['video_url'] %}
+                                {% set video_id = c['video_url'].split('v=')[1].split('&')[0] %}
+                                <div class="video-wrapper">
+                                    <iframe src="https://www.youtube.com/embed/{{ video_id }}" frameborder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                                {% elif 'youtube.com/embed/' in c['video_url'] %}
+                                <div class="video-wrapper">
+                                    <iframe src="{{ c['video_url'] }}" frameborder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                </div>
+                                {% endif %}
+                                {% elif c['video_url'] and (
+                                '.mp4' in c['video_url'] or
+                                '.webm' in c['video_url'] or
+                                '.mov' in c['video_url']
+                                ) %}
+                                <div class="video-wrapper">
+                                    <video class="secure-video" controls controlsList="nodownload" preload="metadata"
+                                        style="width:100%; height:100%; border-radius:12px;">
+                                        <source src="{{ c['video_url'] }}" type="video/mp4">
+                                        Seu navegador não suporta vídeo HTML5.
+                                    </video>
+                                </div>
+                                {% else %}
+                                <div class="video-unavailable">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <h3>Vídeo indisponível</h3>
+                                    <p>O vídeo desta aula não pôde ser carregado.</p>
+                                </div>
+
+                                {% endif %}
+
+
+                                <div style="margin-top: 15px;">
+                                    <span class="resource-badge">
+                                        <i class="fas fa-clock"></i> Duração: 4H/aula
+                                    </span>
+                                    <span class="resource-badge">
+                                        <i class="fas fa-graduation-cap"></i> Nível: Intermediário
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if c['pdf_url'] %}
+                            <div class="content-section">
+                                <h4 class="section-title">
+                                    <i class="fas fa-file-pdf" style="color: #FF6B6B;"></i> Material Didático-Pedagógico
+                                </h4>
+                                <p style="color: var(--gray-600); margin-bottom: 15px;">Estude o material teórico
+                                    para aprofundar seu conhecimento:</p>
+
+                                <div class="pdf-wrapper">
+                                    <iframe src="{{ c['pdf_url'] }}#toolbar=0" width="100%" height="600px">
+                                        <p>Seu navegador não suporta visualização de PDFs.
+                                            <a href="{{ c['pdf_url'] }}" target="_blank" class="btn btn-primary">
+                                                <i class="fas fa-download"></i> Baixar PDF
+                                            </a>
+                                        </p>
+                                    </iframe>
+                                </div>
+
+                                <div style="margin-top: 15px;">
+                                    <span class="resource-badge">
+                                        <i class="fas fa-file-alt"></i> Formato: PDF
+                                    </span>
+                                    <span class="resource-badge">
+                                        <i class="fas fa-book-open"></i> Material Disciplinar | Horas: 20H/leitura
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div class="chapter-actions">
+                            {% if c['prova_id'] %}
+                            <a class="btn-prova btn-prova-primary"
+                                href="/instrucoes/{{ disciplina['id'] }}/{{ loop.index }}">
+                                <i class="fas fa-clipboard-check"></i> Iniciar Prova (Capítulo {{ loop.index }})
+                            </a>
+                            <a href="#chapter-{{ loop.index + 1 if not loop.last else '1' }}"
+                                class="btn-prova btn-prova-secondary">
+                                <i class="fas fa-arrow-right"></i> {% if loop.last %}Revisar{% else %}Próximo Capítulo{%
+                                endif %}
+                            </a>
+                            {% else %}
+                            <div
+                                style="text-align: center; width: 100%; padding: 20px; background: var(--gray-50); border-radius: var(--radius-md);">
+                                <i class="fas fa-info-circle"
+                                    style="color: var(--gray-500); font-size: 1.5rem; margin-bottom: 10px;"></i>
+                                <p style="color: var(--gray-600); margin: 0;">Prova disponível em breve para este
+                                    capítulo.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-book-open"></i>
+                <h3>Nenhum capítulo disponível</h3>
+                <p>Esta disciplina ainda não possui conteúdo publicado. Entre em contato com o administrador para mais
+                    informações.</p>
+                <a href="/dashboard" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
+                </a>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <footer>
+                <div class="footer-content">
+                    <div class="footer-section">
+                        <h4><i class="fas fa-graduation-cap"></i> Ambiente Virtual de Aprendizagem FACOP/SiGEU</h4>
+                        <p>Sistema educacional desenvolvido para proporcionar uma experiência de aprendizado completa e
+                            interativa.</p>
+                        <p style="font-size: 0.9rem; margin-top: 20px;">
+                            <i class="fas fa-shield-alt"></i> Ambiente seguro e confiável
+                        </p>
+                    </div>
+
+                    <div class="footer-section">
+                        <h4><i class="fas fa-link"></i> Links Rápidos</h4>
+                        <ul class="footer-links">
+                            <li><a href="/dashboard"><i class="fas fa-home"></i> Dashboard</a></li>
+                            <li><a href="/disciplina/{{ disciplina['id'] }}"><i class="fas fa-book"></i> Disciplina
+                                    Atual</a></li>
+                            {% for c in capitulos[:3] %}
+                            <li><a href="#chapter-{{ loop.index }}"><i class="fas fa-bookmark"></i> Cap. {{ loop.index
+                                    }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="footer-section">
+                        <h4><i class="fas fa-info-circle"></i> Recursos</h4>
+                        <ul class="footer-links">
+                            <li><a href="#"><i class="fas fa-question-circle"></i> Ajuda e Suporte</a></li>
+                            <li><a href="#"><i class="fas fa-download"></i> Materiais para Download</a></li>
+                            <li><a href="#"><i class="fas fa-chart-line"></i> Estatísticas de Aprendizado</a></li>
+                            <li><a href="#"><i class="fas fa-certificate"></i> Certificados</a></li>
+                        </ul>
+                    </div>
+
+                    <div class="footer-section">
+                        <h4><i class="fas fa-envelope"></i> Contato</h4>
+                        <p><i class="fas fa-university"></i> Instituição de Ensino FACOP/SiGEU</p>
+                        <p><i class="fas fa-envelope"></i> contato@campusvirtualfacop.com.br</p>
+                        <p><i class="fas fa-phone"></i> 21 99002-0262 | 11 3302-0501</p>
+                        <p style="margin-top: 20px;">
+                            <i class="fas fa-clock"></i> Horário de atendimento:<br>
+                            Segunda a Sexta, 8h às 18h
+                        </p>
+                    </div>
+                </div>
+
+                <div class="footer-bottom">
+                    <p>© 2026 Plataforma Acadêmica. Todos os direitos reservados. | Desenvolvido com <i
+                            class="fas fa-heart"></i> para a educação</p>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <script>
+        function toggleChapter(chapterNumber) {
+            const content = document.getElementById('content-' + chapterNumber);
+            const toggle = document.getElementById('toggle-' + chapterNumber);
+            const step = document.getElementById('step-' + chapterNumber);
+
+            content.classList.toggle('show');
+            toggle.classList.toggle('rotated');
+
+            // Update progress tracker
+            if (content.classList.contains('show')) {
+                document.querySelectorAll('.progress-step').forEach(step => {
+                    step.classList.remove('current');
+                });
+                step.classList.add('current');
+            }
+        }
+
+        // Open first chapter by default if it's not blocked
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if first chapter is not blocked
+            const firstChapterCard = document.querySelector('.chapter-card:not(.blocked-chapter)');
+            if (firstChapterCard) {
+                const chapterNumber = firstChapterCard.closest('.chapter-container').id.replace('chapter-', '');
+                toggleChapter(chapterNumber);
+            }
+
+            // Smooth scroll for chapter navigation
+            document.querySelectorAll('.chapter-nav').forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const chapterNum = this.getAttribute('data-chapter');
+                    const target = document.getElementById('chapter-' + chapterNum);
+
+                    // Check if chapter is blocked
+                    const targetCard = target.querySelector('.chapter-card');
+                    if (targetCard.classList.contains('blocked-chapter')) {
+                        return; // Don't open blocked chapters
+                    }
+
+                    // Close all chapters
+                    document.querySelectorAll('.chapter-content').forEach(content => {
+                        content.classList.remove('show');
+                    });
+                    document.querySelectorAll('.chapter-toggle').forEach(toggle => {
+                        toggle.classList.remove('rotated');
+                    });
+
+                    // Open target chapter
+                    setTimeout(() => {
+                        toggleChapter(chapterNum);
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 300);
+                });
+            });
+
+            // Auto-scroll for next chapter buttons
+            document.querySelectorAll('.btn-prova-secondary').forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    if (this.getAttribute('href').startsWith('#')) {
+                        e.preventDefault();
+                        const targetId = this.getAttribute('href').substring(1);
+                        const target = document.getElementById(targetId);
+
+                        if (target) {
+                            // Close current chapter
+                            const currentChapter = this.closest('.chapter-content');
+                            if (currentChapter) {
+                                currentChapter.classList.remove('show');
+                                currentChapter.closest('.chapter-card').querySelector('.chapter-toggle').classList.remove('rotated');
+                            }
+
+                            // Check if next chapter is not blocked
+                            const nextChapterCard = target.querySelector('.chapter-card');
+                            if (nextChapterCard.classList.contains('blocked-chapter')) {
+                                alert('O próximo capítulo ainda não está disponível. Ele será liberado de acordo com o cronograma da disciplina.');
+                                return;
+                            }
+
+                            // Open target chapter after delay
+                            setTimeout(() => {
+                                const chapterNum = targetId.split('-')[1];
+                                toggleChapter(chapterNum);
+                                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 300);
+                        }
+                    }
+                });
+            });
+
+            // Update progress line colors
+            const steps = document.querySelectorAll('.progress-step');
+            steps.forEach((step, index) => {
+                if (step.classList.contains('completed')) {
+                    const line = step.querySelector('.progress-line');
+                    if (line) line.classList.add('completed');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

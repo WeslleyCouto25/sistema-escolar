@@ -1,0 +1,2133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FACOP/SiGEU</title>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        /* RESET E VARIÁVEIS */
+        :root {
+            --primary-color: #1a237e;
+            --primary-dark: #0d1b5e;
+            --secondary-color: #ff6f00;
+            --secondary-dark: #e65100;
+            --accent-color: #4caf50;
+            --accent-dark: #388e3c;
+            --rock-color: #795548;
+            --rock-dark: #5d4037;
+            --rock-light: #d7ccc8;
+            --light-blue: #e8eaf6;
+            --dark-blue: #283593;
+            --dark-gray: #2c3e50;
+            --medium-gray: #546e7a;
+            --light-gray: #f8f9fa;
+            --white: #ffffff;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 15px 35px rgba(0, 0, 0, 0.12);
+            --border-radius: 12px;
+            --transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.7;
+            color: var(--dark-gray);
+            background: var(--white);
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* TOP HEADER - CORRIGIDO */
+        .top-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-blue));
+            color: white;
+            padding: 10px 0;
+            font-size: 0.85rem;
+            position: relative;
+            z-index: 1001;
+        }
+
+        .top-header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .top-header-left,
+        .top-header-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .header-contact {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .header-contact:hover {
+            color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .header-social {
+            display: flex;
+            gap: 10px;
+        }
+
+        .social-icon {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+        }
+
+        .social-icon:hover {
+            background: var(--secondary-color);
+            transform: translateY(-3px) scale(1.1);
+            border-color: transparent;
+        }
+
+        .auth-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 20px;
+            transition: var(--transition);
+            color: white;
+            text-decoration: none;
+        }
+
+        .auth-badge:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* WHATSAPP FIXO */
+        .whatsapp-fixed {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #25D366;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+            z-index: 1000;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .whatsapp-fixed:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 30px rgba(37, 211, 102, 0.6);
+        }
+
+        /* HEADER PRINCIPAL - CORRIGIDO */
+        .main-header {
+            background: var(--white);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.97);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            position: relative;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+            margin-right: 25px;
+        }
+
+        .logo {
+            height: 70px;
+            transition: var(--transition);
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo-main {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary-color);
+            line-height: 1.1;
+        }
+
+        .logo-subtitle {
+            font-size: 13px;
+            color: var(--medium-gray);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .partnership-badge {
+            background: linear-gradient(45deg, var(--secondary-color), var(--rock-color));
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 5px;
+            display: inline-block;
+            width: fit-content;
+        }
+
+        .mec-badge {
+            background: linear-gradient(45deg, var(--accent-color), var(--rock-dark));
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        /* NAVEGAÇÃO PRINCIPAL - CORRIGIDA */
+        .main-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 35px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            font-weight: 600;
+            color: var(--dark-gray);
+            padding: 8px 0;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: var(--transition);
+            text-decoration: none !important;
+            border-bottom: 2px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--rock-color);
+        }
+
+        .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--rock-color);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-whatsapp-header {
+            background: #25D366;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .btn-whatsapp-header:hover {
+            background: #128C7E;
+            transform: translateY(-2px);
+        }
+
+        /* Botão do menu mobile */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--primary-color);
+            cursor: pointer;
+            padding: 10px;
+            margin-left: 10px;
+        }
+
+        /* HERO SECTION */
+        .hero {
+            position: relative;
+            padding: 180px 0 120px;
+            overflow: hidden;
+            background: linear-gradient(135deg,
+                    rgba(26, 35, 126, 0.9) 0%,
+                    rgba(41, 98, 255, 0.85) 50%,
+                    rgba(121, 85, 72, 0.8) 100%);
+        }
+
+        .hero-bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+        }
+
+        .hero-title {
+            font-size: 3.8rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 25px;
+            background: linear-gradient(45deg, #fff, #e3f2fd, var(--rock-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero-subtitle {
+            font-size: 1.4rem;
+            margin-bottom: 40px;
+            color: rgba(255, 255, 255, 0.95);
+            font-weight: 300;
+            max-width: 700px;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 40px;
+        }
+
+        .hero-badge {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+        }
+
+        /* SEÇÃO DE PARCERIA */
+        .partnership-section {
+            background: linear-gradient(135deg, var(--light-gray), var(--light-blue));
+            padding: 80px 0;
+            position: relative;
+        }
+
+        .partnership-content {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            padding: 50px;
+            box-shadow: var(--shadow);
+            border-left: 5px solid var(--rock-color);
+        }
+
+        .legal-stamp {
+            background: linear-gradient(45deg, var(--primary-color), var(--rock-dark));
+            color: white;
+            padding: 15px 25px;
+            border-radius: var(--border-radius);
+            margin-top: 30px;
+            display: inline-block;
+        }
+
+        /* CURSOS EM DESTAQUE */
+        .courses-section {
+            padding: 100px 0;
+            background: var(--light-gray);
+        }
+
+        .courses-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .course-tab-btn {
+            padding: 15px 30px;
+            background: var(--white);
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 600;
+            color: var(--medium-gray);
+        }
+
+        .course-tab-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .course-tab-btn:hover:not(.active) {
+            border-color: var(--rock-color);
+            color: var(--rock-color);
+        }
+
+        /* SISTEMA DE PESQUISA DE CURSOS */
+        .course-search-container {
+            max-width: 600px;
+            margin: 0 auto 40px;
+            position: relative;
+        }
+
+        .course-search {
+            width: 100%;
+            padding: 16px 50px 16px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50px;
+            font-size: 16px;
+            transition: var(--transition);
+        }
+
+        .course-search:focus {
+            border-color: var(--rock-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(121, 85, 72, 0.1);
+        }
+
+        .search-icon-btn {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--medium-gray);
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .courses-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .course-card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border: 1px solid #e0e0e0;
+        }
+
+        .course-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--rock-color);
+        }
+
+        .course-header {
+            padding: 25px;
+            background: linear-gradient(135deg, var(--primary-color), var(--dark-blue));
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .course-header.rock-bg {
+            background: linear-gradient(135deg, var(--rock-color), var(--purple));
+        }
+
+        .course-category {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .course-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* MODAIS */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 500px;
+            padding: 40px;
+            text-align: center;
+            animation: modalSlideIn 0.4s ease;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--medium-gray);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .whatsapp-btn-large {
+            background: #25D366;
+            color: white;
+            padding: 18px 35px;
+            border-radius: 50px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+
+        .whatsapp-btn-large:hover {
+            background: #128C7E;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(37, 211, 102, 0.3);
+        }
+
+        /* OFERTAS ACADÊMICAS */
+        .academic-offers {
+            padding: 100px 0;
+            background: linear-gradient(135deg, var(--white), var(--light-gray));
+        }
+
+        .offer-category {
+            margin-bottom: 60px;
+        }
+
+        .offer-category h3 {
+            color: purple;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--rock-light);
+            font-size: 1.8rem;
+        }
+
+        .offer-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .offer-item {
+            background: var(--white);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            border-left: 4px solid var(--rock-color);
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .offer-item:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        /* ÁREA DE DOCUMENTOS */
+        .documents-section {
+            background: linear-gradient(135deg, var(--primary-dark), var(--dark-blue));
+            color: white;
+            padding: 80px 0;
+        }
+
+        .documents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+
+        .document-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            text-align: center;
+            transition: var(--transition);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+
+        .document-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px);
+        }
+
+        /* FAQ E OUVIDORIA - CORRIGIDO */
+        .faq-section {
+            padding: 100px 0;
+        }
+
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 20px;
+            background: var(--light-gray);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .faq-question:hover {
+            background: var(--light-blue);
+        }
+
+        .faq-question i {
+            transition: transform 0.3s;
+        }
+
+        .faq-item.active .faq-question i {
+            transform: rotate(180deg);
+        }
+
+        .faq-answer {
+            padding: 0 20px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s, padding 0.3s;
+        }
+
+        .faq-item.active .faq-answer {
+            padding: 20px;
+            max-height: 500px;
+        }
+
+        .ouvidoria-box {
+            background: linear-gradient(135deg, var(--rock-light), var(--light-blue));
+            padding: 40px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        /* FOOTER */
+        .main-footer {
+            background: linear-gradient(135deg, var(--primary-dark), #0a1640);
+            color: white;
+            padding: 80px 0 30px;
+            position: relative;
+        }
+
+        .footer-wave {
+            position: absolute;
+            top: -100px;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z' fill='%231a237e'%3E%3C/path%3E%3C/svg%3E");
+            background-size: 1200px 100px;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .qr-code-container {
+            background: white;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            display: inline-block;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .qr-code-img {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* BOTÕES */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 32px;
+            background: linear-gradient(45deg, var(--secondary-color), var(--secondary-dark));
+            color: white;
+            border-radius: 50px;
+            font-weight: 600;
+            transition: var(--transition);
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(255, 111, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, var(--primary-color), var(--dark-blue));
+        }
+
+        .btn-rock {
+            background: linear-gradient(45deg, var(--rock-color), purple);
+        }
+
+        .mec-verified {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-left: 15px;
+        }
+
+        /* SEÇÃO DE IMAGENS */
+        .image-section {
+            padding: 80px 0;
+            background: var(--light-gray);
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .campus-image {
+            width: 100%;
+            height: 250px;
+            border-radius: var(--border-radius);
+            object-fit: cover;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .campus-image:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-hover);
+        }
+
+
+        @media (max-width: 992px) {
+            .main-nav {
+                position: relative;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .nav-menu {
+                display: none;
+                position: absolute;
+                top: 100%;
+                right: 0;
+                width: 300px;
+                background: var(--white);
+                flex-direction: column;
+                padding: 20px;
+                box-shadow: var(--shadow-hover);
+                z-index: 1000;
+                border-radius: var(--border-radius);
+                margin-top: 10px;
+            }
+
+            .nav-menu.active {
+                display: flex;
+            }
+
+            .nav-item {
+                width: 100%;
+            }
+
+            .nav-link {
+                padding: 12px 15px;
+                border-radius: 8px;
+                width: 100%;
+            }
+
+            .nav-link:hover {
+                background: var(--light-gray);
+            }
+
+            .hero-title {
+                font-size: 2.8rem;
+            }
+        }
+
+        /* ESTILOS GERAIS */
+        section {
+            padding: 100px 0;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            position: relative;
+            display: inline-block;
+        }
+
+        .section-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(45deg, var(--rock-color), var(--secondary-color));
+            border-radius: 2px;
+        }
+
+        .section-subtitle {
+            font-size: 1.2rem;
+            color: var(--medium-gray);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 1200px) {
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .hero-title {
+                font-size: 3.2rem;
+            }
+        }
+
+        /* ===== TABLET ===== */
+        @media (max-width: 1024px) {
+            .hero-title {
+                font-size: 2.8rem;
+            }
+
+            .courses-grid,
+            .documents-grid,
+            .offer-list {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* ===== CELULAR ===== */
+        @media (max-width: 768px) {
+
+            .container {
+                padding: 0 16px;
+            }
+
+            .logo-container {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+
+            .main-nav {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .nav-menu {
+                width: 100%;
+                left: 0;
+                right: auto;
+            }
+
+            .top-header-container {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+
+            .top-header-left,
+            .top-header-right {
+                justify-content: center;
+                width: 100%;
+            }
+
+            .logo {
+                height: 55px;
+            }
+
+            .logo-main {
+                font-size: 22px;
+            }
+
+            .hero {
+                padding: 120px 0 80px;
+            }
+
+            .hero-title {
+                font-size: 2.2rem;
+                line-height: 1.2;
+            }
+
+            .hero-subtitle {
+                font-size: 1.05rem;
+            }
+
+            .courses-grid,
+            .image-grid,
+            .documents-grid,
+            .offer-list,
+            .footer-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .btn,
+            .btn-whatsapp-header {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .section-title {
+                font-size: 2.2rem;
+            }
+
+            .top-header {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- WhatsApp Fixo -->
+    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20os%20cursos%20da%20FACOP"
+        target="_blank" class="whatsapp-fixed">
+        <i class="fab fa-whatsapp"></i>
+    </a>
+
+    <!-- Top Header -->
+    <div class="top-header">
+        <div class="container top-header-container">
+            <div class="top-header-left">
+                <a href="tel:+551133020501" class="header-contact">
+                    <i class="fas fa-phone-alt"></i> (21) 99002-0262
+                    <a href="mailto:contato@centroeducacionalunificado.com.br" class="header-contact">
+                        <i class="fas fa-envelope"></i> Matriz: Av. Paulista, 1000 - São Paulo/SP <i
+                            class="fas fa-minus"></i>
+                        Polos em todas as regiões brasileiras
+                    </a>
+                    <div class="header-contact">
+                        <i class="fas fa-clock"></i> Seg-Sab: 8h às 22h &nbsp;&nbsp;
+                        <i class="fas fa-phone-alt"></i> (11) 3302-0501
+                    </div>
+                </a>
+            </div>
+            <div class="top-header-right">
+                <a href="/validar-documento" class="auth-badge">
+                    <i class="fas fa-file-certificate"></i> Validar Documento
+                </a>
+
+                <div class="header-social">
+                    <a href="https://wa.me/5521990020262" target="_blank" class="social-icon">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
+                    <a href="https://wa.me/5521990020262" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="https://www.instagram.com/centraldoalunouniversitario/" class="social-icon"><i
+                            class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Header -->
+    <header class="main-header">
+        <div class="container header-content">
+            <div class="logo-container">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
+                <div class="logo-text">
+                    <div class="logo-main">FACOP</span></div>
+                    <div class="logo-subtitle">em parceria</div>
+                    <div class="partnership-badge">
+                        <i class="fas fa-handshake"></i> SiGEU
+                    </div>
+                </div>
+            </div>
+
+            <nav class="main-nav">
+                <ul class="nav-menu" id="navMenu">
+                    <li class="nav-item"><a href="#home" class="nav-link active">Início</a></li>
+                    <li class="nav-item"><a href="#courses" class="nav-link">Cursos</a></li>
+                    <li class="nav-item"><a href="#disciplinas-isoladas" class="nav-link">Disciplinas Isoladas</a></li>
+                    <li class="nav-item"><a href="#academic" class="nav-link">Modalidades</a></li>
+                    <li class="nav-item"><a href="#documents" class="nav-link">Documentos</a></li>
+                    <li class="nav-item"><a href="#faq" class="nav-link">FAQ</a></li>
+                    <li class="nav-item"><a href="#contact" class="nav-link">Contato</a></li>
+                </ul>
+
+                <div class="header-actions">
+                    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20falar%20com%20a%20equipe%20comercial%20da%20FACOP"
+                        target="_blank" class="btn-whatsapp-header">
+                        <i class="fab fa-whatsapp"></i> Matrícula
+                    </a>
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">
+                        <i class="fas fa-sign-in-alt"></i> Aluno
+                    </a>
+                </div>
+
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero" id="home">
+        <canvas class="hero-bg-canvas" id="heroCanvas"></canvas>
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Transformando Vidas Através da Educação de Qualidade</h1>
+                <p class="hero-subtitle">
+                    Instituição mantenedora na Portaria 887 de 25/07/2017, em parceria estratégica com o Sistema de
+                    Gestão Educacional Unificada - SiGEU,
+                    oferecendo excelência acadêmica com certificação FACOP/MEC.
+                </p>
+
+                <div class="hero-badges">
+                    <div class="hero-badge">
+                        <i class="fas fa-university"></i> Mantenedora: FACOP
+                    </div>
+                    <div class="hero-badge">
+                        <i class="fas fa-graduation-cap"></i> Provedora: SiGEU
+                    </div>
+                    <div class="hero-badge">
+                        <i class="fas fa-award"></i> Certificação FACOP/MEC
+                    </div>
+                    <div class="hero-badge">
+                        <i class="fas fa-file-contract"></i> Contrato Vinculado ao MEC
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <a href="#courses" class="btn btn-primary">
+                        <i class="fas fa-book-open"></i> Ver Cursos
+                    </a>
+                    <a href="#partnership" class="btn btn-rock">
+                        <i class="fas fa-handshake"></i> Conhecer Parceria
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção de Imagens do Campus -->
+    <section class="image-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Nossa Estrutura</h2>
+                <p class="section-subtitle">Ambientes de aprendizado modernos e inspiradores</p>
+            </div>
+
+            <div class="image-grid">
+                <div>
+                    <img src="{{ url_for('static', filename='img/index1.png') }}" alt="Estudantes no campus FACOP"
+                        class="campus-image">
+                    <p style="text-align: center; margin-top: 15px; color: var(--medium-gray);">
+                        Biblioteca moderna com acervo atualizado
+                    </p>
+                </div>
+                <div>
+                    <img src="{{ url_for('static', filename='img/img2.png') }}" alt="Estudantes no campus FACOP"
+                        class="campus-image">
+                    <p style="text-align: center; margin-top: 15px; color: var(--medium-gray);">
+                        Laboratórios equipados para prática profissional
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção de Parceria Técnica -->
+    <section class="partnership-section" id="partnership">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Parceria Estratégica FACOP e SiGEU</h2>
+                <p class="section-subtitle" style="max-width: 800px; margin: 0 auto;">
+                    Modelo inovador de gestão acadêmica validado pelo Ministério da Educação
+                </p>
+            </div>
+
+            <div class="partnership-content">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px;">
+                    <div>
+                        <h3 style="color: var(--primary-color); margin-bottom: 20px;">
+                            <i class="fas fa-university"></i> PAPEL DA FACOP
+                        </h3>
+                        <p style="margin-bottom: 15px;">
+                            A <strong>Faculdade do Centro Oeste Paulista - FACOP</strong> (Código MEC 1135) atua como
+                            <strong>instituição mantenedora</strong>, detentora do credenciamento institucional junto ao
+                            Ministério da Educação, responsável pela:
+                        </p>
+                        <ul style="list-style: none; margin-bottom: 25px;">
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
+                                Gestão administrativo-financeira institucional
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
+                                Certificação e diplomação oficial dos egressos
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
+                                Acompanhamento das diretrizes curriculares nacionais
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
+                                Garantia da qualidade acadêmica conforme exigências MEC
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h3 style="color: purple; margin-bottom: 20px;">
+                            <i class="fas fa-graduation-cap"></i> PAPEL DO SISTEMA SiGEU
+                        </h3>
+                        <p style="margin-bottom: 15px;">
+                            O <strong>Sistema de Gestão Educacional Unificada - SiGEU</strong> atua como
+                            <strong>provedor acadêmico</strong>,
+                            responsável pela operacionalização pedagógica mediante contrato de prestação de serviços
+                            educacionais, incluindo:
+                        </p>
+                        <ul style="list-style: none; margin-bottom: 25px;">
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
+                                Desenvolvimento de matrizes curriculares e projetos pedagógicos
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
+                                Fornecimento de corpo docente qualificado (mestres e doutores)
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
+                                Plataforma tecnológica e materiais didáticos especializados
+                            </li>
+                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
+                                <i class="fas fa-check-circle"
+                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
+                                Metodologias ativas de ensino-aprendizagem
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="legal-stamp">
+                    <h4 style="margin-bottom: 10px;">
+                        <i class="fas fa-balance-scale"></i> VALIDAÇÃO LEGAL E REGULATÓRIA
+                    </h4>
+                    <p style="font-size: 0.95rem; opacity: 0.95;">
+                        Esta parceria é regulamentada por <strong>contrato de prestação de serviços
+                            educacionais</strong>
+                        nos termos da Lei nº 9.870/1999, com validação explícita pelo MEC através dos processos
+                        de credenciamento e recredenciamento da FACOP (Portaria MEC nº 1.135/2024).
+                        O modelo atende integralmente às Diretrizes Curriculares Nacionais e às normativas
+                        da Secretaria de Regulação e Supervisão da Educação Superior (SERES/MEC).
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cursos em Destaque -->
+    <section class="courses-section" id="courses">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Cursos e Formação</h2>
+                <p class="section-subtitle">Graduação, Pós-Graduação, Mestrado e Doutorado com certificação FACOP</p>
+            </div>
+
+            <!-- Sistema de Pesquisa -->
+            <div class="course-search-container">
+                <input type="text" class="course-search" id="courseSearch" placeholder="Pesquisar cursos...">
+                <button class="search-icon-btn" onclick="searchCourses()">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+
+            <!-- Tabs de Categorias -->
+            <div class="courses-tabs">
+                <button class="course-tab-btn active" data-category="all">Todos os Cursos</button>
+                <button class="course-tab-btn" data-category="graduation">Graduação/Especialização</button>
+                <button class="course-tab-btn" data-category="postgraduate">Pós-Graduação/Isoladas</button>
+                <button class="course-tab-btn" data-category="masters">Extensão/Estágios</button>
+                <button class="course-tab-btn" data-category="doctorate">Gerais</button>
+            </div>
+
+            <!-- Grid de Cursos -->
+            <div class="courses-grid" id="coursesGrid">
+                <!-- Cursos carregados via JavaScript -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Link para Disciplinas Isoladas -->
+    <section id="disciplinas-isoladas"
+        style="background: linear-gradient(135deg, var(--rock-light), var(--light-blue)); padding: 80px 0;">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Disciplinas Isoladas</h2>
+                <p class="section-subtitle">Estude disciplinas específicas sem necessidade de matrícula em curso
+                    completo</p>
+            </div>
+
+            <div style="text-align: center; max-width: 800px; margin: 0 auto;">
+                <p style="margin-bottom: 30px; font-size: 1.1rem;">
+                    Oferecemos matrícula em disciplinas isoladas para quem deseja complementar formação,
+                    fazer aproveitamento de estudos ou cursar disciplinas específicas de interesse.
+                    As disciplinas cursadas podem ser aproveitadas em cursos regulares posteriormente.
+                </p>
+                <a href="/disciplinas-isoladas" class="btn btn-rock" style="
+                    font-size: 1.1rem;
+                    background-color: purple;
+                    color: #fff;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 12px rgba(128, 0, 128, 0.6);
+                    font-weight: 600;
+                        ">
+                    <i class="fas fa-book-open"></i> Ver Disciplinas Disponíveis
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Ofertas Acadêmicas -->
+    <section class="academic-offers" id="academic">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Modalidades de Formação Acadêmica</h2>
+                <p class="section-subtitle">Soluções educacionais completas para todas as necessidades de capacitação
+                </p>
+            </div>
+
+            <div class="offer-category">
+                <h3><i class="fas fa-graduation-cap"></i> FORMAÇÃO REGULAR</h3>
+                <div class="offer-list">
+                    <a href="#courses" class="offer-item">
+                        <h4 style="color: var(--primary-color); margin-bottom: 10px;">Cursos de Graduação</h4>
+                        <p>Formação superior com duração de 2 a 6 anos, conferindo título de bacharel, licenciado ou
+                            tecnólogo.</p>
+                    </a>
+                    <a href="#courses" class="offer-item">
+                        <h4 style="color: var(--primary-color); margin-bottom: 10px;">Pós-Graduação Lato Sensu</h4>
+                        <p>Especializações e Extensão/Aperfeiçoament com foco em aprofundamento profissional, duração de
+                            12 a 24 meses.</p>
+                    </a>
+                    <a href="#courses" class="offer-item">
+                        <h4 style="color: var(--primary-color); margin-bottom: 10px;">Mestrado Acadêmico</h4>
+                        <p>Formação stricto sensu com ênfase em pesquisa científica, preparando para carreira acadêmica.
+                        </p>
+                    </a>
+                    <a href="#courses" class="offer-item">
+                        <h4 style="color: var(--primary-color); margin-bottom: 10px;">Doutorado</h4>
+                        <p>Nível máximo de formação acadêmica, com produção de pesquisa original e contribuição
+                            científica.</p>
+                    </a>
+                </div>
+            </div>
+
+            <div class="offer-category">
+                <h3><i class="fas fa-certificate"></i> FORMAÇÃO COMPLEMENTAR</h3>
+                <div class="offer-list">
+                    <a href="#disciplinas-isoladas" class="offer-item">
+                        <h4 style="color: purple; margin-bottom: 10px;">Disciplinas Isoladas</h4>
+                        <p>Matrícula em disciplinas específicas sem necessidade de ingresso em curso completo.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: purple; margin-bottom: 10px;">Cursos de Extensão</h4>
+                        <p>Atividades de curta duração que promovem a interação universidade-sociedade.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--rock-dark); margin-bottom: 10px;">Atividades Extensionistas</h4>
+                        <p>Projetos sociais, culturais e tecnológicos que integram ensino, pesquisa e extensão.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--rock-dark); margin-bottom: 10px;">Práticas Curriculares</h4>
+                        <p>Atividades práticas obrigatórias integradas às matrizes curriculares.</p>
+                    </a>
+                </div>
+            </div>
+
+            <div class="offer-category">
+                <h3><i class="fas fa-briefcase"></i> FORMAÇÃO PROFISSIONAL</h3>
+                <div class="offer-list">
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--secondary-color); margin-bottom: 10px;">Estágios Supervisionados</h4>
+                        <p>Atividades práticas em ambiente profissional com supervisão acadêmica.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--secondary-color); margin-bottom: 10px;">Cursos Livres</h4>
+                        <p>Capacitações não regulamentadas pelo MEC, focadas em desenvolvimento de habilidades.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--secondary-color); margin-bottom: 10px;">Cursos de Especialização</h4>
+                        <p>Programas de pós-graduação lato sensu com foco em áreas profissionais específicas.</p>
+                    </a>
+                    <a href="#" class="offer-item" onclick="openOuvidoriaModal(event)">
+                        <h4 style="color: var(--secondary-color); margin-bottom: 10px;">Atualização Profissional</h4>
+                        <p>Cursos de curta duração para atualização em novas tecnologias e procedimentos.</p>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Área de Documentos -->
+    <!-- Área de Documentos - Versão Grid Centralizado -->
+    <section class="documents-section" id="documents">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title" style="color: white;">Autenticação de Documentos</h2>
+                <p class="section-subtitle" style="color: rgba(255,255,255,0.9);">
+                    Valide a autenticidade dos documentos emitidos pela FACOP
+                </p>
+            </div>
+
+            <div class="documents-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; justify-items: center;">
+                <!-- Primeiro Card -->
+                <div class="document-card" onclick="openDocumentModal(event)"
+                    style="width: 100%; max-width: 350px; text-align: center;">
+                    <div style="font-size: 40px; margin-bottom: 20px;">
+                        <i class="fas fa-file-certificate"></i>
+                    </div>
+                    <h4 style="margin-bottom: 15px; font-size: 1.2rem;">Validar Documento</h4>
+                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
+                        Verifique a autenticidade de diplomas, históricos e declarações emitidos pela FACOP
+                    </p>
+                    <div class="btn btn-primary" style="margin: 0 auto;">
+                        <i class="fas fa-search"></i> Validar Agora
+                    </div>
+                </div>
+
+                <!-- Segundo Card -->
+                <div class="document-card" onclick="openDocumentModal(event)"
+                    style="width: 100%; max-width: 350px; text-align: center;">
+                    <div style="font-size: 40px; margin-bottom: 20px;">
+                        <i class="fas fa-graduation-cap"></i>
+                    </div>
+                    <h4 style="margin-bottom: 15px; font-size: 1.2rem;">Diplomas e Históricos</h4>
+                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
+                        Solicite 2ª via de documentos acadêmicos com autenticação digital
+                    </p>
+                    <div class="btn btn-rock" style="margin: 0 auto;">
+                        <i class="fas fa-file-download"></i> Solicitar
+                    </div>
+                </div>
+
+                <!-- Terceiro Card -->
+                <div class="document-card" onclick="openDocumentModal(event)"
+                    style="width: 100%; max-width: 350px; text-align: center;">
+                    <div style="font-size: 40px; margin-bottom: 20px;">
+                        <i class="fas fa-qrcode"></i>
+                    </div>
+                    <h4 style="margin-bottom: 15px; font-size: 1.2rem;">Verificação QR Code</h4>
+                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
+                        Documentos com código QR para verificação instantânea de autenticidade
+                    </p>
+                    <div class="btn" style="background: var(--accent-color); margin: 0 auto;">
+                        <i class="fas fa-mobile-alt"></i> Verificar QR
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- FAQ e Ouvidoria - Corrigido -->
+    <section class="faq-section" id="faq">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Perguntas Frequentes</h2>
+                <p class="section-subtitle">Tire suas dúvidas sobre a FACOP e a parceria com o SiGEU</p>
+            </div>
+
+            <div class="faq-container" id="faqContainer">
+                <!-- FAQ items serão adicionados via JavaScript -->
+            </div>
+
+            <div class="ouvidoria-box">
+                <h3 style="color: var(--primary-color); margin-bottom: 20px;">
+                    <i class="fas fa-headset"></i> OUVIDORIA
+                </h3>
+                <p style="margin-bottom: 25px; font-size: 1.1rem;">
+                    A Ouvidoria é o canal oficial para manifestações sobre serviços acadêmicos,
+                    administrativos e relacionamento institucional. Sua manifestação será tratada
+                    com sigilo e responderemos em até 10 dias úteis.
+                </p>
+                <button class="btn btn-primary" onclick="openOuvidoriaModal(event)">
+                    <i class="fas fa-comments"></i> Acessar Ouvidoria
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="main-footer" id="contact">
+        <div class="footer-wave"></div>
+        <div class="container">
+            <div class="footer-grid">
+                <div>
+                    <h4 style="margin-bottom: 25px; color: white;">FACOP</h4>
+                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
+                        <strong>Faculdade do Centro Oeste Paulista - Mantenedora</strong><br>
+                        Código MEC: 1135<br>
+                        Situação: ATIVA<br>
+                        Credenciada pelo Ministério da Educação
+                    </p>
+                    <div style="margin-top: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
+                            <span style="opacity: 0.9;">Credenciamento MEC</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
+                            <span style="opacity: 0.9;">Reconhecimento de Cursos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 style="margin-bottom: 25px; color: white;">Parceria Estratégica</h4>
+                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
+                        <strong>SISTEMA SiGEU</strong><br>
+                        Sistema de Gestão Educacional Unificada<br>
+                        Contrato de Administração Educacional (CAE)<br>
+                        Validação: Processo/Contrato nº 2025/2
+                    </p>
+                    <div class="mec-verified">
+                        <i class="fas fa-shield-alt"></i> PARCERIA VALIDADA PELO MEC
+                    </div>
+                </div>
+
+                <div>
+                    <h4 style="margin-bottom: 25px; color: #ffffff;">
+                        Verificação MEC
+                    </h4>
+
+                    <p style="opacity: 0.9; margin-bottom: 15px; font-size: 0.9rem; color: #ffffff;">
+                        Clique na imagem abaixo para verificar o credenciamento da FACOP diretamente no sistema do MEC:
+                    </p>
+
+                    <div style="text-align: center;">
+                        <a href="https://emec.mec.gov.br/emec/consulta-cadastro/detalhamento/d96957f455f6405d14c6542552b0f6eb/MTkzMjU="
+                            target="_blank">
+                            <img src="{{ url_for('static', filename='img/consultamec.png') }}"
+                                alt="Clique para consultar o status da FACOP / SiGEU no MEC" width="120"
+                                style="cursor: pointer;">
+                        </a>
+                    </div>
+
+                    <p style="margin-top: 10px; font-size: 0.8rem; opacity: 0.8; color: #ffffff; text-align: center;">
+                        e-MEC: 1135/2024 — FACOP
+                    </p>
+                </div>
+
+                <div>
+                    <h4 style="margin-bottom: 25px; color: white;">Contato</h4>
+                    <div style="margin-bottom: 15px;">
+                        <i class="fas fa-map-marker-alt" style="margin-right: 10px; opacity: 0.8;"></i>
+                        <span style="opacity: 0.9;">Av. Paulista, 1000 - São Paulo/SP</span>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <i class="fas fa-phone" style="margin-right: 10px; opacity: 0.8;"></i>
+                        <span style="opacity: 0.9; display: block;">(11) 3302-0501</span>
+                        <span style="opacity: 0.9; display: block;">(21) 3795-0444</span>
+                        <span style="opacity: 0.9; display: block;">(21) 99002-0262</span>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <i class="fas fa-envelope" style="margin-right: 10px; opacity: 0.8;"></i>
+                        <span style="opacity: 0.9; display: block;">contato@centroeducacionalunificado.com.br</span>
+                        <span style="opacity: 0.9; display: block;">contato@facop.edu.br</span>
+                        <span style="opacity: 0.9; display: block;">academico@sigeu.com.br</span>
+                    </div>
+
+                    <div class="header-social">
+                        <a href="https://wa.me/5521990020262" target="_blank" class="social-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </a>
+                        <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="social-icon"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 60px; padding-top: 30px; text-align: center; opacity: 0.8;">
+                <p style="margin-bottom: 10px;">
+                    &copy; 2026 Sistema de Gestão Educacional Unificada & FACOP. Todos os direitos reservados.
+                </p>
+                <p style="font-size: 0.9rem;">
+                    CNPJ MANETEDORA: 04.344.730/0003-22 |
+                    Em parceria contratual com o SISTEMA SiGEU |
+                    Credenciada pela Portaria MEC nº 1.135/2024
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal WhatsApp -->
+    <div class="modal" id="whatsappModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('whatsappModal')">&times;</button>
+            <div style="margin-bottom: 25px;">
+                <div style="font-size: 60px; color: #25D366; margin-bottom: 15px;">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">Fale com nosso time comercial</h3>
+                <p style="color: var(--medium-gray);">
+                    Clique no botão abaixo para conversar diretamente com nossos especialistas em WhatsApp.
+                    Tire todas suas dúvidas sobre matrículas, cursos, investimentos e muito mais!
+                </p>
+            </div>
+
+            <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20o%20curso%20"
+                target="_blank" class="whatsapp-btn-large">
+                <i class="fab fa-whatsapp"></i> Conversar no WhatsApp
+            </a>
+
+            <p style="margin-top: 20px; font-size: 0.9rem; color: var(--medium-gray);">
+                <i class="fas fa-clock"></i> Atendimento: Segunda a Sexta, 8h às 20h
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal Documentos -->
+    <div class="modal" id="documentModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('documentModal')">&times;</button>
+            <div style="margin-bottom: 25px;">
+                <div style="font-size: 60px; color: var(--primary-color); margin-bottom: 15px;">
+                    <i class="fas fa-file-certificate"></i>
+                </div>
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">Sistema de Documentos</h3>
+                <p style="color: var(--medium-gray);">
+                    Para acessar o sistema completo de validação de documentos, solicitação de diplomas
+                    e verificação QR Code, faça login na sua conta.
+                </p>
+            </div>
+
+            <a href="{{ url_for('login') }}" class="btn btn-primary" style="width: 100%; margin-bottom: 15px;">
+                <i class="fas fa-sign-in-alt"></i> Acessar Área do Aluno
+            </a>
+
+            <p style="font-size: 0.9rem; color: var(--medium-gray); margin-top: 20px;">
+                <i class="fas fa-info-circle"></i> Para validação pública de documentos sem login,
+                <a href="/validar-documento" style="color: var(--primary-color);">clique aqui</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal Ouvidoria -->
+    <div class="modal" id="ouvidoriaModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('ouvidoriaModal')">&times;</button>
+            <div style="margin-bottom: 25px;">
+                <div style="font-size: 60px; color: var(--rock-color); margin-bottom: 15px;">
+                    <i class="fas fa-headset"></i>
+                </div>
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">Ouvidoria FACOP</h3>
+                <p style="color: var(--medium-gray);">
+                    Utilize este canal para registrar elogios, sugestões, reclamações ou solicitações de informação.
+                    Sua manifestação será tratada com sigilo e responderemos em até 10 dias úteis.
+                </p>
+            </div>
+
+            <form id="ouvidoriaForm" style="text-align: left;">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Tipo de Manifestação</label>
+                    <select
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: var(--border-radius);">
+                        <option value="">Selecione...</option>
+                        <option value="reclamacao">Reclamação</option>
+                        <option value="sugestao">Sugestão</option>
+                        <option value="elogio">Elogio</option>
+                        <option value="informacao">Solicitação de Informação</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Seu Nome</label>
+                    <input type="text"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: var(--border-radius);"
+                        required>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Seu E-mail</label>
+                    <input type="email"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: var(--border-radius);"
+                        required>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Mensagem</label>
+                    <textarea rows="4"
+                        style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: var(--border-radius);"
+                        required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-rock" style="width: 100%;">
+                    <i class="fas fa-paper-plane"></i> Enviar para Ouvidoria
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // DADOS DE CURSOS COMPLETOS
+        const allCourses = {
+            graduation: [
+                { id: 1, title: 'Gestão de Recursos Humanos', category: 'Tecnólogo', duration: '2 anos', modality: 'EAD', description: 'Formação em gestão estratégica de pessoas, recrutamento, treinamento e desenvolvimento organizacional.', area: 'Gestão' },
+                { id: 2, title: 'Odontologia', category: 'Bacharelado/Pós/Especialização', duration: '5 anos', modality: 'Presencial', description: 'Formação completa em saúde bucal, com ênfase em clínica, cirurgia e ortodontia.', area: 'Saúde' },
+                { id: 3, title: 'Processos Gerenciais', category: 'Tecnólogo', duration: '2 anos', modality: 'EAD', description: 'Gestão empresarial, planejamento estratégico e controle de processos organizacionais.', area: 'Gestão' },
+                { id: 4, title: 'Administração', category: 'Especialização', duration: '4 anos', modality: 'Presencial/EAD', description: 'Formação em gestão empresarial, finanças, marketing e recursos humanos.', area: 'Gestão' },
+                { id: 5, title: 'Ciências Contábeis', category: 'Bacharelado/Pós/Especialização', duration: '4 anos', modality: 'EAD', description: 'Formação em contabilidade, auditoria, controladoria e perícia contábil.', area: 'Gestão' },
+                { id: 6, title: 'Pedagogia', category: 'Licenciatura', duration: '4 anos', modality: 'EAD', description: 'Formação para atuação na Educação Infantil, Ensino Fundamental e Gestão Escolar.', area: 'Educação' },
+                { id: 7, title: 'Direito', category: 'Bacharelado/Pós/Especialização', duration: '5 anos', modality: 'Presencial', description: 'Formação jurídica completa para atuação como advogado, juiz, promotor ou delegado.', area: 'Ciências Sociais' },
+                { id: 8, title: 'Enfermagem', category: 'Bacharelado/Pós/Especialização', duration: '5 anos', modality: 'Presencial', description: 'Formação para cuidado integral à saúde em diferentes níveis de atenção.', area: 'Saúde' },
+                { id: 9, title: 'Engenharia Civil', category: 'Extensão/Aperfeiçoamento', duration: '5 anos', modality: 'Presencial', description: 'Formação em projetos, construção e manutenção de edificações e infraestrutura.', area: 'Engenharia' },
+                { id: 10, title: 'Sistemas de Informação', category: 'Extensão/Aperfeiçoamento', duration: '4 anos', modality: 'EAD', description: 'Formação em desenvolvimento de software, banco de dados e gestão de TI.', area: 'Tecnologia' }
+            ],
+            postgraduate: [
+                { id: 11, title: 'Extensão em Gestão Empresarial', category: 'Extensão/Aperfeiçoamento', duration: '18 meses', modality: 'EAD', description: 'Especialização em gestão estratégica, finanças, marketing e operações.', area: 'Gestão' },
+                { id: 12, title: 'Contabilidade', category: 'Especialização', duration: '18 meses', modality: 'EAD', description: 'Aprofundamento em direito das obrigações, contratos e responsabilidade civil.', area: 'Direito' },
+                { id: 13, title: 'Enfermagem', category: 'Isoladas', duration: '18 meses', modality: 'EAD', description: 'Especialização em atendimento de emergência e cuidados intensivos.', area: 'Saúde' },
+                { id: 14, title: 'Pós em Biomedicina Estética', category: 'Especialização', duration: '18 meses', modality: 'EAD', description: 'Formação em procedimentos estéticos e análises laboratoriais.', area: 'Saúde' },
+                { id: 15, title: 'Engenharia Mecânica', category: 'Isoladas', duration: '18 meses', modality: 'EAD', description: 'Especialização em atendimento educacional especializado e inclusão.', area: 'Educação' },
+                { id: 16, title: 'Pós em Psicopedagogia', category: 'Isoladas', duration: '18 meses', modality: 'EAD', description: 'Formação em diagnóstico e intervenção nas dificuldades de aprendizagem.', area: 'Educação' },
+                { id: 17, title: 'Engenharia de Segurança', category: 'Isoladas', duration: '18 meses', modality: 'EAD', description: 'Especialização em segurança do trabalho e prevenção de acidentes.', area: 'Engenharia' },
+                { id: 18, title: 'Data Science', category: 'Especialização', duration: '18 meses', modality: 'EAD', description: 'Formação em análise de dados, machine learning e business intelligence.', area: 'Tecnologia' }
+            ],
+            masters: [
+                { id: 19, title: 'Administração', category: 'Isoladas', duration: '24 meses', modality: 'Híbrido', description: 'Mestrado acadêmico com ênfase em pesquisa em Gestão Organizacional.', area: 'Gestão' },
+                { id: 20, title: 'Educação', category: 'Isoladas', duration: '24 meses', modality: 'Híbrido', description: 'Formação para pesquisa em políticas educacionais e práticas pedagógicas.', area: 'Educação' },
+                { id: 21, title: 'Direito', category: 'Isoladas', duration: '24 meses', modality: 'Híbrido', description: 'Pesquisa em teoria constitucional, direitos fundamentais e jurisdição.', area: 'Direito' },
+                { id: 22, title: 'Saúde', category: 'Extensão/Estágio', duration: '24 meses', modality: 'Híbrido', description: 'Formação em políticas públicas, epidemiologia e gestão em saúde.', area: 'Saúde' },
+                { id: 23, title: 'Engenharias', category: 'Extensão/Estágio', duration: '24 meses', modality: 'Híbrido', description: 'Estágios e Pesquisas em otimização de processos e gestão da engenharia.', area: 'Engenharia' }
+            ],
+            doctorate: [
+                { id: 24, title: 'Doutorado em Educação', category: 'Isoladas', duration: '48 meses', modality: 'Híbrido', description: 'Formação de pesquisadores de alto nível em Ciências da Educação.', area: 'Educação' },
+                { id: 25, title: 'Ciências Biológicas', category: 'Licenciatura', duration: '48 meses', modality: 'Híbrido', description: 'Formação para produção de pesquisa original em Ciências Jurídicas.', area: 'Direito' },
+                { id: 26, title: 'Administração', category: 'Extensão/Estágio', duration: '48 meses', modality: 'Híbrido', description: 'Estágio e Extensão em prática e teorias organizacionais e gestão.', area: 'Gestão' },
+                { id: 27, title: 'Saúde Coletiva', category: 'Extensão/Estágio', duration: '48 meses', modality: 'Híbrido', description: 'Estágio e Extensão em produção de conhecimento em saúde pública e coletiva.', area: 'Saúde' }
+            ]
+        };
+
+        // FUNÇÕES DO SISTEMA
+        function initCourses() {
+            renderCourses('all');
+            initCourseTabs();
+            initFAQ();
+        }
+
+        function renderCourses(category, searchTerm = '') {
+            const coursesGrid = document.getElementById('coursesGrid');
+            coursesGrid.innerHTML = '';
+
+            let coursesToShow = [];
+
+            if (category === 'all') {
+                coursesToShow = [
+                    ...allCourses.graduation,
+                    ...allCourses.postgraduate,
+                    ...allCourses.masters,
+                    ...allCourses.doctorate
+                ];
+            } else {
+                coursesToShow = allCourses[category] || [];
+            }
+
+            // Filtro de pesquisa
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                coursesToShow = coursesToShow.filter(course =>
+                    course.title.toLowerCase().includes(term) ||
+                    course.description.toLowerCase().includes(term) ||
+                    course.area.toLowerCase().includes(term) ||
+                    course.category.toLowerCase().includes(term)
+                );
+            }
+
+            if (coursesToShow.length === 0) {
+                coursesGrid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; background: var(--white); border-radius: var(--border-radius);">
+                        <i class="fas fa-search" style="font-size: 48px; color: var(--medium-gray); margin-bottom: 20px;"></i>
+                        <h3 style="color: var(--primary-color); margin-bottom: 15px;">Nenhum curso encontrado</h3>
+                        <p style="color: var(--medium-gray);">Tente alterar os filtros ou buscar por outro termo.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            coursesToShow.forEach(course => {
+                const courseCard = document.createElement('div');
+                courseCard.className = 'course-card';
+                courseCard.innerHTML = `
+                    <div class="course-header" style="background: ${getCategoryColor(course.category)}">
+                        <div class="course-category">${course.category} • ${course.area}</div>
+                        <h4 style="font-size: 1.3rem; margin: 10px 0;">${course.title}</h4>
+                        <div class="course-meta">
+                            <span><i class="fas fa-clock"></i> ${course.duration}</span>
+                            <span><i class="fas fa-laptop"></i> ${course.modality}</span>
+                        </div>
+                    </div>
+                    <div style="padding: 25px;">
+                        <p style="color: var(--medium-gray); margin-bottom: 25px; line-height: 1.6;">
+                            ${course.description}
+                        </p>
+                        <button class="btn btn-primary whatsapp-course-btn" 
+                                data-course="${course.title}"
+                                onclick="openWhatsAppModal('${course.title}')"
+                                style="width: 100%;">
+                            <i class="fab fa-whatsapp"></i> Saiba Mais no WhatsApp
+                        </button>
+                    </div>
+                `;
+                coursesGrid.appendChild(courseCard);
+            });
+        }
+
+        function getCategoryColor(category) {
+            const colors = {
+                'Tecnólogo': 'var(--primary-color)',
+                'Bacharelado/Pós/Especialização': 'purple',
+                'Licenciatura': 'var(--accent-color)',
+                'Especialização': 'green',
+                'Extensão/Aperfeiçoamento': 'var(--secondary-color)',
+                'Isoladas': 'var(--primary-dark)',
+                'Extensão/Estágio': 'firebrick'
+            };
+            return colors[category] || 'var(--primary-color)';
+        }
+
+        function initCourseTabs() {
+            const tabs = document.querySelectorAll('.course-tab-btn');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    renderCourses(tab.dataset.category);
+                });
+            });
+        }
+
+        function searchCourses() {
+            const searchTerm = document.getElementById('courseSearch').value;
+            const activeTab = document.querySelector('.course-tab-btn.active');
+            renderCourses(activeTab.dataset.category, searchTerm);
+        }
+
+        // FAQ SYSTEM
+        function initFAQ() {
+            const faqData = [
+                {
+                    question: 'Como funciona a parceria FACOP e SiGEU?',
+                    answer: 'A FACOP atua como instituição mantenedora credenciada pelo MEC (código 1135), responsável pela certificação oficial. O SiGEU (Sistema de Gestão Educacional Unificada) é o provedor acadêmico contratado para operacionalização pedagógica, fornecendo matrizes curriculares, corpo docente e plataforma tecnológica. A parceria é regulamentada por contrato de prestação de serviços educacionais validado pelo MEC.'
+                },
+                {
+                    question: 'Os diplomas são emitidos pela FACOP ou pelo SiGEU?',
+                    answer: 'Os diplomas são emitidos EXCLUSIVAMENTE pela FACOP, instituição mantenedora credenciada pelo MEC. O SiGEU atua como provedor dos serviços acadêmicos, mas a certificação, registro e diplomação são de responsabilidade da FACOP, garantindo validade nacional e reconhecimento pelo Ministério da Educação.'
+                },
+                {
+                    question: 'A parceria é reconhecida pelo Ministério da Educação?',
+                    answer: 'SIM. A parceria está formalizada em contrato de prestação de serviços educacionais nos termos da Lei nº 9.870/1999, Lei Lei nº 11.196/2005, Lei nº 13.243/2016 e Lei n° 9.394/1996 e foi analisada e validada durante o processo de credenciamento da FACOP (Portaria MEC nº 1.135/2024). O modelo atende todas as exigências da Secretaria de Regulação e Supervisão da Educação Superior (SERES/MEC).'
+                },
+                {
+                    question: 'Posso fazer disciplinas isoladas sem me matricular em um curso completo?',
+                    answer: 'SIM. Oferecemos matrícula em disciplinas isoladas para estudantes que desejam complementar formação, fazer aproveitamento de estudos ou cursar disciplinas específicas. As disciplinas cursadas podem posteriormente ser aproveitadas em cursos regulares, mediante análise de equivalência. <a href="#disciplinas-isoladas" style="color: var(--primary-color);">Clique aqui para ver as disciplinas disponíveis</a>.'
+                },
+                {
+                    question: 'Como funciona o sistema de disciplinas isoladas?',
+                    answer: 'O sistema de disciplinas isoladas permite que você se matricule em disciplinas específicas sem precisar ingressar em um curso completo. Após aprovação na disciplina, você recebe um certificado de conclusã, histórico e plano de ensino que pode ser utilizado para aproveitamento de estudos em cursos regulares ou para comprovar conhecimento específico.'
+                },
+                {
+                    question: 'Quais as formas de pagamento disponíveis?',
+                    answer: 'Oferecemos diversas opções: boleto bancário, cartão de crédito (até 12x), PIX em 2X e programas de bolsas. Para informações específicas sobre valores e condições, entre em contato com nossa equipe comercial pelo WhatsApp (21) 99002-0262.'
+                },
+                {
+                    question: 'Os cursos são totalmente online ou há aulas presenciais?',
+                    answer: 'Oferecemos cursos em diferentes modalidades: 100% online (EAD), semipresencial (híbrido) e presencial. A modalidade depende do curso específico. Consulte a página do curso desejado para verificar a modalidade disponível.'
+                },
+                {
+                    question: 'Como validar a autenticidade de um documento da FACOP/SiGEU?',
+                    answer: 'Para validar a autenticidade de diplomas, históricos ou declarações emitidos pela FACOP, utilize nosso sistema de validação de documentos. Você pode acessar através do botão "Validar Documento" no cabeçalho do site ou na seção de Documentos. O sistema permite verificação por código de autenticação ou QR Code.'
+                }
+            ];
+
+            const faqContainer = document.getElementById('faqContainer');
+            faqData.forEach(item => {
+                const faqItem = document.createElement('div');
+                faqItem.className = 'faq-item';
+                faqItem.innerHTML = `
+                    <div class="faq-question">
+                        ${item.question}
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>${item.answer}</p>
+                    </div>
+                `;
+                faqContainer.appendChild(faqItem);
+            });
+
+            // Adicionar eventos aos FAQs
+            document.querySelectorAll('.faq-question').forEach(question => {
+                question.addEventListener('click', () => {
+                    const item = question.parentElement;
+                    const isActive = item.classList.contains('active');
+
+                    // Fechar todos os outros
+                    document.querySelectorAll('.faq-item').forEach(otherItem => {
+                        if (otherItem !== item) {
+                            otherItem.classList.remove('active');
+                        }
+                    });
+
+                    // Alternar o atual
+                    item.classList.toggle('active', !isActive);
+                });
+            });
+        }
+
+        // MODAL FUNCTIONS
+        function openWhatsAppModal(courseName = '') {
+            const message = courseName
+                ? `Olá! Gostaria de mais informações sobre o curso de ${courseName} da FACOP/SiGEU.`
+                : 'Olá! Gostaria de mais informações sobre os cursos e atividades da FACOP/SiGEU.';
+
+            const whatsappBtn = document.querySelector('#whatsappModal .whatsapp-btn-large');
+            whatsappBtn.href = `https://wa.me/5521990020262?text=${encodeURIComponent(message)}`;
+
+            document.getElementById('whatsappModal').style.display = 'flex';
+        }
+
+        function openDocumentModal(e) {
+            e.preventDefault();
+            document.getElementById('documentModal').style.display = 'flex';
+        }
+
+        function openOuvidoriaModal(e) {
+            e.preventDefault();
+            document.getElementById('ouvidoriaModal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // MOBILE MENU - CORRIGIDO
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const navMenu = document.getElementById('navMenu');
+
+        mobileMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navMenu.classList.toggle('active');
+
+            // Altera o ícone
+            const icon = mobileMenuBtn.querySelector('i');
+            if (navMenu.classList.contains('active')) {
+                icon.classList.remove('fa-bars');
+                icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+
+        // Fechar menu ao clicar em link
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                navMenu.classList.remove('active');
+                const icon = mobileMenuBtn.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            });
+        });
+
+        // Fechar menu ao clicar fora
+        document.addEventListener('click', (e) => {
+            if (!navMenu.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+                navMenu.classList.remove('active');
+                const icon = mobileMenuBtn.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
+            }
+        });
+
+        // SMOOTH SCROLL
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const href = this.getAttribute('href');
+                if (href === '#' || href === '#!') return;
+
+                e.preventDefault();
+                const targetElement = document.querySelector(href);
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 100,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // FORM OUVIDORIA
+        document.getElementById('ouvidoriaForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            alert('Obrigado por sua manifestação! Entraremos em contato em até 10 dias úteis.');
+            closeModal('ouvidoriaModal');
+            this.reset();
+        });
+
+        // CANVAS BACKGROUND
+        const canvas = document.getElementById('heroCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = Math.random() * 1 - 0.5;
+                this.speedY = Math.random() * 1 - 0.5;
+                this.color = `rgba(255, 255, 255, ${Math.random() * 0.3 + 0.1})`;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x > canvas.width) this.x = 0;
+                else if (this.x < 0) this.x = canvas.width;
+                if (this.y > canvas.height) this.y = 0;
+                else if (this.y < 0) this.y = canvas.height;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        let particles = [];
+
+        function initParticles() {
+            particles = [];
+            const particleCount = Math.floor((canvas.width * canvas.height) / 10000);
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Conexões
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - distance / 100)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+
+            requestAnimationFrame(animateParticles);
+        }
+
+        // Inicializar
+        window.addEventListener('load', () => {
+            resizeCanvas();
+            initParticles();
+            animateParticles();
+            initCourses();
+        });
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            initParticles();
+        });
+
+        // Fechar modais ao clicar fora
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>

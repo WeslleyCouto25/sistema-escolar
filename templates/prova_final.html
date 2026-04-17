@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Prova Final - {{ disciplina['nome'] }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .timer-container {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: var(--danger-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            z-index: 1000;
+            font-size: 1.2em;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .questao {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+        .opcao {
+            border: 2px solid #dee2e6;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .opcao:hover {
+            background: #e7f1ff;
+            border-color: var(--primary-light);
+        }
+        .opcao.selected {
+            background: #d4edda;
+            border-color: var(--success-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="topbar">
+        <div class="navbar-header">
+            <div class="logo-text">PROVA FINAL - {{ disciplina['nome'] }}</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/avaliacao-final" class="logout-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </header>
+
+    <div class="timer-container" id="timerElement">
+        <i class="fas fa-clock"></i>
+        <span id="timerText">90:00</span>
+    </div>
+
+    <div class="main-container">
+        <main class="content-area" style="padding: 20px;">
+            <div style="max-width: 800px; margin: auto;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h1>📝 Prova Final - {{ disciplina['nome'] }}</h1>
+                    <p><strong>{{ total_questoes }} questões</strong> • Tempo: 90 minutos</p>
+                    <p style="color: var(--medium-gray); font-size: 14px;">
+                        <i class="fas fa-info-circle"></i> Esta prova vale 50% da sua nota final
+                    </p>
+                </div>
+
+                <form method="post" action="/avaliacao-final/correcao/{{ disciplina_id }}" id="formProva">
+                    {% for q in questoes %}
+                    <div class="questao">
+                        <h3>Questão {{ loop.index }}</h3>
+                        <p><strong>{{ q['pergunta'] }}</strong></p>
+                        
+                        <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'A')">
+                            <input type="radio" name="q{{ loop.index }}" value="A" hidden>
+                            <strong>A)</strong> {{ q['opcao_a'] }}
+                        </div>
+                        
+                        <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'B')">
+                            <input type="radio" name="q{{ loop.index }}" value="B" hidden>
+                            <strong>B)</strong> {{ q['opcao_b'] }}
+                        </div>
+                        
+                        <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'C')">
+                            <input type="radio" name="q{{ loop.index }}" value="C" hidden>
+                            <strong>C)</strong> {{ q['opcao_c'] }}
+                        </div>
+                        
+                        <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'D')">
+                            <input type="radio" name="q{{ loop.index }}" value="D" hidden>
+                            <strong>D)</strong> {{ q['opcao_d'] }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 15px; font-size: 18px;">
+                        <i class="fas fa-paper-plane"></i> 📤 Enviar Prova Final
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Timer de 90 minutos
+        let tempoRestante = 90 * 60;
+        
+        function atualizarTimer() {
+            const minutos = Math.floor(tempoRestante / 60);
+            const segundos = tempoRestante % 60;
+            const tempoFormatado = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+            
+            document.getElementById('timerText').textContent = tempoFormatado;
+            
+            if (tempoRestante <= 0) {
+                document.getElementById('formProva').submit();
+                return;
+            }
+            
+            tempoRestante--;
+        }
+        
+        setInterval(atualizarTimer, 1000);
+        
+        // Seleção de opções
+        function selectOption(div, questaoNum, letra) {
+            // Desselecionar outras opções da mesma questão
+            const questao = div.closest('.questao');
+            questao.querySelectorAll('.opcao').forEach(op => {
+                op.classList.remove('selected');
+            });
+            
+            // Selecionar esta opção
+            div.classList.add('selected');
+            
+            // Marcar radio button
+            const radio = div.querySelector('input[type="radio"]');
+            radio.checked = true;
+        }
+        
+        // Prevenir saída
+        window.addEventListener('beforeunload', function(e) {
+            e.preventDefault();
+            e.returnValue = '⚠️ Se você sair agora, a prova será encerrada.';
+        });
+    </script>
+</body>
+</html>

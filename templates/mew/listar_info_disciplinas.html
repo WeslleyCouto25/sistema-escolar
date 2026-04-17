@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listar Disciplinas - MEW</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .back-btn {
+            display: inline-block;
+            background: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            margin-bottom: 20px;
+        }
+        .back-btn:hover {
+            background: #5a6268;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 4px;
+            text-decoration: none;
+            margin-right: 5px;
+        }
+        .btn-primary {
+            background: #1a237e;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0d1b6b;
+        }
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .filter-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            min-width: 150px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #1a237e;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/mew/info-disciplinas" class="back-btn">← Voltar</a>
+        <h1>📋 Lista de Disciplinas com Informações</h1>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ disciplinas|length }}</div>
+                <div class="stat-label">Total de Disciplinas</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">
+                    {{ disciplinas|selectattr('docente_nome')|list|length }}
+                </div>
+                <div class="stat-label">Com Docente Atribuído</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">
+                    {{ disciplinas|selectattr('total_alunos', 'gt', 0)|list|length }}
+                </div>
+                <div class="stat-label">Com Alunos Matriculados</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">
+                    {{ disciplinas|selectattr('carga_horaria', 'ne', 80)|selectattr('carga_horaria')|list|length }}
+                </div>
+                <div class="stat-label">Carga Horária Personalizada</div>
+            </div>
+        </div>
+        
+        <div class="filters">
+            <div class="filter-group">
+                <label for="filterDocente">Filtrar por Docente</label>
+                <select id="filterDocente" class="filter-select" onchange="filtrarTabela()">
+                    <option value="">Todos os docentes</option>
+                    {% set docentes_unicos = [] %}
+                    {% for d in disciplinas if d.docente_nome and d.docente_nome not in docentes_unicos %}
+                    {% set _ = docentes_unicos.append(d.docente_nome) %}
+                    <option value="{{ d.docente_nome }}">{{ d.docente_nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="filterCarga">Filtrar por Carga Horária</label>
+                <select id="filterCarga" class="filter-select" onchange="filtrarTabela()">
+                    <option value="">Todas as cargas</option>
+                    <option value="80">80 horas (padrão)</option>
+                    <option value="personalizada">Personalizada</option>
+                </select>
+            </div>
+            
+            <div class="filter-group">
+                <label for="filterAlunos">Filtrar por Alunos</label>
+                <select id="filterAlunos" class="filter-select" onchange="filtrarTabela()">
+                    <option value="">Todos</option>
+                    <option value="com_alunos">Com alunos</option>
+                    <option value="sem_alunos">Sem alunos</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="table-container">
+                <table id="disciplinasTable">
+                    <thead>
+                        <tr>
+                            <th>Disciplina</th>
+                            <th>Carga Horária</th>
+                            <th>Docente</th>
+                            <th>Titulação</th>
+                            <th>Ano/Semestre</th>
+                            <th>Alunos Matriculados</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for disciplina in disciplinas %}
+                        <tr class="disciplina-row" 
+                            data-docente="{{ disciplina.docente_nome or '' }}"
+                            data-carga="{{ disciplina.carga_horaria or 80 }}"
+                            data-alunos="{{ disciplina.total_alunos or 0 }}">
+                            <td>
+                                <strong>{{ disciplina.nome }}</strong>
+                            </td>
+                            <td>
+                                {% if disciplina.carga_horaria %}
+                                    <span class="badge {% if disciplina.carga_horaria == 80 %}badge-info{% else %}badge-success{% endif %}">
+                                        {{ disciplina.carga_horaria }}h
+                                        {% if disciplina.carga_horaria != 80 %}
+                                        <small>(personalizada)</small>
+                                        {% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-warning">80h (padrão)</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if disciplina.docente_nome %}
+                                    {{ disciplina.docente_nome }}
+                                {% else %}
+                                    <span style="color: #dc3545; font-style: italic;">Não atribuído</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ disciplina.docente_titulacao or '-' }}
+                            </td>
+                            <td>
+                                {% if disciplina.ano_semestre %}
+                                    <span class="badge badge-info">{{ disciplina.ano_semestre }}</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if disciplina.total_alunos %}
+                                    <span class="badge {% if disciplina.total_alunos > 0 %}badge-success{% else %}badge-warning{% endif %}">
+                                        {{ disciplina.total_alunos }} aluno(s)
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-warning">0 alunos</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="/mew/atribuir-info-disciplina" class="btn-small btn-primary">
+                                    ⚙️ Configurar
+                                </a>
+                                <a href="/mew/disciplinas" class="btn-small btn-primary">
+                                    📝 Conteúdo
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <div>📚</div>
+                                <h3>Nenhuma disciplina encontrada</h3>
+                                <p>Cadastre disciplinas primeiro em "Gerenciar Disciplinas"</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>📊 Exportar Dados</h3>
+            <p>Exporte a lista de disciplinas com todas as informações:</p>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="exportarCSV()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                    📥 Exportar CSV
+                </button>
+                <button onclick="exportarJSON()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                    📥 Exportar JSON
+                </button>
+                <button onclick="imprimirTabela()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                    🖨️ Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function filtrarTabela() {
+            const filtroDocente = document.getElementById('filterDocente').value.toLowerCase();
+            const filtroCarga = document.getElementById('filterCarga').value;
+            const filtroAlunos = document.getElementById('filterAlunos').value;
+            
+            const rows = document.querySelectorAll('.disciplina-row');
+            
+            rows.forEach(row => {
+                const docente = row.getAttribute('data-docente').toLowerCase();
+                const carga = row.getAttribute('data-carga');
+                const alunos = parseInt(row.getAttribute('data-alunos'));
+                
+                let show = true;
+                
+                // Filtro por docente
+                if (filtroDocente && !docente.includes(filtroDocente)) {
+                    show = false;
+                }
+                
+                // Filtro por carga horária
+                if (filtroCarga === '80' && carga !== '80') {
+                    show = false;
+                } else if (filtroCarga === 'personalizada' && carga === '80') {
+                    show = false;
+                }
+                
+                // Filtro por alunos
+                if (filtroAlunos === 'com_alunos' && alunos === 0) {
+                    show = false;
+                } else if (filtroAlunos === 'sem_alunos' && alunos > 0) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        }
+        
+        function exportarCSV() {
+            const rows = document.querySelectorAll('.disciplina-row:not([style*="display: none"])');
+            let csv = 'Disciplina,Carga Horária,Docente,Titulação,Ano/Semestre,Alunos\n';
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const rowData = [
+                    cells[0].textContent.trim(),
+                    cells[1].textContent.replace(/[^\d]/g, ''),
+                    cells[2].textContent.trim(),
+                    cells[3].textContent.trim(),
+                    cells[4].textContent.trim(),
+                    cells[5].textContent.replace(/[^\d]/g, '')
+                ];
+                
+                // Escapar vírgulas e aspas
+                const escapedData = rowData.map(cell => {
+                    if (cell.includes(',') || cell.includes('"')) {
+                        return `"${cell.replace(/"/g, '""')}"`;
+                    }
+                    return cell;
+                });
+                
+                csv += escapedData.join(',') + '\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'disciplinas_informacoes.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function exportarJSON() {
+            const rows = document.querySelectorAll('.disciplina-row:not([style*="display: none"])');
+            const data = [];
+            
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                data.push({
+                    disciplina: cells[0].textContent.trim(),
+                    carga_horaria: cells[1].textContent.replace(/[^\d]/g, ''),
+                    docente: cells[2].textContent.trim(),
+                    titulacao: cells[3].textContent.trim(),
+                    ano_semestre: cells[4].textContent.trim(),
+                    alunos: cells[5].textContent.replace(/[^\d]/g, '')
+                });
+            });
+            
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'disciplinas_informacoes.json';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function imprimirTabela() {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Lista de Disciplinas</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        h1 { color: #1a237e; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+                        th { background: #f5f5f5; }
+                        .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>📋 Lista de Disciplinas com Informações</h1>
+                    <p>Data: ${new Date().toLocaleDateString('pt-BR')}</p>
+                    ${document.getElementById('disciplinasTable').outerHTML}
+                    <div class="footer">
+                        Gerado pelo Sistema MEW - Faculdade do Centro Oeste Paulista
+                    </div>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+    </script>
+</body>
+</html>
