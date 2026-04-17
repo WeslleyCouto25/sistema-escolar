@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>{{ disciplina['nome'] }} | FACOP SiGEU</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0a2c4e;
+            --primary-light: #1e3a5f;
+            --primary-dark: #051e33;
+            --secondary: #b8860b;
+            --secondary-light: #daa520;
+            --accent: #8b0000;
+            --success: #2e7d32;
+            --warning: #ed6c02;
+            --info: #0288d1;
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-800);
+            line-height: 1.5;
+        }
+
+        /* Topbar */
+        .topbar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            height: 70px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            color: white;
+            box-shadow: var(--shadow-md);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-text {
+            font-weight: 600;
+            font-size: 1.25rem;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 40px;
+        }
+
+        .spacer { flex: 1; }
+
+        .logout-btn {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover { background: rgba(255,255,255,0.2); }
+
+        /* Main Container */
+        .main-container {
+            display: flex;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .user-profile {
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .profile-img {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid var(--secondary);
+        }
+
+        .profile-img i { font-size: 40px; color: white; }
+        .profile-text .name { font-weight: 600; margin-bottom: 5px; }
+        .profile-text .ra { font-size: 0.9rem; opacity: 0.8; background: rgba(255,255,255,0.15); padding: 4px 12px; border-radius: 20px; display: inline-block; }
+
+        .main-menu { display: flex; flex-direction: column; gap: 5px; padding: 10px; }
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            gap: 12px;
+            border-radius: var(--radius-md);
+            transition: all 0.2s;
+        }
+        .menu-item:hover { background: rgba(255,255,255,0.1); }
+        .menu-item.active { background: rgba(255,255,255,0.15); border-left: 4px solid var(--secondary); font-weight: 600; }
+        .menu-item i { width: 24px; text-align: center; }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: var(--gray-100);
+        }
+
+        /* Discipline Header */
+        .discipline-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 40px;
+            border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 30px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 30px;
+        }
+
+        /* Mural Card */
+        .mural-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 30px;
+            overflow: hidden;
+            border: 1px solid var(--gray-200);
+        }
+
+        .mural-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 15px 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .mural-header i { font-size: 1.5rem; }
+        .mural-header h3 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+
+        .mural-content {
+            padding: 25px;
+            font-size: 1rem;
+            line-height: 1.7;
+            color: var(--gray-700);
+        }
+
+        .mural-content img { max-width: 100%; border-radius: var(--radius-md); }
+        .mural-content iframe { max-width: 100%; border-radius: var(--radius-md); }
+
+        /* Upload Area */
+        .upload-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 30px;
+            border: 2px dashed var(--gray-300);
+            transition: all 0.3s;
+        }
+
+        .upload-card:hover {
+            border-color: var(--secondary);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .upload-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .upload-header i {
+            font-size: 1.8rem;
+            color: var(--secondary);
+        }
+
+        .upload-header h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .upload-body {
+            padding: 25px;
+        }
+
+        .file-upload-area {
+            border: 2px dashed var(--gray-300);
+            border-radius: var(--radius-md);
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--gray-50);
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--secondary);
+            background: rgba(184, 134, 11, 0.05);
+        }
+
+        .file-upload-area i {
+            font-size: 3rem;
+            color: var(--gray-400);
+            margin-bottom: 15px;
+        }
+
+        .file-upload-area p {
+            color: var(--gray-600);
+            margin-bottom: 10px;
+        }
+
+        .file-upload-area small {
+            color: var(--gray-500);
+        }
+
+        .upload-preview {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .upload-preview.active { display: block; }
+
+        .preview-info {
+            background: var(--gray-50);
+            border-radius: var(--radius-md);
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .preview-info .file-name {
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        /* Anexos List */
+        .anexos-list {
+            margin-top: 30px;
+        }
+
+        .anexo-card {
+            background: white;
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid var(--gray-200);
+            transition: all 0.3s;
+        }
+
+        .anexo-card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .anexo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .anexo-file {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .anexo-file i {
+            font-size: 1.5rem;
+            color: var(--secondary);
+        }
+
+        .anexo-file a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .anexo-file a:hover { text-decoration: underline; }
+
+        .anexo-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-pendente { background: #fff3cd; color: #856404; }
+        .status-corrigido { background: #d1ecf1; color: #0c5460; }
+        .status-aprovado { background: #d4edda; color: #155724; }
+        .status-reprovado { background: #f8d7da; color: #721c24; }
+
+        .anexo-meta {
+            font-size: 0.85rem;
+            color: var(--gray-500);
+            margin-bottom: 10px;
+        }
+
+        .anexo-descricao {
+            color: var(--gray-600);
+            margin-bottom: 10px;
+            padding: 10px;
+            background: var(--gray-50);
+            border-radius: var(--radius-sm);
+        }
+
+        .anexo-feedback {
+            background: #e8f5e9;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            margin-top: 10px;
+            border-left: 4px solid var(--success);
+        }
+
+        .anexo-nota {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        /* Nota Final Card */
+        .nota-final-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: var(--radius-lg);
+            padding: 25px;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .nota-final-card h3 { margin-bottom: 15px; }
+        .nota-valor { font-size: 3rem; font-weight: 700; margin: 10px 0; }
+        .status-aprovado-text { background: var(--success); display: inline-block; padding: 5px 20px; border-radius: 20px; }
+        .status-reprovado-text { background: var(--accent); display: inline-block; padding: 5px 20px; border-radius: 20px; }
+        .status-cursando-text { background: var(--warning); display: inline-block; padding: 5px 20px; border-radius: 20px; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--radius-lg);
+            max-width: 500px;
+            width: 90%;
+            padding: 25px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 { margin: 0; color: var(--primary); }
+
+        .modal-close {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: var(--gray-500);
+        }
+
+        .btn-submit {
+            background: var(--secondary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--primary-dark);
+            color: white;
+            padding: 40px 0 20px;
+            margin-top: 60px;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.5);
+        }
+
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; }
+            .sidebar { width: 100%; max-height: 300px; overflow-y: auto; }
+            .content-area { padding: 20px; }
+            .page-title { font-size: 1.8rem; }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="topbar">
+        <div class="logo-text">FACOP • SiGEU</div>
+        <div class="spacer"></div>
+        <div class="user-menu">
+            <a href="/dashboard" class="logout-btn"><i class="fas fa-graduation-cap"></i><span>Dashboard</span></a>
+            <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i><span>Sair</span></a>
+        </div>
+    </header>
+
+    <div class="discipline-header">
+        <div class="header-content">
+            <a href="/dashboard" class="back-link"><i class="fas fa-arrow-left"></i> Voltar ao dashboard</a>
+            <h1 class="page-title">📋 {{ disciplina['nome'] }}</h1>
+            <p class="page-subtitle">Disciplina Alternativa - Envie suas atividades e aguarde a correção do professor.</p>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="user-profile">
+                <div class="profile-img"><i class="fas fa-user-graduate"></i></div>
+                <div class="profile-text">
+                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="ra">RA: {{ aluno_ra }}</div>
+                </div>
+            </div>
+            <div class="main-menu">
+                <a href="/dashboard" class="menu-item"><i class="fas fa-graduation-cap"></i><span>Dashboard</span></a>
+                <a href="/disciplina-alternativa/{{ disciplina['id'] }}" class="menu-item active"><i class="fas fa-chalkboard"></i><span>{{ disciplina['nome'][:20] }}</span></a>
+            </div>
+        </nav>
+
+        <main class="content-area">
+            <!-- MURAL -->
+            <div class="mural-card">
+                <div class="mural-header">
+                    <i class="fas fa-chalkboard"></i>
+                    <h3>📌 Mural da Disciplina</h3>
+                </div>
+                <div class="mural-content">
+                    {{ disciplina['mural']|safe if disciplina['mural'] else '<p><i class="fas fa-info-circle"></i> Nenhuma informação disponível no momento.</p>' }}
+                </div>
+            </div>
+
+            <!-- ÁREA DE ENVIO -->
+            <div class="upload-card" id="uploadCard">
+                <div class="upload-header">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h3>📎 Enviar Atividade</h3>
+                </div>
+                <div class="upload-body">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <input type="hidden" name="disciplina_id" value="{{ disciplina['id'] }}">
+                        
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <i class="fas fa-file-upload"></i>
+                            <p>Clique ou arraste o arquivo aqui</p>
+                            <small>Formatos aceitos: PDF, DOC, DOCX, JPG, PNG, ZIP (max 50MB)</small>
+                            <input type="file" name="anexo" id="fileInput" style="display: none;">
+                        </div>
+                        
+                        <div class="upload-preview" id="uploadPreview">
+                            <div class="preview-info">
+                                <div><i class="fas fa-file"></i> <span class="file-name" id="fileName"></span></div>
+                                <button type="button" class="btn-danger" id="cancelUpload">Cancelar</button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Descrição (opcional):</label>
+                            <textarea name="descricao" rows="3" style="width: 100%; padding: 12px; border: 1px solid var(--gray-300); border-radius: var(--radius-md); font-family: inherit;" placeholder="Descreva brevemente sua atividade..."></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn-submit" id="submitBtn">📤 Enviar Atividade</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- MINHAS ATIVIDADES -->
+            <div class="anexos-list">
+                <h3 style="margin-bottom: 20px; color: var(--primary);"><i class="fas fa-history"></i> Minhas Atividades</h3>
+                
+                {% if anexos %}
+                    {% for anexo in anexos %}
+                    <div class="anexo-card" id="anexo-{{ anexo['id'] }}">
+                        <div class="anexo-header">
+                            <div class="anexo-file">
+                                <i class="fas fa-paperclip"></i>
+                                <a href="{{ anexo['url_arquivo'] }}" target="_blank">{{ anexo['nome_arquivo'] }}</a>
+                            </div>
+                            <div>
+                                <span class="anexo-status 
+                                    {% if anexo['status'] == 'pendente' %}status-pendente
+                                    {% elif anexo['status'] == 'corrigido' %}status-corrigido
+                                    {% elif anexo['status'] == 'aprovado' %}status-aprovado
+                                    {% elif anexo['status'] == 'reprovado' %}status-reprovado
+                                    {% endif %}">
+                                    {% if anexo['status'] == 'pendente' %}⏳ Aguardando Correção
+                                    {% elif anexo['status'] == 'corrigido' %}✓ Corrigido
+                                    {% elif anexo['status'] == 'aprovado' %}✅ Aprovado
+                                    {% elif anexo['status'] == 'reprovado' %}❌ Reprovado
+                                    {% endif %}
+                                </span>
+                                {% if anexo['status'] == 'pendente' %}
+                                <button class="btn-danger" onclick="excluirAnexo({{ anexo['id'] }})" style="margin-left: 10px; padding: 4px 12px;">🗑️ Excluir</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="anexo-meta">
+                            <i class="fas fa-calendar-alt"></i> Enviado em: {{ anexo['data_envio'] }}
+                        </div>
+                        {% if anexo['descricao'] %}
+                        <div class="anexo-descricao">
+                            <i class="fas fa-align-left"></i> {{ anexo['descricao'] }}
+                        </div>
+                        {% endif %}
+                        {% if anexo['feedback'] %}
+                        <div class="anexo-feedback">
+                            <strong><i class="fas fa-comment-dots"></i> Feedback do Professor:</strong>
+                            <p style="margin-top: 8px;">{{ anexo['feedback'] }}</p>
+                            {% if anexo['nota'] %}
+                            <p style="margin-top: 8px;"><strong>Nota:</strong> <span class="anexo-nota">{{ anexo['nota'] }}</span></p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div style="text-align: center; padding: 40px; background: white; border-radius: var(--radius-md); color: var(--gray-500);">
+                    <i class="fas fa-inbox" style="font-size: 3rem; margin-bottom: 15px;"></i>
+                    <p>Você ainda não enviou nenhuma atividade.</p>
+                    <p style="font-size: 0.9rem;">Clique na área acima para fazer seu primeiro envio!</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- NOTA FINAL -->
+            {% if nota_final %}
+            <div class="nota-final-card">
+                <h3>🎯 Resultado Final</h3>
+                <div class="nota-valor">{{ "%.2f"|format(nota_final['nota_final']) }}</div>
+                <div>
+                    {% if nota_final['status'] == 'aprovado' %}
+                    <span class="status-aprovado-text">✅ APROVADO</span>
+                    {% elif nota_final['status'] == 'reprovado' %}
+                    <span class="status-reprovado-text">❌ REPROVADO</span>
+                    {% else %}
+                    <span class="status-cursando-text">📚 EM ANDAMENTO</span>
+                    {% endif %}
+                </div>
+                <p style="margin-top: 15px; font-size: 0.9rem; opacity: 0.9;">
+                    Média calculada com base em todas as atividades corrigidas.
+                </p>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4><i class="fas fa-graduation-cap"></i> FACOP/SiGEU</h4>
+                <p>Sistema de Gestão Educacional Unificado</p>
+            </div>
+            <div class="footer-section">
+                <h4><i class="fas fa-envelope"></i> Contato</h4>
+                <p><i class="fas fa-envelope"></i> contato@campusvirtualfacop.com.br</p>
+                <p><i class="fas fa-phone"></i> (11) 3302-0501</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2026 Plataforma Acadêmica FACOP/SiGEU. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Upload de arquivo
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadPreview = document.getElementById('uploadPreview');
+        const fileNameSpan = document.getElementById('fileName');
+        const cancelUpload = document.getElementById('cancelUpload');
+        let selectedFile = null;
+
+        fileUploadArea.addEventListener('click', () => fileInput.click());
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.style.borderColor = 'var(--secondary)';
+        });
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.style.borderColor = 'var(--gray-300)';
+        });
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.style.borderColor = 'var(--gray-300)';
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFileSelect(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            selectedFile = file;
+            fileNameSpan.textContent = file.name;
+            uploadPreview.classList.add('active');
+            fileUploadArea.style.display = 'none';
+        }
+
+        cancelUpload.addEventListener('click', () => {
+            selectedFile = null;
+            fileInput.value = '';
+            uploadPreview.classList.remove('active');
+            fileUploadArea.style.display = 'block';
+        });
+
+        // Submit form
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedFile) {
+                alert('Selecione um arquivo para enviar');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+            const formData = new FormData();
+            formData.append('disciplina_id', document.querySelector('input[name="disciplina_id"]').value);
+            formData.append('descricao', document.querySelector('textarea[name="descricao"]').value);
+            formData.append('anexo', selectedFile);
+
+            try {
+                const response = await fetch('/enviar-anexo', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + result.message);
+                }
+            } catch (error) {
+                alert('Erro ao enviar: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '📤 Enviar Atividade';
+            }
+        });
+
+        // Excluir anexo
+        async function excluirAnexo(anexoId) {
+            if (!confirm('Tem certeza que deseja excluir este anexo? Esta ação não pode ser desfeita.')) return;
+            
+            try {
+                const response = await fetch(`/excluir-anexo/${anexoId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('Erro: ' + result.message);
+                }
+            } catch (error) {
+                alert('Erro ao excluir: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

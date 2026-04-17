@@ -967,6 +967,10 @@
                     <i class="fas fa-book"></i>
                     <span>Minhas Disciplinas</span>
                 </li>
+                <li class="section-menu-item" data-section="praticas">  <!-- 👈 CORRIGIDO! -->
+                    <i class="fas fa-chalkboard"></i>
+                    <span>Disciplinas Práticas</span>
+                </li>
                 <li class="section-menu-item" data-section="notas">
                     <i class="fas fa-chart-line"></i>
                     <span>Minhas Notas</span>
@@ -1144,6 +1148,56 @@
                 </div>
                 {% endif %}
             </div>
+            
+<!-- SEÇÃO: PRÁTICAS (DISCIPLINAS ALTERNATIVAS) -->
+<div class="content-section" id="praticas-section">
+    <h1 class="page-title">📋 Práticas</h1>
+    <p class="page-subtitle">Disciplinas práticas e alternativas</p>
+
+    {% if disciplinas_alternativas %}
+    <div class="cards-container">
+        {% for da in disciplinas_alternativas %}
+        <div class="card">
+            <div class="card-header" style="background: linear-gradient(135deg, #9c27b0, #7b1fa2);">
+                <h3><i class="fas fa-chalkboard-teacher"></i> {{ da['nome'] }}</h3>
+                <div class="status-badge">
+                    {% if da['progresso'] == 100 %}Concluído{% else %}Em Andamento{% endif %}
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="course-name">{{ da['nome'] }}</div>
+                <p style="color: var(--gray-600); margin-bottom: 15px;">
+                    Disciplina prática - Envio de atividades
+                </p>
+                <div class="progress-container">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Progresso:</span>
+                        <strong>{{ da['progresso'] }}%</strong>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ da['progresso'] }}%;"></div>
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <a href="/disciplina-alternativa/{{ da['id'] }}" class="btn btn-primary w-100">
+                        <i class="fas fa-arrow-right"></i> Acessar Prática
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-chalkboard"></i>
+        <h3>Nenhuma prática disponível</h3>
+        <p>Você não está matriculado em nenhuma disciplina prática no momento.</p>
+    </div>
+    {% endif %}
+</div>
+
+
+
 
             <!-- SEÇÃO: NOTAS (mantida exatamente igual, apenas com classes CSS atualizadas) -->
             <div class="content-section" id="notas-section">
