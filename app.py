@@ -173,7 +173,7 @@ def init_db():
             FOREIGN KEY (aluno_id) REFERENCES alunos(id)
         )
     """)
-
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS aluno_disciplina_datas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1531,7 +1531,7 @@ def dashboard():
     declaracoes_pendentes_result = cursor.fetchone()
     declaracoes_pendentes = declaracoes_pendentes_result["pendente"] if declaracoes_pendentes_result else 0
 
-    # ⬇️ NOVO: Buscar documentos não visualizados ⬇️
+    # Buscar documentos não visualizados
     cursor.execute("""
         SELECT COUNT(*) as total 
         FROM documentos_enviados 
@@ -1539,9 +1539,33 @@ def dashboard():
     """, (aluno_id,))
     nao_visualizados = cursor.fetchone()["total"] or 0
 
+    # ========== DISCIPLINAS ALTERNATIVAS ==========
+    # Buscar disciplinas alternativas do aluno
+    cursor.execute("""
+        SELECT da.*, 
+               (SELECT COUNT(*) FROM anexos_disciplina_alternativa 
+                WHERE aluno_id = ? AND disciplina_id = da.id) as total_anexos,
+               (SELECT AVG(nota) FROM anexos_disciplina_alternativa 
+                WHERE aluno_id = ? AND disciplina_id = da.id AND nota IS NOT NULL) as media_nota
+        FROM disciplinas_alternativas da
+        JOIN aluno_disciplina_alternativa ada ON da.id = ada.disciplina_id
+        WHERE ada.aluno_id = ? AND da.ativa = 1
+    """, (aluno_id, aluno_id, aluno_id))
+    
+    disciplinas_alternativas_raw = cursor.fetchall()
+    
+    # Converter para lista de dicionários e calcular progresso
+    disciplinas_alternativas = []
+    for da in disciplinas_alternativas_raw:
+        da_dict = dict(da)
+        media_nota = da_dict.get('media_nota') or 0
+        da_dict['progresso'] = min(100, int(media_nota * 10)) if media_nota else 0
+        disciplinas_alternativas.append(da_dict)
+    # ========== FIM DISCIPLINAS ALTERNATIVAS ==========
+    
     conn.close()
 
-    # Funções para template - ATUALIZADAS
+    # Funções para template
     def calcular_progresso(aluno_id, disciplina_id):
         try:
             conn = get_db_connection()
@@ -1638,6 +1662,7 @@ def dashboard():
         dados_pessoais=dados_pessoais,
         situacao_financeira=situacao_financeira,
         disciplinas=disciplinas,
+        disciplinas_alternativas=disciplinas_alternativas,  # NOVO PARÂMETRO
         notas=notas,
         solicitacoes_material=solicitacoes_material,
         solicitacoes_declaracoes=solicitacoes_declaracoes,
@@ -1648,7 +1673,7 @@ def dashboard():
         calcular_progresso=calcular_progresso,
         contar_capitulos=contar_capitulos,
         contar_provas_realizadas=contar_provas_realizadas,
-        nao_visualizados=nao_visualizados  # ⬅️ NOVO PARÂMETRO ADICIONADO
+        nao_visualizados=nao_visualizados
     )
 
 @app.route("/mew/notas/capitulos/<int:aluno_id>/<int:disciplina_id>")
@@ -2707,7 +2732,7 @@ def mew_login():
 
     return render_template("mew/login.html")
 
-'''@app.route("/mew/login", methods=["GET", "POST"])
+''' @app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
         email = request.form.get("email")
@@ -2719,7 +2744,6 @@ def mew_login():
 
     return render_template("mew/login.html")'''
     
-
 
 
 @app.route("/mew/dashboard")
@@ -10268,7 +10292,542 @@ def testar_chave_api():
         return f"API Key configurada: {chave[:5]}... (tamanho: {len(chave)})"
     else:
         return "API Key NÃO configurada no ambiente"
+
+# ============================================
+# ROTAS PARA DISCIPLINAS ALTERNATIVAS (ALUNO)
+# ============================================
+
+@app.route("/disciplina-alternativa/<int:disciplina_id>")
+def disciplina_alternativa(disciplina_id):
+    """Página da disciplina alternativa para o aluno"""
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
     
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se o aluno está matriculado
+    cursor.execute("""
+        SELECT * FROM aluno_disciplina_alternativa 
+        WHERE aluno_id = ? AND disciplina_id = ?
+    """, (aluno_id, disciplina_id))
+    
+    if not cursor.fetchone():
+        conn.close()
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Acesso Negado</title>
+            <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                .error-box { 
+                    background: #f8d7da; 
+                    color: #721c24; 
+                    padding: 30px; 
+                    border-radius: 10px; 
+                    margin: 20px auto; 
+                    max-width: 600px;
+                    border: 1px solid #f5c6cb;
+                }
+                .btn { 
+                    display: inline-block; 
+                    background: #007bff; 
+                    color: white; 
+                    padding: 10px 20px; 
+                    text-decoration: none; 
+                    border-radius: 5px; 
+                    margin-top: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="error-box">
+                <h2>❌ Acesso Negado</h2>
+                <p>Você não está matriculado nesta disciplina alternativa.</p>
+                <a href="/dashboard" class="btn">🏠 Voltar ao Dashboard</a>
+            </div>
+        </body>
+        </html>
+        '''
+    
+    # Buscar dados da disciplina
+    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    disciplina = cursor.fetchone()
+    
+    if not disciplina:
+        conn.close()
+        return "Disciplina não encontrada", 404
+    
+    # Buscar anexos do aluno nesta disciplina
+    cursor.execute("""
+        SELECT * FROM anexos_disciplina_alternativa 
+        WHERE aluno_id = ? AND disciplina_id = ?
+        ORDER BY data_envio DESC
+    """, (aluno_id, disciplina_id))
+    
+    anexos = cursor.fetchall()
+    
+    # Buscar nota final
+    cursor.execute("""
+        SELECT * FROM notas_finais_alternativas 
+        WHERE aluno_id = ? AND disciplina_id = ?
+    """, (aluno_id, disciplina_id))
+    
+    nota_final = cursor.fetchone()
+    
+    conn.close()
+    
+    return render_template(
+        "disciplina_alternativa.html",
+        disciplina=disciplina,
+        anexos=anexos,
+        nota_final=nota_final,
+        aluno_nome=session.get("aluno_nome"),
+        aluno_ra=session.get("aluno_ra")
+    )
+
+@app.route("/enviar-anexo", methods=["POST"])
+def enviar_anexo():
+    """Envia um anexo para a disciplina alternativa"""
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success": False, "message": "Não autenticado"})
+    
+    disciplina_id = request.form.get("disciplina_id")
+    descricao = request.form.get("descricao", "")
+    
+    if not disciplina_id:
+        return jsonify({"success": False, "message": "Disciplina não identificada"})
+    
+    # Verificar se tem arquivo
+    if 'anexo' not in request.files:
+        return jsonify({"success": False, "message": "Nenhum arquivo enviado"})
+    
+    arquivo = request.files['anexo']
+    
+    if arquivo.filename == '':
+        return jsonify({"success": False, "message": "Nenhum arquivo selecionado"})
+    
+    # Salvar arquivo
+    try:
+        # Criar diretório se não existir
+        upload_dir = os.path.join('static', 'uploads', 'disciplinas_alternativas', str(disciplina_id))
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Gerar nome único para o arquivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_seguro = f"aluno_{aluno_id}_{timestamp}_{arquivo.filename}"
+        caminho_arquivo = os.path.join(upload_dir, nome_seguro)
+        
+        arquivo.save(caminho_arquivo)
+        
+        # URL pública
+        url_arquivo = f"/{caminho_arquivo.replace(os.sep, '/')}"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO anexos_disciplina_alternativa 
+            (aluno_id, disciplina_id, nome_arquivo, url_arquivo, descricao, data_envio, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'pendente')
+        """, (aluno_id, disciplina_id, arquivo.filename, url_arquivo, descricao, 
+              datetime.now().strftime("%d/%m/%Y %H:%M")))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True, 
+            "message": "Arquivo enviado com sucesso! Aguarde a correção do professor."
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro ao enviar arquivo: {str(e)}"})
+
+@app.route("/excluir-anexo/<int:anexo_id>", methods=["POST"])
+def excluir_anexo(anexo_id):
+    """Exclui um anexo do aluno (apenas se não corrigido)"""
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success": False, "message": "Não autenticado"})
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar se o anexo pertence ao aluno e está pendente
+    cursor.execute("""
+        SELECT url_arquivo, status FROM anexos_disciplina_alternativa 
+        WHERE id = ? AND aluno_id = ?
+    """, (anexo_id, aluno_id))
+    
+    anexo = cursor.fetchone()
+    
+    if not anexo:
+        conn.close()
+        return jsonify({"success": False, "message": "Anexo não encontrado"})
+    
+    if anexo['status'] != 'pendente':
+        conn.close()
+        return jsonify({"success": False, "message": "Não é possível excluir anexo já corrigido"})
+    
+    # Deletar arquivo físico
+    try:
+        caminho = anexo['url_arquivo'].lstrip('/')
+        if os.path.exists(caminho):
+            os.remove(caminho)
+    except:
+        pass  # Se não conseguir deletar o arquivo, continua
+    
+    # Deletar do banco
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE id = ?", (anexo_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "message": "Anexo excluído com sucesso"})
+    
+
+
+# ============================================
+# ROTAS PARA DISCIPLINAS ALTERNATIVAS (MEW)
+# ============================================
+
+@app.route("/mew/disciplinas-alternativas")
+def mew_disciplinas_alternativas():
+    """Lista todas as disciplinas alternativas"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT da.*, 
+               (SELECT COUNT(*) FROM aluno_disciplina_alternativa WHERE disciplina_id = da.id) as total_alunos,
+               (SELECT COUNT(*) FROM anexos_disciplina_alternativa WHERE disciplina_id = da.id) as total_anexos
+        FROM disciplinas_alternativas da
+        ORDER BY da.data_criacao DESC
+    """)
+    
+    disciplinas = cursor.fetchall()
+    conn.close()
+    
+    return render_template("mew/disciplinas_alternativas.html", disciplinas=disciplinas)
+
+@app.route("/mew/criar-disciplina-alternativa", methods=["GET", "POST"])
+def mew_criar_disciplina_alternativa():
+    """Cria uma nova disciplina alternativa"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        mural = request.form.get("mural")
+        
+        if not nome:
+            flash("Nome da disciplina é obrigatório", "error")
+            return redirect("/mew/criar-disciplina-alternativa")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO disciplinas_alternativas (nome, mural, data_criacao, ativa)
+            VALUES (?, ?, ?, 1)
+        """, (nome, mural, datetime.now().strftime("%d/%m/%Y %H:%M")))
+        
+        disciplina_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        flash(f"Disciplina '{nome}' criada com sucesso!", "success")
+        return redirect(f"/mew/editar-disciplina-alternativa/{disciplina_id}")
+    
+    return render_template("mew/criar_disciplina_alternativa.html")
+
+@app.route("/mew/editar-disciplina-alternativa/<int:disciplina_id>", methods=["GET", "POST"])
+def mew_editar_disciplina_alternativa(disciplina_id):
+    """Edita uma disciplina alternativa"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if request.method == "POST":
+        nome = request.form.get("nome")
+        mural = request.form.get("mural")
+        ativa = request.form.get("ativa", "0")
+        
+        cursor.execute("""
+            UPDATE disciplinas_alternativas 
+            SET nome = ?, mural = ?, ativa = ?
+            WHERE id = ?
+        """, (nome, mural, ativa, disciplina_id))
+        
+        conn.commit()
+        flash("Disciplina atualizada com sucesso!", "success")
+    
+    # GET: Buscar dados
+    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    disciplina = cursor.fetchone()
+    
+    # Buscar alunos matriculados
+    cursor.execute("""
+        SELECT a.id, a.nome, a.ra, ada.data_matricula
+        FROM alunos a
+        JOIN aluno_disciplina_alternativa ada ON a.id = ada.aluno_id
+        WHERE ada.disciplina_id = ?
+        ORDER BY a.nome
+    """, (disciplina_id,))
+    
+    alunos_matriculados = cursor.fetchall()
+    
+    # Buscar todos os alunos para matricular
+    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
+    todos_alunos = cursor.fetchall()
+    
+    # Buscar anexos
+    cursor.execute("""
+        SELECT a.*, al.nome as aluno_nome, al.ra as aluno_ra
+        FROM anexos_disciplina_alternativa a
+        JOIN alunos al ON a.aluno_id = al.id
+        WHERE a.disciplina_id = ?
+        ORDER BY a.data_envio DESC
+    """, (disciplina_id,))
+    
+    anexos = cursor.fetchall()
+    
+    conn.close()
+    
+    return render_template(
+        "mew/editar_disciplina_alternativa.html",
+        disciplina=disciplina,
+        alunos_matriculados=alunos_matriculados,
+        todos_alunos=todos_alunos,
+        anexos=anexos
+    )
+
+@app.route("/mew/matricular-aluno-alternativa", methods=["POST"])
+def mew_matricular_aluno_alternativa():
+    """Matricula um aluno em uma disciplina alternativa"""
+    if not session.get("mew_admin"):
+        return jsonify({"success": False, "message": "Não autorizado"})
+    
+    disciplina_id = request.form.get("disciplina_id")
+    aluno_id = request.form.get("aluno_id")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            INSERT INTO aluno_disciplina_alternativa (aluno_id, disciplina_id, data_matricula)
+            VALUES (?, ?, ?)
+        """, (aluno_id, disciplina_id, datetime.now().strftime("%d/%m/%Y")))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "Aluno matriculado com sucesso"})
+    except:
+        conn.close()
+        return jsonify({"success": False, "message": "Aluno já matriculado nesta disciplina"})
+
+@app.route("/mew/remover-matricula-alternativa", methods=["POST"])
+def mew_remover_matricula_alternativa():
+    """Remove matrícula de um aluno em disciplina alternativa"""
+    if not session.get("mew_admin"):
+        return jsonify({"success": False, "message": "Não autorizado"})
+    
+    disciplina_id = request.form.get("disciplina_id")
+    aluno_id = request.form.get("aluno_id")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        DELETE FROM aluno_disciplina_alternativa 
+        WHERE aluno_id = ? AND disciplina_id = ?
+    """, (aluno_id, disciplina_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "message": "Matrícula removida"})
+
+@app.route("/mew/corrigir-anexo/<int:anexo_id>", methods=["POST"])
+def mew_corrigir_anexo(anexo_id):
+    """Corrige um anexo, calcula média e SALVA NA TABELA notas_finais (disciplinas normais)"""
+    if not session.get("mew_admin"):
+        return jsonify({"success": False, "message": "Não autorizado"})
+    
+    data = request.get_json()
+    nota = data.get("nota")
+    feedback = data.get("feedback", "")
+    status = data.get("status", "corrigido")
+    
+    if nota is None:
+        return jsonify({"success": False, "message": "Nota não informada"})
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. BUSCAR DADOS DO ANEXO
+    cursor.execute("SELECT disciplina_id, aluno_id FROM anexos_disciplina_alternativa WHERE id = ?", (anexo_id,))
+    anexo = cursor.fetchone()
+    
+    if not anexo:
+        conn.close()
+        return jsonify({"success": False, "message": "Anexo não encontrado"})
+    
+    disciplina_id = anexo['disciplina_id']
+    aluno_id = anexo['aluno_id']
+    
+    # 2. ATUALIZAR ANEXO (com feedback)
+    try:
+        cursor.execute("""
+            UPDATE anexos_disciplina_alternativa 
+            SET nota = ?, feedback = ?, status = ?, data_correcao = ?
+            WHERE id = ?
+        """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
+    except sqlite3.OperationalError:
+        # Se a coluna feedback não existir, recriar a tabela
+        cursor.execute("ALTER TABLE anexos_disciplina_alternativa ADD COLUMN feedback TEXT")
+        cursor.execute("""
+            UPDATE anexos_disciplina_alternativa 
+            SET nota = ?, feedback = ?, status = ?, data_correcao = ?
+            WHERE id = ?
+        """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
+    
+    # 3. CALCULAR MÉDIA DO ALUNO NESTA DISCIPLINA
+    cursor.execute("""
+        SELECT AVG(nota) as media 
+        FROM anexos_disciplina_alternativa 
+        WHERE aluno_id = ? AND disciplina_id = ? AND nota IS NOT NULL
+    """, (aluno_id, disciplina_id))
+    
+    resultado = cursor.fetchone()
+    media = resultado['media'] if resultado and resultado['media'] else 0
+    nota_final = round(media, 2)
+    
+    # 4. BUSCAR O NOME DA DISCIPLINA ALTERNATIVA
+    cursor.execute("SELECT nome FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    disciplina_alt = cursor.fetchone()
+    nome_disciplina = disciplina_alt['nome'] if disciplina_alt else f"Disciplina Alternativa {disciplina_id}"
+    
+    # 5. VERIFICAR SE JÁ EXISTE UMA DISCIPLINA NORMAL COM ESTE NOME
+    cursor.execute("SELECT id FROM disciplinas WHERE nome = ?", (nome_disciplina,))
+    disciplina_normal = cursor.fetchone()
+    
+    if disciplina_normal:
+        # Já existe - usar o ID existente
+        disciplina_normal_id = disciplina_normal['id']
+    else:
+        # Criar nova disciplina normal
+        cursor.execute("INSERT INTO disciplinas (nome) VALUES (?)", (nome_disciplina,))
+        disciplina_normal_id = cursor.lastrowid
+        
+        # Criar 4 capítulos vazios para esta disciplina (para fins de estrutura)
+        for i in range(1, 5):
+            cursor.execute("""
+                INSERT INTO capitulos (disciplina_id, titulo, video_url, pdf_url)
+                VALUES (?, ?, '', '')
+            """, (disciplina_normal_id, f"Capítulo {i}"))
+            
+            capitulo_id = cursor.lastrowid
+            # Criar prova vazia
+            cursor.execute("""
+                INSERT INTO provas (capitulo_id, questoes_json)
+                VALUES (?, '[]')
+            """, (capitulo_id,))
+    
+    # 6. SALVAR NA TABELA notas_finais (disciplinas normais)
+    # Calcular média das provas dos capítulos (vai ser 0, já que não tem)
+    cursor.execute("""
+        SELECT AVG(nota) as media_capitulos 
+        FROM notas 
+        WHERE aluno_id = ? AND disciplina_id = ?
+    """, (aluno_id, disciplina_normal_id))
+    
+    media_capitulos = cursor.fetchone()
+    media_capitulos_valor = media_capitulos['media_capitulos'] if media_capitulos and media_capitulos['media_capitulos'] else 0
+    
+    # A média final é a nota da disciplina alternativa
+    media_final = nota_final
+    status_final = "aprovado" if media_final >= 7 else "reprovado" if media_final > 0 else "cursando"
+    
+    # Salvar/Atualizar nota final na tabela de disciplinas normais
+    cursor.execute("""
+        INSERT OR REPLACE INTO notas_finais 
+        (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (aluno_id, disciplina_normal_id, nota_final, media_capitulos_valor, media_final, status_final, 
+          datetime.now().strftime("%d/%m/%Y %H:%M")))
+    
+    # 7. TAMBÉM SALVAR NA TABELA DE NOTAS FINAIS ALTERNATIVAS
+    cursor.execute("""
+        INSERT OR REPLACE INTO notas_finais_alternativas 
+        (aluno_id, disciplina_id, nota_final, status, data_realizacao)
+        VALUES (?, ?, ?, ?, ?)
+    """, (aluno_id, disciplina_id, nota_final, status_final, datetime.now().strftime("%d/%m/%Y %H:%M")))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        "success": True, 
+        "message": f"Correção salva! Nota: {nota_final} - {status_final.upper()}",
+        "media": media,
+        "nota_final": nota_final,
+        "status_final": status_final,
+        "disciplina_normal_id": disciplina_normal_id
+    })
+
+@app.route("/mew/excluir-disciplina-alternativa/<int:disciplina_id>")
+def mew_excluir_disciplina_alternativa(disciplina_id):
+    """Exclui uma disciplina alternativa e todos os dados relacionados"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Buscar anexos para deletar arquivos
+    cursor.execute("SELECT url_arquivo FROM anexos_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
+    anexos = cursor.fetchall()
+    
+    for anexo in anexos:
+        try:
+            caminho = anexo['url_arquivo'].lstrip('/')
+            if os.path.exists(caminho):
+                os.remove(caminho)
+        except:
+            pass
+    
+    # Deletar dados relacionados
+    cursor.execute("DELETE FROM notas_finais_alternativas WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("DELETE FROM aluno_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("DELETE FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    
+    # Tentar deletar pasta de uploads
+    try:
+        pasta = os.path.join('static', 'uploads', 'disciplinas_alternativas', str(disciplina_id))
+        if os.path.exists(pasta):
+            import shutil
+            shutil.rmtree(pasta)
+    except:
+        pass
+    
+    conn.commit()
+    conn.close()
+    
+    return redirect("/mew/disciplinas-alternativas?sucesso=Disciplina+excluída")
+
 
 if __name__ == "__main__":
     init_db()
