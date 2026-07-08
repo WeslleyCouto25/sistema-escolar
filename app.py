@@ -11371,18 +11371,28 @@ def mew_contratos():
 
 @app.before_request
 def bloquear_aluno_com_contrato_pendente():
-    aluno_id = session.get("aluno_id")
-
-    if not aluno_id:
+    # Não bloquear MEW/admin
+    if request.path.startswith("/mew"):
         return
 
+    # Não bloquear arquivos estáticos
+    if request.path.startswith("/static"):
+        return
+
+    # Não bloquear login, logout e a própria tela do contrato
     rotas_liberadas = [
-        "contrato_pendente",
+        "login",
         "logout",
+        "contrato_pendente",
         "static"
     ]
 
     if request.endpoint in rotas_liberadas:
+        return
+
+    aluno_id = session.get("aluno_id")
+
+    if not aluno_id:
         return
 
     conn = get_db_connection()
@@ -11398,11 +11408,10 @@ def bloquear_aluno_com_contrato_pendente():
     conn.close()
 
     if contrato:
-        return redirect(url_for("contrato_pendente"))  
-    
+        return redirect(url_for("contrato_pendente"))
+
 
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
-    init_db()
     init_contratos_db()
+    app.run(debug=True)
