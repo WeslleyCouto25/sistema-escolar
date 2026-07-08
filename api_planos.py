@@ -12,6 +12,7 @@ load_dotenv()
 # Configurar OpenAI (MESMA CHAVE)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+
 # Criar blueprint
 planos_bp = Blueprint('planos', __name__)
 

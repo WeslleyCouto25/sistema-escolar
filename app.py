@@ -1,4 +1,5 @@
 from pydoc import html
+from werkzeug.utils import secure_filename
 import sqlite3
 import json
 import time
@@ -245,11 +246,30 @@ def init_db():
         )
     """)
     
-
     conn.commit()
     conn.close()
 
+def init_contratos_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS contratos_alunos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            pdf_path TEXT NOT NULL,
+            status TEXT DEFAULT 'pendente',
+            assinatura_base64 TEXT,
+            arquivo_assinado_path TEXT,
+            data_envio TEXT,
+            data_assinatura TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+    
 def gerar_hash_documento(conteudo, ra, timestamp):
     """
     Gera um hash único para o documento baseado no conteúdo
@@ -2731,8 +2751,9 @@ def mew_login():
             return render_template("mew/login.html")
 
     return render_template("mew/login.html")
+'''
 
-''' @app.route("/mew/login", methods=["GET", "POST"])
+@app.route("/mew/login", methods=["GET", "POST"])
 def mew_login():
     if request.method == "POST":
         email = request.form.get("email")
@@ -2744,7 +2765,6 @@ def mew_login():
 
     return render_template("mew/login.html")'''
     
-
 
 @app.route("/mew/dashboard")
 def mew_dashboard():
@@ -10828,7 +10848,561 @@ def mew_excluir_disciplina_alternativa(disciplina_id):
     
     return redirect("/mew/disciplinas-alternativas?sucesso=Disciplina+excluída")
 
+@app.route("/contrato-pendente", methods=["GET", "POST"])
+def contrato_pendente():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+
+    init_contratos_db()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT c.*, a.nome, a.ra
+        FROM contratos_alunos c
+        JOIN alunos a ON a.id = c.aluno_id
+        WHERE c.aluno_id = ? AND c.status = 'pendente'
+        ORDER BY c.id DESC
+        LIMIT 1
+    """, (aluno_id,))
+
+    contrato = cursor.fetchone()
+
+    if not contrato:
+        conn.close()
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        assinatura = request.form.get("assinatura")
+
+        if not assinatura or "data:image/png;base64" not in assinatura:
+            conn.close()
+            return "Assinatura não recebida."
+
+        os.makedirs("static/contratos_assinados", exist_ok=True)
+
+        data_assinatura = datetime.now().strftime("%d/%m/%Y %H:%M")
+        hash_contrato = hashlib.sha256(
+            f"{contrato['id']}-{contrato['aluno_id']}-{contrato['nome']}-{contrato['ra']}-{data_assinatura}-{secrets.token_hex(8)}".encode("utf-8")
+        ).hexdigest()
+
+        caminho_html = f"static/contratos_assinados/contrato_assinado_{contrato['id']}.html"
+        caminho_publico = "/" + caminho_html.replace("\\", "/")
+
+        html_assinado = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Contrato Assinado</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background: #ddd;
+                    margin: 0;
+                    padding: 20px;
+                }}
+
+                .topo {{
+                    background: #111827;
+                    color: white;
+                    padding: 18px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    display: flex;
+                    gap: 12px;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                }}
+
+                .topo a, .topo button {{
+                    background: #16a34a;
+                    color: white;
+                    padding: 12px 18px;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    border: none;
+                    cursor: pointer;
+                }}
+
+                .topo button.pdf {{
+                    background: #2563eb;
+                }}
+
+                .pagina {{
+                    background: white;
+                    width: 210mm;
+                    min-height: 297mm;
+                    margin: 0 auto 20px auto;
+                    padding: 12mm;
+                    box-sizing: border-box;
+                }}
+
+                iframe {{
+                    width: 100%;
+                    height: 260mm;
+                    border: 1px solid #ccc;
+                    background: white;
+                }}
+
+                .assinatura-box {{
+                    background: white;
+                    width: 210mm;
+                    min-height: 297mm;
+                    margin: 0 auto;
+                    padding: 25mm;
+                    box-sizing: border-box;
+                }}
+
+                .assinatura {{
+                    margin-top: 50px;
+                    border-top: 2px solid #000;
+                    width: 420px;
+                    text-align: center;
+                    padding-top: 10px;
+                }}
+
+                .hash {{
+                    margin-top: 40px;
+                    font-size: 11px;
+                    color: #333;
+                    word-break: break-all;
+                    border-top: 1px solid #ccc;
+                    padding-top: 15px;
+                }}
+
+                @media print {{
+                    body {{
+                        background: white;
+                        padding: 0;
+                    }}
+
+                    .topo, .pagina {{
+                        display: none;
+                    }}
+
+                    .assinatura-box {{
+                        margin: 0;
+                        width: 210mm;
+                        min-height: 297mm;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+
+            <div class="topo">
+                <h2>✅ Contrato assinado com sucesso</h2>
+
+                <div>
+                    <button class="pdf" onclick="imprimirPDF()">IMPRIMIR PDF DO CONTRATO</button>
+                    <button onclick="window.print()">IMPRIMIR PÁGINA DA ASSINATURA</button>
+                    <a href="/dashboard">IR PARA A DASHBOARD</a>
+                </div>
+            </div>
+
+            <div class="pagina">
+                <iframe src="{contrato['pdf_path']}"></iframe>
+            </div>
+
+            <div class="assinatura-box">
+                <h2>Comprovante de Assinatura Digital</h2>
+
+                <p><strong>Aluno:</strong> {contrato['nome']}</p>
+                <p><strong>RA:</strong> {contrato['ra']}</p>
+                <p><strong>Data da assinatura:</strong> {data_assinatura}</p>
+
+                <div class="assinatura">
+                    <img src="{assinatura}" style="max-width: 380px;">
+                    <p>{contrato['nome']}</p>
+                </div>
+
+                <div class="hash">
+                    <strong>Hash de autenticação:</strong><br>
+                    {hash_contrato}
+                </div>
+            </div>
+
+            <script>
+                function imprimirPDF() {{
+                    const janela = window.open("{contrato['pdf_path']}", "_blank");
+                    setTimeout(function() {{
+                        janela.focus();
+                        janela.print();
+                    }}, 800);
+                }}
+            </script>
+
+        </body>
+        </html>
+        """
+
+        with open(caminho_html, "w", encoding="utf-8") as f:
+            f.write(html_assinado)
+
+        cursor.execute("""
+            UPDATE contratos_alunos
+            SET status = 'assinado',
+                assinatura_base64 = ?,
+                arquivo_assinado_path = ?,
+                data_assinatura = ?
+            WHERE id = ?
+        """, (
+            assinatura,
+            caminho_publico,
+            data_assinatura,
+            contrato["id"]
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return redirect(caminho_publico)
+
+    conn.close()
+
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Assinar Contrato</title>
+        <style>
+            body {
+                margin: 0;
+                font-family: Arial, sans-serif;
+                background: #050505;
+                color: white;
+            }
+
+            .container {
+                max-width: 1000px;
+                margin: auto;
+                padding: 30px;
+            }
+
+            iframe {
+                width: 100%;
+                height: 650px;
+                border: 0;
+                background: white;
+                border-radius: 10px;
+            }
+
+            canvas {
+                background: white;
+                border: 3px solid #16a34a;
+                border-radius: 10px;
+                width: 100%;
+                height: 220px;
+                touch-action: none;
+                display: block;
+                cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext y='24' font-size='24'%3E✍️%3C/text%3E%3C/svg%3E") 4 28, crosshair;
+            }
+
+            button {
+                padding: 14px 25px;
+                border: 0;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: bold;
+                margin-top: 15px;
+            }
+
+            .btn-principal {
+                background: #16a34a;
+                color: white;
+            }
+
+            .btn-limpar {
+                background: #dc2626;
+                color: white;
+            }
+
+            .aviso {
+                background: #111827;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+            }
+
+            #assinaturaArea {
+                display: none;
+                margin-top: 25px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>ASSINAR CONTRATO</h1>
+
+            <div class="aviso">
+                Leia o contrato abaixo. Depois clique em <strong>Prosseguir para assinatura</strong>.
+            </div>
+
+            <iframe src="{{ contrato.pdf_path }}"></iframe>
+
+            <button class="btn-principal" onclick="mostrarAssinatura()">PROSSEGUIR PARA ASSINATURA</button>
+
+            <div id="assinaturaArea">
+                <h2>Assine abaixo com o mouse ou dedo</h2>
+
+                <canvas id="canvas"></canvas>
+
+                <form method="POST" onsubmit="return salvarAssinatura()">
+                    <input type="hidden" name="assinatura" id="assinatura">
+                    <button type="button" class="btn-limpar" onclick="limpar()">Limpar</button>
+                    <button type="submit" class="btn-principal">FINALIZAR ASSINATURA</button>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+            let desenhando = false;
+            let assinou = false;
+
+            function ajustarCanvas() {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = 220;
+                ctx.lineWidth = 3;
+                ctx.lineCap = "round";
+                ctx.strokeStyle = "#000";
+            }
+
+            window.addEventListener("load", ajustarCanvas);
+            window.addEventListener("resize", ajustarCanvas);
+
+            function pegarPosicao(e) {
+                const rect = canvas.getBoundingClientRect();
+                const toque = e.touches ? e.touches[0] : e;
+                return {
+                    x: toque.clientX - rect.left,
+                    y: toque.clientY - rect.top
+                };
+            }
+
+            function iniciar(e) {
+                e.preventDefault();
+                desenhando = true;
+                assinou = true;
+                const p = pegarPosicao(e);
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+            }
+
+            function desenhar(e) {
+                if (!desenhando) return;
+                e.preventDefault();
+                const p = pegarPosicao(e);
+                ctx.lineTo(p.x, p.y);
+                ctx.stroke();
+            }
+
+            function parar(e) {
+                e.preventDefault();
+                desenhando = false;
+            }
+
+            canvas.addEventListener("mousedown", iniciar);
+            canvas.addEventListener("mousemove", desenhar);
+            canvas.addEventListener("mouseup", parar);
+            canvas.addEventListener("mouseleave", parar);
+
+            canvas.addEventListener("touchstart", iniciar, { passive: false });
+            canvas.addEventListener("touchmove", desenhar, { passive: false });
+            canvas.addEventListener("touchend", parar, { passive: false });
+
+            function limpar() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                assinou = false;
+            }
+
+            function mostrarAssinatura() {
+                document.getElementById("assinaturaArea").style.display = "block";
+                setTimeout(ajustarCanvas, 100);
+                document.getElementById("assinaturaArea").scrollIntoView({ behavior: "smooth" });
+            }
+
+            function salvarAssinatura() {
+                if (!assinou) {
+                    alert("Faça sua assinatura antes de finalizar.");
+                    return false;
+                }
+
+                document.getElementById("assinatura").value = canvas.toDataURL("image/png");
+                return true;
+            }
+        </script>
+    </body>
+    </html>
+    """, contrato=contrato)
+    
+    
+
+@app.route("/mew/contratos", methods=["GET", "POST"])
+def mew_contratos():
+    if not session.get("mew_admin"):
+        return "Não autorizado", 403
+
+    init_contratos_db()
+
+    if request.method == "POST":
+        aluno_id = request.form.get("aluno_id")
+        arquivo = request.files.get("pdf")
+
+        if not aluno_id or not arquivo:
+            return "Selecione o aluno e envie um PDF."
+
+        os.makedirs("static/contratos", exist_ok=True)
+
+        nome_arquivo = secure_filename(arquivo.filename)
+        caminho = f"static/contratos/contrato_aluno_{aluno_id}_{nome_arquivo}"
+        arquivo.save(caminho)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO contratos_alunos
+            (aluno_id, pdf_path, status, data_envio)
+            VALUES (?, ?, 'pendente', ?)
+        """, (
+            aluno_id,
+            "/" + caminho.replace("\\", "/"),
+            datetime.now().strftime("%d/%m/%Y %H:%M")
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return redirect("/mew/contratos")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
+    alunos = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT c.*, a.nome, a.ra
+        FROM contratos_alunos c
+        JOIN alunos a ON a.id = c.aluno_id
+        ORDER BY c.id DESC
+    """)
+    contratos = cursor.fetchall()
+
+    conn.close()
+
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>MEW - Contratos</title>
+        <style>
+            body { font-family: Arial; padding: 30px; background: #f4f4f4; }
+            .box { background: white; padding: 25px; border-radius: 10px; margin-bottom: 25px; }
+            select, input, button { padding: 10px; margin: 5px 0; width: 100%; }
+            button { background: #111827; color: white; border: 0; cursor: pointer; }
+            table { width: 100%; border-collapse: collapse; background: white; }
+            th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+            .pendente { color: #b45309; font-weight: bold; }
+            .assinado { color: #15803d; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h2>Enviar contrato para aluno</h2>
+
+            <form method="POST" enctype="multipart/form-data">
+                <label>Aluno:</label>
+                <select name="aluno_id" required>
+                    <option value="">Selecione...</option>
+                    {% for aluno in alunos %}
+                        <option value="{{ aluno.id }}">{{ aluno.nome }} - RA {{ aluno.ra }}</option>
+                    {% endfor %}
+                </select>
+
+                <label>PDF do contrato:</label>
+                <input type="file" name="pdf" accept="application/pdf" required>
+
+                <button type="submit">Enviar contrato</button>
+            </form>
+        </div>
+
+        <div class="box">
+            <h2>Contratos enviados</h2>
+
+            <table>
+                <tr>
+                    <th>Aluno</th>
+                    <th>RA</th>
+                    <th>Status</th>
+                    <th>Data envio</th>
+                    <th>Arquivo assinado</th>
+                </tr>
+
+                {% for c in contratos %}
+                <tr>
+                    <td>{{ c.nome }}</td>
+                    <td>{{ c.ra }}</td>
+                    <td class="{{ c.status }}">{{ c.status }}</td>
+                    <td>{{ c.data_envio }}</td>
+                    <td>
+                        {% if c.arquivo_assinado_path %}
+                            <a href="{{ c.arquivo_assinado_path }}" target="_blank">Ver assinado</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </body>
+    </html>
+    """, alunos=alunos, contratos=contratos)
+
+
+@app.before_request
+def bloquear_aluno_com_contrato_pendente():
+    aluno_id = session.get("aluno_id")
+
+    if not aluno_id:
+        return
+
+    rotas_liberadas = [
+        "contrato_pendente",
+        "logout",
+        "static"
+    ]
+
+    if request.endpoint in rotas_liberadas:
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id FROM contratos_alunos
+        WHERE aluno_id = ? AND status = 'pendente'
+        LIMIT 1
+    """, (aluno_id,))
+
+    contrato = cursor.fetchone()
+    conn.close()
+
+    if contrato:
+        return redirect(url_for("contrato_pendente"))  
+    
 
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)
+    init_db()
+    init_contratos_db()
