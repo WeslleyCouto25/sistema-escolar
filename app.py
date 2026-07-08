@@ -11147,6 +11147,19 @@ def contrato_pendente():
 
             <button class="btn-principal" onclick="mostrarAssinatura()">PROSSEGUIR PARA ASSINATURA</button>
 
+<a href="{{ url_for('logout') }}"
+   style="
+       display:inline-block;
+       padding:14px 25px;
+       border-radius:8px;
+       background:#dc2626;
+       color:white;
+       text-decoration:none;
+       font-weight:bold;
+       margin-top:15px;
+       margin-left:10px;">
+    SAIR
+</a>
             <div id="assinaturaArea">
                 <h2>Assine abaixo com o mouse ou dedo</h2>
 
