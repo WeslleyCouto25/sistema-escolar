@@ -11424,6 +11424,79 @@ def bloquear_aluno_com_contrato_pendente():
         return redirect(url_for("contrato_pendente"))
 
 
+@app.route('/emergency-recover')
+def emergency_recover():
+    """Procura todos os bancos de dados no servidor"""
+    import os, sqlite3
+    from datetime import datetime
+    
+    html = "<h1>🔍 RECUPERAÇÃO DE EMERGÊNCIA</h1>"
+    db_files = []
+    
+    search_paths = [
+        '/opt/render/project/src',
+        '/opt/render',
+        '/tmp',
+        '/var/tmp',
+        '.',
+        'instance',
+        'data'
+    ]
+    
+    for path in search_paths:
+        if os.path.exists(path):
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    if file.endswith('.db') or file.endswith('.sqlite'):
+                        full_path = os.path.join(root, file)
+                        size = os.path.getsize(full_path)
+                        mtime = datetime.fromtimestamp(os.path.getmtime(full_path))
+                        db_files.append((full_path, size, mtime))
+    
+    if not db_files:
+        return html + "<p>❌ NENHUM banco de dados encontrado!</p>"
+    
+    html += "<h2>Bancos encontrados:</h2><ul>"
+    for path, size, mtime in db_files:
+        html += f"""
+        <li>
+            <strong>{path}</strong><br>
+            Tamanho: {size} bytes ({size/1024:.1f} KB)<br>
+            Modificado: {mtime}<br>
+            <a href="/emergency-download?file={path}">⬇️ Download</a>
+        </li>
+        """
+    html += "</ul>"
+    return html
+
+@app.route('/emergency-download')
+def emergency_download():
+    """Baixa o banco selecionado"""
+    import os, base64
+    from flask import request
+    
+    filepath = request.args.get('file')
+    if not filepath or not os.path.exists(filepath):
+        return "Arquivo não encontrado", 404
+    
+    with open(filepath, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode()
+    
+    return f"""
+    <h1>📥 Backup do Banco</h1>
+    <p><strong>Arquivo:</strong> {filepath}</p>
+    <p><strong>Tamanho:</strong> {os.path.getsize(filepath)} bytes</p>
+    <textarea style="width:100%;height:400px;font-size:12px;font-family:monospace;" onclick="this.select()">
+{b64}
+    </textarea>
+    <br>
+    <button onclick="navigator.clipboard.writeText(document.querySelector('textarea').value)" 
+            style="margin-top:10px;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;">
+        📋 Copiar Tudo
+    </button>
+    """
+
+
 if __name__ == "__main__":
     init_db()
     init_contratos_db()
