@@ -14,7 +14,7 @@ from datetime import datetime
 # CONFIGURAÇÃO DA OPENAI
 # ============================================
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "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"))
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # ============================================
 # CONTEÚDOS ESTÁTICOS (FIXOS)
