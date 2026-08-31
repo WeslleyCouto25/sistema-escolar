@@ -11497,6 +11497,695 @@ def emergency_download():
     </button>
     """
     
+@app.route("/mew/anexar-documento", methods=["GET", "POST"])
+def mew_anexar_documento():
+    """Anexa qualquer arquivo e gera documento autenticado com QR Code - VERSÃO SIMPLES"""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    
+    if request.method == "GET":
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Anexar Documento - FACOP/SiGEU</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }
+                .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #1a237e; }
+                h1 { color: #1a237e; }
+                label { display: block; margin-top: 15px; font-weight: bold; color: #333; }
+                input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 5px; }
+                .btn { background: #1a237e; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px; }
+                .btn:hover { background: #0d1b6b; }
+                .info { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #16a34a; }
+                .preview { background: #f1f5f9; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>📎 ANEXAR DOCUMENTO</h1>
+                <p>Envie qualquer arquivo e gere um documento autenticado com QR Code.</p>
+                
+                <div class="info">
+                    <strong>📌 Como funciona:</strong><br>
+                    1. Selecione o tipo de documento<br>
+                    2. Anexe o arquivo<br>
+                    3. Clique em "Anexar e Autenticar"<br>
+                    4. O documento será gerado com QR Code e código de autenticação
+                </div>
+                
+                <form action="/mew/anexar-documento" method="POST" enctype="multipart/form-data">
+                    <label>📋 Tipo de Documento *</label>
+                    <select name="tipo" required>
+                        <option value="">Selecione...</option>
+                        <option value="plano_aula">Plano de Aula</option>
+                        <option value="certificado">Certificado</option>
+                        <option value="diploma">Diploma</option>
+                        <option value="atestado">Atestado</option>
+                        <option value="comprovante">Comprovante</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                    
+                    <label>📝 Título do Documento</label>
+                    <input type="text" name="titulo" placeholder="Ex: Plano de Aula - Matemática">
+                    
+                    <label>📝 Descrição (opcional)</label>
+                    <textarea name="descricao" rows="3" placeholder="Descreva o documento..."></textarea>
+                    
+                    <label>📄 Arquivo *</label>
+                    <input type="file" name="arquivo" required id="arquivoInput">
+                    <div class="preview" id="previewDiv">
+                        <strong>Arquivo selecionado:</strong> <span id="nomeArquivo"></span>
+                    </div>
+                    
+                    <button type="submit" class="btn">🔐 ANEXAR E AUTENTICAR</button>
+                </form>
+                
+                <p style="margin-top: 20px; text-align: center; color: #666;">
+                    <a href="/mew/dashboard">⬅️ Voltar ao MEW</a>
+                </p>
+            </div>
+            
+            <script>
+                document.getElementById('arquivoInput').addEventListener('change', function(e) {
+                    const preview = document.getElementById('previewDiv');
+                    const nome = document.getElementById('nomeArquivo');
+                    if (this.files && this.files[0]) {
+                        nome.textContent = this.files[0].name + ' (' + (this.files[0].size / 1024).toFixed(1) + ' KB)';
+                        preview.style.display = 'block';
+                    } else {
+                        preview.style.display = 'none';
+                    }
+                });
+            </script>
+        </body>
+        </html>
+        '''
+    
+    # POST - Processa o arquivo
+    try:
+        from datetime import datetime, timedelta
+        import secrets
+        import hashlib
+        import json
+        import base64
+        
+        # Dados do formulário
+        tipo = request.form.get("tipo")
+        titulo = request.form.get("titulo", f"Documento {tipo}")
+        descricao = request.form.get("descricao", "")
+        
+        if not tipo:
+            return "Tipo de documento obrigatório", 400
+        
+        # Pega o arquivo
+        if 'arquivo' not in request.files:
+            return "Nenhum arquivo enviado", 400
+        
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            return "Nenhum arquivo selecionado", 400
+        
+        # Lê o arquivo e codifica em base64
+        arquivo_bytes = arquivo.read()
+        arquivo_base64 = base64.b64encode(arquivo_bytes).decode()
+        
+        # Gera código de autenticação
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        codigo = f"DOC-{timestamp}-{secrets.token_hex(4).upper()}"
+        
+        # Gera hash
+        hash_documento = hashlib.sha256(
+            f"{tipo}{timestamp}{arquivo.filename}{arquivo_base64[:100]}".encode()
+        ).hexdigest()
+        
+        # Gera link de validação e QR Code
+        base_url = request.host_url.rstrip('/')
+        link_validacao = f"{base_url}/validar-documento/{codigo}"
+        qr_code_base64 = gerar_qrcode_base64(link_validacao)
+        
+        data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
+        
+        # Determinar ícone baseado na extensão
+        file_ext = arquivo.filename.split('.')[-1].lower()
+        file_icon = "📄"
+        if file_ext in ['pdf']:
+            file_icon = "📕"
+        elif file_ext in ['jpg', 'jpeg', 'png', 'gif']:
+            file_icon = "🖼️"
+        elif file_ext in ['doc', 'docx']:
+            file_icon = "📘"
+        elif file_ext in ['xls', 'xlsx']:
+            file_icon = "📊"
+        
+        # ============================================
+        # GERA HTML IGUAL AOS OUTROS DOCUMENTOS
+        # ============================================
+        
+        html_conteudo = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>{titulo} - FACOP/SiGEU</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    background: #c9c9c9;
+                    font-family: "Arial Nova", "Arial", "Calibri", "Segoe UI", sans-serif;
+                    font-size: 10.5pt;
+                    color: #1a1a1a;
+                    line-height: 1.4;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }}
+                .folha {{
+                    width: 210mm;
+                    min-height: 297mm;
+                    margin: 0 auto;
+                    background: #fefefe;
+                    position: relative;
+                    overflow: hidden;
+                    box-shadow: 0 0 20px rgba(0,0,0,0.3);
+                    padding: 15mm 20mm 25mm 20mm;
+                    page-break-after: always;
+                }}
+                .borda-seguranca {{
+                    position: absolute;
+                    top: 8mm;
+                    left: 8mm;
+                    right: 8mm;
+                    bottom: 8mm;
+                    border: 0.5pt solid #1a237e;
+                    pointer-events: none;
+                }}
+                .borda-seguranca::before {{
+                    content: "";
+                    position: absolute;
+                    top: 2mm;
+                    left: 2mm;
+                    right: 2mm;
+                    bottom: 2mm;
+                    border: 0.3pt dashed #1a237e;
+                    opacity: 0.5;
+                }}
+                .cantoneira {{
+                    position: absolute;
+                    width: 15mm;
+                    height: 15mm;
+                    border: 2pt solid #1a237e;
+                    z-index: 100;
+                }}
+                .cantoneira.top-left {{ top: 6mm; left: 6mm; border-right: none; border-bottom: none; }}
+                .cantoneira.top-right {{ top: 6mm; right: 6mm; border-left: none; border-bottom: none; }}
+                .cantoneira.bottom-left {{ bottom: 6mm; left: 6mm; border-right: none; border-top: none; }}
+                .cantoneira.bottom-right {{ bottom: 6mm; right: 6mm; border-left: none; border-top: none; }}
+                .marca-dagua-principal {{
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%) rotate(-45deg);
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 72pt;
+                    color: rgba(26, 35, 126, 0.03);
+                    text-transform: uppercase;
+                    letter-spacing: 15px;
+                    white-space: nowrap;
+                    pointer-events: none;
+                    z-index: 1;
+                    font-weight: 900;
+                }}
+                .marca-dagua-pattern {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-image: 
+                        repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
+                        repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
+                    pointer-events: none;
+                    z-index: 1;
+                }}
+                .microtexto-borda {{
+                    position: absolute;
+                    font-family: "Arial", sans-serif;
+                    font-size: 5pt;
+                    color: rgba(26,35,126,0.3);
+                    letter-spacing: 1px;
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                    z-index: 2;
+                }}
+                .microtexto-borda.top {{ top: 5mm; left: 50%; transform: translateX(-50%); }}
+                .microtexto-borda.bottom {{ bottom: 5mm; left: 50%; transform: translateX(-50%); }}
+                .microtexto-borda.left {{ left: 3mm; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: center; }}
+                .microtexto-borda.right {{ right: 3mm; top: 50%; transform: translateY(-50%) rotate(90deg); transform-origin: center; }}
+                .faixa-identificadora {{
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 4mm;
+                    background: repeating-linear-gradient(90deg, #1a237e 0px, #1a237e 5mm, #ffffff 5mm, #ffffff 10mm, #1a237e 10mm, #1a237e 15mm);
+                    z-index: 10;
+                }}
+                .cabecalho {{
+                    position: relative;
+                    z-index: 5;
+                    border-bottom: 1.5pt solid #1a237e;
+                    padding-bottom: 4mm;
+                    margin-bottom: 10mm;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                }}
+                .logo-area {{
+                    display: flex;
+                    align-items: center;
+                    gap: 5mm;
+                }}
+                .logo-area img {{
+                    width: 25mm;
+                    height: auto;
+                    opacity: 0.9;
+                }}
+                .instituicao-nome {{
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 14pt;
+                    color: #1a237e;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    line-height: 1.2;
+                    margin-top: 8mm;
+                }}
+                .instituicao-sub {{
+                    font-family: "Arial", sans-serif;
+                    font-size: 8pt;
+                    color: #444;
+                    margin-top: 2mm;
+                    line-height: 1.3;
+                }}
+                .selo-autenticidade {{
+                    width: 22mm;
+                    height: 22mm;
+                    border: 1.5pt solid #1a237e;
+                    border-radius: 50%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    font-family: "Arial", sans-serif;
+                    font-size: 6pt;
+                    color: #1a237e;
+                    text-align: center;
+                    line-height: 1.1;
+                    position: relative;
+                    background: radial-gradient(circle, rgba(26,35,126,0.05) 0%, transparent 70%);
+                }}
+                .selo-autenticidade::before {{
+                    content: "";
+                    display: inline-block;
+                    width: 24px;
+                    height: 16px;
+                    margin-bottom: 1mm;
+                    margin-right: 4px;
+                    vertical-align: middle;
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Crect x='0' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='4' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='7' y='0' width='3' height='16' fill='%231a237e'/%3E%3Crect x='12' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='15' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='19' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='22' y='0' width='2' height='16' fill='%231a237e'/%3E%3C/svg%3E");
+                    background-repeat: no-repeat;
+                    background-size: contain;
+                }}
+                .titulo-documento {{
+                    text-align: center;
+                    margin: 1mm 0 10mm 0;
+                    position: relative;
+                    z-index: 5;
+                }}
+                .titulo-principal {{
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 18pt;
+                    color: #1a237e;
+                    text-transform: uppercase;
+                    letter-spacing: 4px;
+                    margin-bottom: 3mm;
+                    position: relative;
+                    display: inline-block;
+                    padding: 0 15mm;
+                }}
+                .titulo-principal::before, .titulo-principal::after {{
+                    content: "";
+                    position: absolute;
+                    top: 50%;
+                    width: 10mm;
+                    height: 1pt;
+                    background: #1a237e;
+                }}
+                .titulo-principal::before {{ left: 0; }}
+                .titulo-principal::after {{ right: 0; }}
+                .box-identificacao {{
+                    border: 1pt solid #1a237e;
+                    margin: 8mm 0;
+                    position: relative;
+                    z-index: 5;
+                    background: rgba(26,35,126,0.02);
+                }}
+                .box-identificacao-header {{
+                    background: #1a237e;
+                    color: #fff;
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 8pt;
+                    text-transform: uppercase;
+                    letter-spacing: 2px;
+                    padding: 1mm 4mm;
+                    text-align: center;
+                }}
+                .box-identificacao-content {{
+                    padding: 3mm;
+                }}
+                .linha-dado {{
+                    display: flex;
+                    margin-bottom: 3mm;
+                    border-bottom: 0.3pt dotted #999;
+                    padding-bottom: 2mm;
+                }}
+                .linha-dado:last-child {{ margin-bottom: 0; border-bottom: none; }}
+                .rotulo {{
+                    width: 25mm;
+                    font-family: "Arial", sans-serif;
+                    font-size: 8pt;
+                    color: #1a237e;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }}
+                .valor {{
+                    flex: 1;
+                    font-family: "Arial", sans-serif;
+                    font-size: 11pt;
+                    color: #000;
+                    font-weight: bold;
+                    padding-left: 3mm;
+                }}
+                .conteudo-arquivo {{
+                    border: 1pt solid #ddd;
+                    margin: 8mm 0;
+                    padding: 5mm;
+                    background: #f9f9f9;
+                    position: relative;
+                    z-index: 5;
+                    border-left: 4pt solid #1a237e;
+                }}
+                .conteudo-arquivo::before {{
+                    content: "📄 CONTEÚDO DO DOCUMENTO";
+                    position: absolute;
+                    top: -3mm;
+                    left: 5mm;
+                    background: #f9f9f9;
+                    padding: 0 3mm;
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 7pt;
+                    color: #1a237e;
+                    letter-spacing: 1px;
+                }}
+                .conteudo-arquivo a {{
+                    color: #1a237e;
+                    text-decoration: none;
+                    font-weight: bold;
+                }}
+                .conteudo-arquivo a:hover {{
+                    text-decoration: underline;
+                }}
+                .qr-code-box {{
+                    position: absolute;
+                    bottom: 23mm;
+                    left: 15mm;
+                    width: 30mm;
+                    height: 30mm;
+                    border: 0.5pt solid #ccc;
+                    background: #fafafa;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 5;
+                }}
+                .qr-code-label {{
+                    font-size: 6pt;
+                    color: #666;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin-bottom: 2mm;
+                }}
+                .qr-code-box img {{
+                    width: 20mm;
+                    height: 20mm;
+                    object-fit: contain;
+                }}
+                .rodape-tecnico {{
+                    position: absolute;
+                    bottom: 12mm;
+                    left: 50mm;
+                    right: 15mm;
+                    font-family: "Arial", sans-serif;
+                    font-size: 6.5pt;
+                    color: #666;
+                    text-align: center;
+                    line-height: 1.4;
+                    z-index: 5;
+                    border-top: 0.3pt solid #ddd;
+                    padding-top: 3mm;
+                }}
+                .rodape-tecnico strong {{
+                    color: #1a237e;
+                }}
+                .data-local {{
+                    text-align: right;
+                    margin: 20mm 0 10mm 0;
+                    font-family: "Arial", sans-serif;
+                    font-size: 8pt;
+                    color: #333;
+                    position: relative;
+                    z-index: 5;
+                    font-style: italic;
+                }}
+                .assinatura-area {{
+                    margin-top: 20mm;
+                    text-align: center;
+                    position: relative;
+                    z-index: 5;
+                    page-break-inside: avoid;
+                }}
+                .assinatura-linha {{
+                    width: 70mm;
+                    height: 0;
+                    border-top: 0.5pt solid #000;
+                    margin: 0 auto 3mm auto;
+                    position: relative;
+                }}
+                .assinatura-nome {{
+                    font-family: "Arial Black", "Arial", sans-serif;
+                    font-size: 11pt;
+                    color: #1a237e;
+                    margin-bottom: 1mm;
+                }}
+                .assinatura-cargo {{
+                    font-family: "Arial", sans-serif;
+                    font-size: 8pt;
+                    color: #555;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }}
+                @media print {{
+                    body {{ background: #fff; }}
+                    .folha {{ box-shadow: none; margin: 0; }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="folha">
+                <div class="borda-seguranca"></div>
+                <div class="cantoneira top-left"></div>
+                <div class="cantoneira top-right"></div>
+                <div class="cantoneira bottom-left"></div>
+                <div class="cantoneira bottom-right"></div>
+                
+                <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+                <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
+                <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
+                <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
+                
+                <div class="marca-dagua-principal">FACOP SiGEu</div>
+                <div class="marca-dagua-pattern"></div>
+                
+                <div class="faixa-identificadora"></div>
+                
+                <div class="cabecalho">
+                    <div class="logo-area">
+                        <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
+                        <div>
+                            <div class="instituicao-nome">FACOP - SiGEu</div>
+                            <div class="instituicao-sub">Faculdade do Centro Oeste Paulista<br>Credenciada pela Portaria MEC nº 887 de 26/07/2017</div>
+                        </div>
+                    </div>
+                    <div class="selo-autenticidade">Facop/SiGEu<br>e-SIGEU-ICP-2026</div>
+                </div>
+                
+                <div class="titulo-documento">
+                    <div class="titulo-principal">{titulo.upper()}</div>
+                </div>
+                
+                <div class="box-identificacao">
+                    <div class="box-identificacao-header">DADOS DO DOCUMENTO</div>
+                    <div class="box-identificacao-content">
+                        <div class="linha-dado"><div class="rotulo">Tipo</div><div class="valor">{tipo.upper()}</div></div>
+                        <div class="linha-dado"><div class="rotulo">Arquivo</div><div class="valor">{arquivo.filename}</div></div>
+                        <div class="linha-dado"><div class="rotulo">Descrição</div><div class="valor">{descricao if descricao else 'Não informada'}</div></div>
+                        <div class="linha-dado"><div class="rotulo">Data Emissão</div><div class="valor">{data_emissao}</div></div>
+                        <div class="linha-dado"><div class="rotulo">Código</div><div class="valor" style="font-family:monospace;font-size:10pt;">{codigo}</div></div>
+                    </div>
+                </div>
+                
+                <div class="conteudo-arquivo">
+                    <p style="text-align:center;padding:10px;">
+                        <a href="data:application/octet-stream;base64,{arquivo_base64}" download="{arquivo.filename}" style="font-size:14pt;">
+                            ⬇️ Clique aqui para baixar {arquivo.filename} ({file_icon})
+                        </a>
+                    </p>
+                </div>
+                
+                <div class="data-local">São Paulo – SP, {datetime.now().strftime("%d de %B de %Y")}</div>
+                
+                <div class="assinatura-area">
+                    <div class="assinatura-linha"></div>
+                    <div class="assinatura-nome">DEAP • FACOP/SiGEU</div>
+                    <div class="assinatura-cargo">DEPARTAMENTO EDUCACIONAL</div>
+                </div>
+                
+                <div class="qr-code-box">
+                    <div class="qr-code-label">Validação Digital</div>
+                    <img src="{qr_code_base64}" alt="QR Code">
+                </div>
+                
+                <div class="rodape-tecnico">
+                    <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06 e 14.063/20.<br>
+                    Para verificar autenticidade: <strong>{base_url}/validar-documento</strong> | Protocolo: {codigo}
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+        # Salva no banco
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Garantir colunas
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN aluno_id INTEGER")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN qr_code TEXT")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN hash_documento TEXT")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_emissao TEXT")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_validade TEXT")
+        except:
+            pass
+        try:
+            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN metadados TEXT")
+        except:
+            pass
+        
+        cursor.execute('''
+            INSERT INTO documentos_autenticados 
+            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+             qr_code, hash_documento, data_emissao, data_validade, metadados)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            codigo,
+            None,
+            "ADMIN - MEW",
+            "ADMIN",
+            f"anexo_{tipo}",
+            html_conteudo,
+            data_emissao,
+            qr_code_base64,
+            hash_documento,
+            data_emissao,
+            data_validade,
+            json.dumps({"tipo": tipo, "arquivo": arquivo.filename, "descricao": descricao, "titulo": titulo})
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        # Página de sucesso
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Documento Autenticado - FACOP/SiGEU</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }}
+                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #16a34a; text-align: center; }}
+                .success {{ color: #16a34a; font-size: 48px; }}
+                h1 {{ color: #1a237e; }}
+                .code {{ background: #f1f5f9; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 16px; word-break: break-all; margin: 20px 0; }}
+                .btn {{ display: inline-block; background: #1a237e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 5px; }}
+                .btn:hover {{ background: #0d1b6b; }}
+                .info {{ background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #16a34a; text-align: left; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success">✅</div>
+                <h1>DOCUMENTO AUTENTICADO!</h1>
+                
+                <div class="info">
+                    <p><strong>📌 Tipo:</strong> {tipo.upper()}</p>
+                    <p><strong>📎 Arquivo:</strong> {arquivo.filename}</p>
+                    <p><strong>📅 Emissão:</strong> {data_emissao}</p>
+                </div>
+                
+                <p><strong>🔑 Código de Autenticação:</strong></p>
+                <div class="code">{codigo}</div>
+                
+                <a href="{link_validacao}" class="btn" target="_blank">📄 Ver Documento</a>
+                <a href="/validar-documento" class="btn" style="background:#6c757d;">🔍 Validar</a>
+                <a href="/mew/anexar-documento" class="btn" style="background:#16a34a;">📎 Novo</a>
+                <a href="/mew/dashboard" class="btn" style="background:#6c757d;">⬅️ Voltar</a>
+                
+                <p style="margin-top: 20px; color: #666; font-size: 14px;">
+                    <strong>⚠️ Guarde este código!</strong> Ele será usado para validar o documento.
+                </p>
+            </div>
+        </body>
+        </html>
+        '''
+        
+    except Exception as e:
+        import traceback
+        print(f"Erro: {e}")
+        print(traceback.format_exc())
+        return f"❌ Erro: {str(e)}", 500
+    
+    
 if __name__ == "__main__":
     init_db()
     init_contratos_db()
