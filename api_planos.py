@@ -207,7 +207,7 @@ def consultar_openai_para_plano(dados):
     print("⏳ Consultando OpenAI...\n")
     
     response = client.chat.completions.create(
-        model="gpt-4-1106-preview",
+        model="gpt-3.5-turbo",
         messages=[
             {
                 "role": "system",
