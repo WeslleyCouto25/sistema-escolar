@@ -23,6 +23,7 @@ import base64
 from io import BytesIO
 import hashlib
 import json
+import plano_ensino  
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv() 
@@ -11495,7 +11496,86 @@ def emergency_download():
         📋 Copiar Tudo
     </button>
     """
-
+@app.route('/mew/gerar-plano-ensino', methods=['POST'])
+def mew_gerar_plano_ensino():
+    """Gera plano de ensino usando o plano_ensino.py e autentica com o sistema do app.py"""
+    if not session.get("mew_admin"):
+        return jsonify({"success": False, "message": "Não autorizado"})
+    
+    try:
+        dados = request.json
+        
+        # ============================================
+        # 1. GERA O HTML USANDO O plano_ensino.py
+        # ============================================
+        html_plano = plano_ensino.gerar_html_plano(dados)
+        
+        # ============================================
+        # 2. APP.PY FAZ A AUTENTICAÇÃO (código, QR Code, banco)
+        # ============================================
+        from datetime import datetime, timedelta
+        import secrets
+        import hashlib
+        import json
+        
+        # Gera código (IGUAL ao histórico e declaração)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        codigo = f"PLANO-{timestamp}-{secrets.token_hex(4).upper()}"
+        
+        # Gera hash (IGUAL ao histórico e declaração)
+        hash_documento = hashlib.sha256(f"plano_ensino_{timestamp}".encode()).hexdigest()
+        
+        # Gera QR Code (IGUAL ao histórico e declaração)
+        base_url = request.host_url.rstrip('/')
+        link_validacao = f"{base_url}/validar-documento/{codigo}"
+        qr_code_base64 = gerar_qrcode_base64(link_validacao)
+        
+        # Salva no banco (MESMA TABELA de histórico e declaração)
+        data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO documentos_autenticados 
+            (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+             qr_code, hash_documento, data_emissao, data_validade, metadados)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            codigo,
+            "ADMIN - MEW",
+            "ADMIN",
+            'plano_ensino',
+            html_plano,
+            data_emissao,
+            qr_code_base64,
+            hash_documento,
+            data_emissao,
+            data_validade,
+            json.dumps({"tipo": "plano_ensino", "gerado_por": "MEW"})
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        # ============================================
+        # 3. RETORNA O RESULTADO
+        # ============================================
+        return jsonify({
+            "success": True,
+            "codigo": codigo,
+            "hash": hash_documento,
+            "qr_code": qr_code_base64,
+            "url_validacao": link_validacao,
+            "url_visualizar": f"/ver-documento/{codigo}"
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Erro: {e}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": str(e)})
 
 if __name__ == "__main__":
     init_db()
