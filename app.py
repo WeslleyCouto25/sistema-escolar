@@ -8276,6 +8276,124 @@ def mew_gerenciar_documentos():
         documentos_visualizados=documentos_visualizados
     )
     
+@app.route('/mew/gerar-historico-automatico', methods=['POST'])
+def gerar_historico_automatico_route():
+    """
+    Gera histórico escolar automaticamente com QR Code e hash
+    """
+    if not session.get("mew_admin"):
+        return jsonify({"success": False, "message": "Não autorizado"})
+    
+    try:
+        data = request.get_json()
+        aluno_id = data.get('aluno_id')
+        ano_manual = data.get('ano_historico')
+        
+        # 👇 PEGAR OS VALORES MANUAIS DO FORMULÁRIO
+        ira_manual = data.get('ira_manual', 'N/I')
+        total_disciplinas_manual = data.get('total_disciplinas', '0')
+        frequencia = data.get('frequencia', 'N/I')  # 👈 DEFINIR A VARIÁVEL AQUI!
+        
+        if not aluno_id:
+            return jsonify({"success": False, "message": "Aluno não selecionado"})
+        
+        # Buscar dados do aluno
+        aluno_completo = buscar_dados_pessoais_completos(aluno_id)
+        if not aluno_completo:
+            return jsonify({"success": False, "message": "Aluno não encontrado"})
+        
+        # Buscar disciplinas do aluno
+        disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
+        if not disciplinas:
+            return jsonify({"success": False, "message": "Aluno não tem disciplinas"})
+        
+        # Gerar código único
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        codigo = f"HIST-{aluno_completo['ra']}-{timestamp}-{secrets.token_hex(4).upper()}"
+        
+        # Gerar hash do documento
+        hash_documento = gerar_hash_documento(
+            f"historico_{aluno_id}_{timestamp}", 
+            aluno_completo['ra'], 
+            timestamp
+        )
+        
+        # Gerar link de validação
+        base_url = request.host_url.rstrip('/')
+        link_validacao = f"{base_url}/validar-documento/{codigo}"
+        
+        # GERAR QR CODE
+        dados_qr = link_validacao 
+        qr_code_base64 = gerar_qrcode_base64(dados_qr)
+        
+        # 👇 PASSAR OS VALORES MANUAIS PARA A FUNÇÃO (10 PARÂMETROS)
+        html = gerar_historico_automatico(
+            aluno_id, 
+            disciplinas, 
+            aluno_completo, 
+            qr_code_base64, 
+            codigo, 
+            hash_documento,
+            ano_manual,
+            ira_manual,
+            total_disciplinas_manual,
+            frequencia  # 👈 10º PARÂMETRO
+        )
+        
+        # Criar metadados
+        metadados = criar_metadados_documento(aluno_id, 'historico', codigo, hash_documento)
+        
+        # Data atual
+        data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
+        
+        # Salvar no banco
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO documentos_autenticados 
+            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+             qr_code, hash_documento, data_emissao, data_validade, metadados)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            codigo, 
+            aluno_id, 
+            aluno_completo['nome'], 
+            aluno_completo['ra'], 
+            'historico', 
+            html, 
+            data_emissao,
+            qr_code_base64,
+            hash_documento,
+            data_emissao,
+            data_validade,
+            metadados
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "codigo": codigo,
+            "hash": hash_documento,
+            "qr_code": qr_code_base64,
+            "aluno_nome": aluno_completo['nome'],
+            "aluno_ra": aluno_completo['ra'],
+            "url_validacao": link_validacao,
+            "url_visualizar": f"/ver-documento/{codigo}",
+            "data_emissao": data_emissao,
+            "data_validade": data_validade
+        })
+            
+    except Exception as e:
+        import traceback
+        print(f"Erro: {e}")
+        print(traceback.format_exc())
+        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
+
+
 @app.route("/mew/enviar-documento-aluno/<int:documento_id>", methods=["POST"])
 def mew_enviar_documento_aluno(documento_id):
     """Envia um documento para a área do aluno"""
