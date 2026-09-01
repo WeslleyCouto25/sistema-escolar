@@ -6034,7 +6034,9 @@ def obter_configuracao_ano():
     from datetime import datetime
     return str(datetime.now().year)
 
-def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None, ira_manual='N/I', total_disciplinas_manual='0'):
+
+
+def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None, ira_manual='N/I', total_disciplinas_manual='0', frequencia_manual='N/I'):
     """Gera HTML do histórico escolar com QR CODE JÁ INCLUSO"""
     
     conn = get_db_connection()
@@ -6066,10 +6068,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     # Obter ano configurável
     ano_historico = ano_manual if ano_manual else obter_configuracao_ano()
     
-    # ===== CORREÇÃO COMPLETA AQUI =====
-    # Buscar IRA do banco de dados
-        # ===== USAR VALORES MANUAIS DO FORMULÁRIO =====
-    # (ignorar completamente o banco de dados)
+    # ===== USAR VALORES MANUAIS DO FORMULÁRIO =====
     ira_display = ira_manual
     
     # Converter total_disciplinas_manual para número
@@ -6192,10 +6191,13 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         
         # Determinar status
         status_display = d.get('status', 'CURSANDO')
-        
+
         # Determinar semestre
         semestre = periodo.split('.')[-1] if '.' in periodo else "1"
-        
+
+        # 👇 USA O VALOR DO FORMULÁRIO PARA FREQUÊNCIA
+        frequencia = frequencia_manual
+
         linhas += f"""
             <tr>
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{periodo}</td>
@@ -6204,10 +6206,11 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{carga_horaria}H</td>
                 <td style="border: 1px solid #000; padding: 4px; text-align: left;">{docente}</td>
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{nota_display}</td>
+                <td style="border: 1px solid #000; padding: 4px; text-align: center;">{frequencia}</td>
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{status_display}</td>
             </tr>
         """
-    
+        
     # Gerar link de validação
     base_url = "https://campusvirtualfacop.com.br"
     link_validacao = f"{base_url}/validar-documento/{codigo}"
@@ -7097,6 +7100,7 @@ body {{
                 <th>C.H.</th>
                 <th>Docente/Titulação</th>
                 <th>Nota Final</th>
+                <th>Frequência</th>
                 <th>Resultado</th>
             </tr>
         </thead>
@@ -7239,125 +7243,6 @@ body {{
     
     conn.close()
     return html
-
-# ==========================
-# ROTA PARA GERAR HISTÓRICO (SIMPLES)
-# ==========================
-@app.route('/mew/gerar-historico-automatico', methods=['POST'])
-def gerar_historico_automatico_route():
-    """
-    Gera histórico escolar automaticamente com QR Code e hash
-    """
-    if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
-    
-    try:
-        data = request.get_json()
-        aluno_id = data.get('aluno_id')
-        ano_manual = data.get('ano_historico')
-        
-        # 👇 1. PEGAR OS VALORES MANUAIS DO FORMULÁRIO
-        ira_manual = data.get('ira_manual', 'N/I')
-        total_disciplinas_manual = data.get('total_disciplinas', '0')
-        
-        if not aluno_id:
-            return jsonify({"success": False, "message": "Aluno não selecionado"})
-        
-        # Buscar dados do aluno
-        aluno_completo = buscar_dados_pessoais_completos(aluno_id)
-        if not aluno_completo:
-            return jsonify({"success": False, "message": "Aluno não encontrado"})
-        
-        # Buscar disciplinas do aluno
-        disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
-        if not disciplinas:
-            return jsonify({"success": False, "message": "Aluno não tem disciplinas"})
-        
-        # Gerar código único
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        codigo = f"HIST-{aluno_completo['ra']}-{timestamp}-{secrets.token_hex(4).upper()}"
-        
-        # Gerar hash do documento
-        hash_documento = gerar_hash_documento(
-            f"historico_{aluno_id}_{timestamp}", 
-            aluno_completo['ra'], 
-            timestamp
-        )
-        
-        # Gerar link de validação
-        base_url = request.host_url.rstrip('/')
-        link_validacao = f"{base_url}/validar-documento/{codigo}"
-        
-        # GERAR QR CODE
-        dados_qr = link_validacao 
-        qr_code_base64 = gerar_qrcode_base64(dados_qr)
-        
-        # 👇 2. PASSAR OS VALORES MANUAIS PARA A FUNÇÃO
-        html = gerar_historico_automatico(
-            aluno_id, 
-            disciplinas, 
-            aluno_completo, 
-            qr_code_base64, 
-            codigo, 
-            hash_documento,
-            ano_manual,
-            ira_manual,              # 👈 NOVO
-            total_disciplinas_manual  # 👈 NOVO
-        )
-        
-        # Criar metadados
-        metadados = criar_metadados_documento(aluno_id, 'historico', codigo, hash_documento)
-        
-        # Data atual
-        data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-        
-        # Salvar no banco
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO documentos_autenticados 
-            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
-             qr_code, hash_documento, data_emissao, data_validade, metadados)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            codigo, 
-            aluno_id, 
-            aluno_completo['nome'], 
-            aluno_completo['ra'], 
-            'historico', 
-            html, 
-            data_emissao,
-            qr_code_base64,
-            hash_documento,
-            data_emissao,
-            data_validade,
-            metadados
-        ))
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "codigo": codigo,
-            "hash": hash_documento,
-            "qr_code": qr_code_base64,
-            "aluno_nome": aluno_completo['nome'],
-            "aluno_ra": aluno_completo['ra'],
-            "url_validacao": link_validacao,
-            "url_visualizar": f"/ver-documento/{codigo}",
-            "data_emissao": data_emissao,
-            "data_validade": data_validade
-        })
-            
-    except Exception as e:
-        import traceback
-        print(f"Erro: {e}")
-        print(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-
 
 @app.route("/ver-documento/<codigo>")
 def ver_documento_completo(codigo):
