@@ -300,31 +300,48 @@
     let disciplinasData = [];
 
     function selecionarTipo(tipo) {
-        // Remover seleção anterior
+        console.log('📌 Selecionando tipo:', tipo);
+        
+        // Remove seleção de TODOS os cards
         document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('selecionado'));
         
-        // Adicionar seleção ao card clicado
-        document.getElementById(`card-${tipo}`).classList.add('selecionado');
+        // Seleciona o card clicado
+        const card = document.getElementById(`card-${tipo}`);
+        if (card) {
+            card.classList.add('selecionado');
+        } else {
+            console.error('❌ Card não encontrado:', tipo);
+            return;
+        }
+        
+        // Armazena o tipo selecionado
         document.getElementById('tipoSelecionado').value = tipo;
         tipoAtual = tipo;
         
-        // Esconder área de disciplinas por padrão
+        // Esconde áreas específicas
         document.getElementById('areaDisciplinas').style.display = 'none';
         document.getElementById('configDeclaracao').style.display = 'none';
+        document.getElementById('infoDisciplinaSelecionada').style.display = 'none';
+        document.getElementById('resultado').style.display = 'none';
         
-        // Se for declaração, mostrar área de disciplinas quando aluno estiver selecionado
+        // Reseta disciplina selecionada ao trocar de tipo
+        disciplinaIdSelecionada = null;
+        
+        // Se for declaração e tiver aluno, carrega disciplinas
         if (tipo === 'declaracao' && alunoIdAtual) {
+            console.log('📚 Carregando disciplinas para declaração...');
             carregarDisciplinasParaDeclaracao(alunoIdAtual);
         }
         
-        // Se for plano, mostrar mensagem de em breve
+        // Se for plano, avisa que está em breve
         if (tipo === 'plano') {
             alert('Funcionalidade de Plano de Ensino estará disponível em breve!');
             document.getElementById('tipoSelecionado').value = '';
-            document.getElementById(`card-${tipo}`).classList.remove('selecionado');
+            card.classList.remove('selecionado');
+            tipoAtual = '';
         }
         
-        // Habilitar/desabilitar botão
+        // Verifica se pode habilitar o botão
         verificarHabilitarBotao();
     }
 
@@ -370,17 +387,20 @@
                 verificarHabilitarBotao();
             }
         } catch (error) {
-            console.error('Erro:', error);
+            console.error('❌ Erro ao carregar aluno:', error);
         }
     }
 
     async function carregarDisciplinasParaDeclaracao(alunoId) {
+        console.log('📚 Carregando disciplinas para o aluno:', alunoId);
+        
         try {
             const response = await fetch(`/mew/buscar-disciplinas-aluno/${alunoId}`);
             const data = await response.json();
 
             if (data.success) {
                 disciplinasData = data.disciplinas;
+                console.log('✅ Disciplinas carregadas:', disciplinasData.length);
                 
                 // Filtrar apenas disciplinas concluídas (com nota final)
                 const disciplinasConcluidas = disciplinasData.filter(d => 
@@ -393,13 +413,14 @@
                 } else {
                     disciplinasConcluidas.forEach(d => {
                         const statusClass = d.status === 'APROVADO' ? 'badge-success' : 'badge-warning';
+                        const notaDisplay = d.nota !== null && d.nota !== undefined ? d.nota : 'N/I';
                         html += `
-                            <div class="disciplina-item" onclick="selecionarDisciplina(${d.id}, '${d.nome}')">
+                            <div class="disciplina-item" onclick="selecionarDisciplina(${d.id}, '${d.nome.replace(/'/g, "\\'")}')">
                                 <strong>${d.nome}</strong> 
                                 <span class="badge ${statusClass}" style="float: right;">${d.status}</span>
                                 <br>
                                 <span style="font-size: 11px; color: #666;">
-                                    Nota: ${d.nota || 'N/I'} | Carga: ${d.carga}h
+                                    Nota: ${notaDisplay} | Carga: ${d.carga}h
                                 </span>
                             </div>
                         `;
@@ -412,9 +433,11 @@
                 
                 // Buscar documentos anteriores
                 await buscarDocumentosAnteriores(alunoId);
+            } else {
+                console.error('❌ Erro ao carregar disciplinas:', data.message);
             }
         } catch (error) {
-            console.error('Erro:', error);
+            console.error('❌ Erro ao carregar disciplinas:', error);
         }
     }
 
@@ -423,7 +446,7 @@
             const response = await fetch(`/mew/buscar-documentos-aluno/${alunoId}?tipo=declaracao_conclusao`);
             const data = await response.json();
             
-            if (data.success && data.documentos.length > 0) {
+            if (data.success && data.documentos && data.documentos.length > 0) {
                 let html = '';
                 data.documentos.forEach(doc => {
                     html += `
@@ -442,13 +465,17 @@
                 });
                 document.getElementById('listaDocumentosAnteriores').innerHTML = html;
                 document.getElementById('documentosAnteriores').style.display = 'block';
+            } else {
+                document.getElementById('documentosAnteriores').style.display = 'none';
             }
         } catch (error) {
-            console.error('Erro:', error);
+            console.error('❌ Erro ao buscar documentos anteriores:', error);
         }
     }
 
     function selecionarDisciplina(id, nome) {
+        console.log('📌 Selecionando disciplina:', id, nome);
+        
         disciplinaIdSelecionada = id;
         document.getElementById('nomeDisciplinaSelecionada').innerText = nome;
         document.getElementById('infoDisciplinaSelecionada').style.display = 'block';
@@ -457,7 +484,13 @@
         document.querySelectorAll('.disciplina-item').forEach(d => d.classList.remove('selecionada'));
         
         // Adicionar seleção ao item clicado
-        event.currentTarget.classList.add('selecionada');
+        const items = document.querySelectorAll('.disciplina-item');
+        for (let item of items) {
+            if (item.textContent.includes(nome)) {
+                item.classList.add('selecionada');
+                break;
+            }
+        }
         
         verificarHabilitarBotao();
     }
@@ -465,145 +498,160 @@
     function verificarHabilitarBotao() {
         const btn = document.getElementById('btnGerar');
         
+        // Se não tem tipo selecionado, desabilita
+        if (!tipoAtual) {
+            btn.disabled = true;
+            return;
+        }
+        
+        // Histórico: precisa de aluno
         if (tipoAtual === 'historico' && alunoIdAtual) {
             btn.disabled = false;
-        } else if (tipoAtual === 'declaracao' && alunoIdAtual && disciplinaIdSelecionada) {
-            btn.disabled = false;
-        } else {
-            btn.disabled = true;
+            return;
         }
+        
+        // Declaração: precisa de aluno E disciplina selecionada
+        if (tipoAtual === 'declaracao' && alunoIdAtual && disciplinaIdSelecionada) {
+            btn.disabled = false;
+            return;
+        }
+        
+        // Qualquer outro caso: desabilita
+        btn.disabled = true;
     }
 
     async function gerarDocumento() {
-    const alunoId = document.getElementById('alunoSelect').value;
-    const ano = document.getElementById('anoReferencia').value;
-    
-    // ===== CAMPOS DO FORMULÁRIO =====
-    const ira = document.getElementById('iraAluno')?.value || 'N/I';
-    const totalDisc = document.getElementById('totalDisciplinas')?.value || '0';
-    const frequencia = document.getElementById('frequenciaAluno')?.value || 'N/I';
-    // =================================
-    
-    const tipo = tipoAtual;
-    
-    const btn = document.getElementById('btnGerar');
-    const originalText = btn.innerHTML;
+        const alunoId = document.getElementById('alunoSelect').value;
+        const ano = document.getElementById('anoReferencia').value;
+        
+        const ira = document.getElementById('iraAluno')?.value || 'N/I';
+        const totalDisc = document.getElementById('totalDisciplinas')?.value || '0';
+        const frequencia = document.getElementById('frequenciaAluno')?.value || 'N/I';
+        
+        const tipo = tipoAtual;
+        
+        const btn = document.getElementById('btnGerar');
+        const originalText = btn.innerHTML;
 
-    if (!alunoId) {
-        alert('Selecione um aluno!');
-        return;
-    }
-
-    if (tipo === 'historico') {
-        // Verifica se o aluno tem disciplinas
-        if (disciplinasData && disciplinasData.length === 0) {
-            alert('Este aluno não possui disciplinas cadastradas para gerar o histórico.');
+        if (!alunoId) {
+            alert('⚠️ Selecione um aluno!');
             return;
         }
-    }
-
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GERANDO...';
-    btn.disabled = true;
-
-    try {
-        let url = '';
-        let bodyData = {};
 
         if (tipo === 'historico') {
-            url = '/mew/gerar-historico-automatico';
-            bodyData = {
-                aluno_id: alunoId,
-                ano_historico: ano,
-                ira_manual: ira,
-                total_disciplinas: totalDisc,
-                frequencia: frequencia
-            };
-        } else if (tipo === 'declaracao') {
-            if (!disciplinaIdSelecionada) {
-                alert('Selecione uma disciplina!');
+            if (!disciplinasData || disciplinasData.length === 0) {
+                alert('⚠️ Este aluno não possui disciplinas cadastradas para gerar o histórico.');
+                return;
+            }
+        }
+
+        if (tipo === 'declaracao' && !disciplinaIdSelecionada) {
+            alert('⚠️ Selecione uma disciplina para gerar a declaração!');
+            return;
+        }
+
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> GERANDO...';
+        btn.disabled = true;
+
+        try {
+            let url = '';
+            let bodyData = {};
+
+            if (tipo === 'historico') {
+                url = '/mew/gerar-historico-automatico';
+                bodyData = {
+                    aluno_id: alunoId,
+                    ano_historico: ano,
+                    ira_manual: ira,
+                    total_disciplinas: totalDisc,
+                    frequencia: frequencia
+                };
+            } else if (tipo === 'declaracao') {
+                url = '/mew/gerar-declaracao-conclusao';
+                bodyData = {
+                    aluno_id: alunoId,
+                    disciplina_id: disciplinaIdSelecionada,
+                    ano_historico: ano
+                };
+            } else {
+                alert('⚠️ Selecione um tipo de documento válido!');
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 return;
             }
-            
-            url = '/mew/gerar-declaracao-conclusao';
-            bodyData = {
-                aluno_id: alunoId,
-                disciplina_id: disciplinaIdSelecionada,
-                ano_historico: ano
-            };
-        } else {
-            alert('Selecione um tipo de documento!');
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(bodyData)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                let tipoDoc = tipo === 'historico' ? 'Histórico Escolar' : 'Declaração de Conclusão';
+                
+                document.getElementById('resultado').innerHTML = `
+                    <div style="background: #d4edda; color: #155724; padding: 20px; border-radius: 10px; border: 1px solid #c3e6cb;">
+                        <h3><i class="fas fa-check-circle"></i> ${tipoDoc} gerado com sucesso!</h3>
+                        <p><strong>Código:</strong> <code style="background:#f8f9fa;padding:2px 8px;border-radius:3px;">${data.codigo}</code></p>
+                        <p><strong>Aluno:</strong> ${data.aluno_nome} (RA: ${data.aluno_ra})</p>
+                        ${data.disciplina_nome ? `<p><strong>Disciplina:</strong> ${data.disciplina_nome}</p>` : ''}
+                        
+                        <div style="margin-top: 15px;">
+                            <a href="/ver-documento/${data.codigo}" target="_blank" class="btn btn-primary" style="display:inline-block;padding:10px 20px;background:#1a237e;color:white;text-decoration:none;border-radius:5px;margin:5px;">
+                                <i class="fas fa-eye"></i> Ver Documento
+                            </a>
+                            <button onclick="window.open('/ver-documento/${data.codigo}', '_blank').print()" class="btn btn-primary" style="display:inline-block;padding:10px 20px;background:#17a2b8;color:white;border:none;border-radius:5px;margin:5px;cursor:pointer;">
+                                <i class="fas fa-print"></i> Imprimir
+                            </button>
+                            <button onclick="copiarCodigo('${data.codigo}')" class="btn btn-secondary" style="display:inline-block;padding:10px 20px;background:#6c757d;color:white;border:none;border-radius:5px;margin:5px;cursor:pointer;">
+                                <i class="fas fa-copy"></i> Copiar Código
+                            </button>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('resultado').style.display = 'block';
+                
+                // Recarregar documentos anteriores
+                if (tipo === 'declaracao') {
+                    await buscarDocumentosAnteriores(alunoId);
+                }
+            } else {
+                alert('❌ Erro: ' + data.message);
+            }
+        } catch (error) {
+            console.error('❌ Erro:', error);
+            alert('❌ Erro ao gerar documento: ' + error.message);
+        } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
-            return;
         }
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(bodyData)
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            let tipoDoc = tipo === 'historico' ? 'Histórico Escolar' : 'Declaração de Conclusão';
-            
-            document.getElementById('resultado').innerHTML = `
-                <div style="background: #d4edda; color: #155724; padding: 20px; border-radius: 10px; border: 1px solid #c3e6cb;">
-                    <h3><i class="fas fa-check-circle"></i> ${tipoDoc} gerado com sucesso!</h3>
-                    <p><strong>Código:</strong> ${data.codigo}</p>
-                    <p><strong>Aluno:</strong> ${data.aluno_nome} (RA: ${data.aluno_ra})</p>
-                    ${data.disciplina_nome ? `<p><strong>Disciplina:</strong> ${data.disciplina_nome}</p>` : ''}
-                    
-                    <div style="margin-top: 15px;">
-                        <a href="/ver-documento/${data.codigo}" target="_blank" class="btn btn-primary">
-                            <i class="fas fa-eye"></i> Ver Documento
-                        </a>
-                        <a href="/validar-documento/${data.codigo}" target="_blank" class="btn btn-success" style="margin-left: 10px;">
-                            <i class="fas fa-check"></i> Validar
-                        </a>
-                        <button onclick="copiarCodigo('${data.codigo}')" class="btn btn-secondary" style="margin-left: 10px;">
-                            <i class="fas fa-copy"></i> Copiar Código
-                        </button>
-                        <button onclick="window.open('/ver-documento/${data.codigo}', '_blank').print()" class="btn btn-primary" style="margin-left: 10px; background: #17a2b8;">
-                            <i class="fas fa-print"></i> Imprimir
-                        </button>
-                    </div>
-                </div>
-            `;
-            document.getElementById('resultado').style.display = 'block';
-            
-            // Recarregar documentos anteriores
-            if (tipo === 'declaracao') {
-                await buscarDocumentosAnteriores(alunoId);
-            }
-        } else {
-            alert('Erro: ' + data.message);
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao gerar documento: ' + error.message);
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
     }
-}
 
-function copiarCodigo(codigo) {
-    navigator.clipboard.writeText(codigo).then(() => {
-        alert('✅ Código copiado: ' + codigo);
-    }).catch(() => {
-        // Fallback se clipboard não funcionar
+    function copiarCodigo(codigo) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(codigo).then(() => {
+                alert('✅ Código copiado: ' + codigo);
+            }).catch(() => {
+                copiarCodigoFallback(codigo);
+            });
+        } else {
+            copiarCodigoFallback(codigo);
+        }
+    }
+
+    function copiarCodigoFallback(codigo) {
         const input = document.createElement('input');
         input.value = codigo;
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
         document.body.appendChild(input);
         input.select();
         document.execCommand('copy');
         document.body.removeChild(input);
         alert('✅ Código copiado: ' + codigo);
-    });
-}
+    }
+</script>
