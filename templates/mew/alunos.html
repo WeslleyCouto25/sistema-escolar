@@ -77,6 +77,20 @@
             padding-top: 20px;
             border-top: 1px solid #eee;
         }
+
+        .mp-box { background:#f8fafc; border:1px solid #dbeafe; border-left:4px solid #2563eb; padding:18px; border-radius:8px; margin:16px 0; }
+        .mp-option { display:flex; align-items:flex-start; gap:10px; padding:12px; background:white; border:1px solid #e5e7eb; border-radius:8px; margin:10px 0; }
+        .mp-option input[type="checkbox"] { width:auto; margin-top:3px; }
+        .mp-hidden { display:none; margin-top:12px; }
+        .mp-status { display:inline-block; padding:5px 9px; border-radius:999px; font-size:12px; font-weight:700; }
+        .mp-pago { background:#dcfce7; color:#166534; }
+        .mp-nao-pago { background:#fee2e2; color:#991b1b; }
+        .mp-pendente { background:#fef3c7; color:#92400e; }
+        .mp-banner { padding:16px 18px; border-radius:8px; margin:0 0 20px; }
+        .mp-banner.ok { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
+        .mp-banner.erro { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+        .mp-checkout-btn { display:inline-block; background:#009ee3; color:white !important; text-decoration:none; padding:10px 14px; border-radius:7px; font-weight:700; margin-top:8px; }
+        .contrato-textarea { min-height:220px; width:100%; resize:vertical; padding:12px; border:1px solid #d1d5db; border-radius:7px; font-family:Arial,sans-serif; line-height:1.5; box-sizing:border-box; }
     </style>
 </head>
 
@@ -126,6 +140,17 @@
 
         <main class="content-area">
             <h1 class="page-title">👤 Gerenciar Alunos</h1>
+
+            {% if cobranca_criada %}
+            <div class="mp-banner ok">
+                <strong>✅ Aluno criado e cobrança gerada.</strong><br>
+                Status inicial: <strong>NÃO PAGO</strong>. Quando o Mercado Pago aprovar, o sistema muda automaticamente para <strong>PAGO</strong>.
+                {% set link_checkout = cobranca_criada.sandbox_checkout_url or cobranca_criada.checkout_url %}
+                {% if link_checkout %}<br><a class="mp-checkout-btn" href="{{ link_checkout }}" target="_blank">💳 Abrir Checkout do Mercado Pago</a>{% endif %}
+            </div>
+            {% endif %}
+            {% if erro_mp %}<div class="mp-banner erro"><strong>⚠️ Mercado Pago:</strong> {{ erro_mp }}</div>{% endif %}
+            {% if sucesso %}<div class="mp-banner ok"><strong>✅ {{ sucesso }}</strong></div>{% endif %}
 
             <!-- ========= BOTÃO EXPANSÍVEL NOVO ALUNO ========= -->
             <div class="toggle-header" onclick="toggleNovoAluno()" id="novoAlunoHeader">
@@ -271,11 +296,40 @@
                                 <option value="avista">À vista</option>
                                 <option value="cartao">Cartão</option>
                                 <option value="boleto_pix">Boleto / PIX</option>
+                                <option value="mercadopago">Mercado Pago (PIX / Cartão)</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Valor Total (R$)</label>
                             <input type="text" name="valor_total" required placeholder="Ex: 1500,00">
+                        </div>
+                    </div>
+
+                    <!-- ========= CONTRATO E COBRANÇA ========= -->
+                    <h3 class="section-title">📄 Contrato e Cobrança Online</h3>
+                    <div class="mp-box">
+                        <div class="mp-option">
+                            <input type="checkbox" id="gerarContrato" name="gerar_contrato" value="1" onchange="toggleContrato()">
+                            <div>
+                                <strong>Gerar contrato para este aluno</strong><br>
+                                <small>Os dados pessoais, curso, forma de pagamento e valor serão preenchidos automaticamente no contrato.</small>
+                            </div>
+                        </div>
+                        <div id="contratoCampos" class="mp-hidden">
+                            <label><strong>Regras e condições gerais do contrato</strong></label>
+                            <textarea class="contrato-textarea" name="regras_contrato" placeholder="Cole aqui o texto geral do contrato. Os dados do aluno serão colocados automaticamente acima."></textarea>
+                            <small>O contrato será disponibilizado ao aluno no fluxo de assinatura que já existe no sistema.</small>
+                        </div>
+
+                        <div class="mp-option" style="margin-top:16px;">
+                            <input type="checkbox" id="gerarCobranca" name="gerar_cobranca" value="1" onchange="toggleCobrancaInfo()">
+                            <div>
+                                <strong>Gerar checkout do Mercado Pago</strong><br>
+                                <small>O aluno será criado como <strong>NÃO PAGO</strong>. O status só muda para <strong>PAGO</strong> após confirmação real do Mercado Pago.</small>
+                            </div>
+                        </div>
+                        <div id="cobrancaInfo" class="mp-hidden" style="background:#eff6ff;padding:12px;border-radius:7px;color:#1e3a8a;">
+                            O Checkout Pro mostrará os meios de pagamento disponíveis na conta, como PIX e cartão. Você não precisa receber dados de cartão dentro do seu site.
                         </div>
                     </div>
 
@@ -372,10 +426,25 @@
                             <td>{{ aluno.telefone }}</td>
                             <td>
                                 {% if aluno.forma_pagamento %}
-                                {{ aluno.forma_pagamento }}<br>
-                                <small>R$ {{ "%.2f"|format(aluno.valor_total) if aluno.valor_total else '0.00' }}</small>
+                                    <strong>{{ aluno.forma_pagamento }}</strong><br>
+                                    <small>R$ {{ "%.2f"|format(aluno.valor_total) if aluno.valor_total else '0.00' }}</small><br>
+                                    {% if aluno.pagamento_mp %}
+                                        {% if aluno.pagamento_mp.status == 'pago' %}
+                                            <span class="mp-status mp-pago">PAGO</span>
+                                        {% else %}
+                                            <span class="mp-status mp-nao-pago">NÃO PAGO</span>
+                                            {% set checkout = aluno.pagamento_mp.sandbox_checkout_url or aluno.pagamento_mp.checkout_url %}
+                                            {% if checkout %}<br><a href="{{ checkout }}" target="_blank" style="font-size:12px;">Abrir checkout</a>{% endif %}
+                                        {% endif %}
+                                    {% else %}
+                                        {% if aluno.status_financeiro == 'pago' %}
+                                            <span class="mp-status mp-pago">PAGO</span>
+                                        {% else %}
+                                            <span class="mp-status mp-nao-pago">NÃO PAGO</span>
+                                        {% endif %}
+                                    {% endif %}
                                 {% else %}
-                                <span style="color: #888;">Não informado</span>
+                                    <span style="color:#888;">Não informado</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -393,6 +462,11 @@
                                 <a href="/mew/editar-aluno/{{ aluno.id }}" class="btn btn-sm btn-primary" title="Editar Aluno">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                {% if aluno.valor_total and (not aluno.pagamento_mp or aluno.pagamento_mp.status != 'pago') %}
+                                <form method="post" action="/mew/gerar-cobranca/{{ aluno.id }}" style="display:inline; margin:0;" onsubmit="return confirm('Gerar uma nova cobrança do Mercado Pago para este aluno?');">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Gerar nova cobrança Mercado Pago"><i class="fas fa-credit-card"></i></button>
+                                </form>
+                                {% endif %}
                                 <a href="/mew/deletar-aluno/{{ aluno.id }}" class="btn btn-sm btn-danger"
                                    onclick="return confirmDelete('{{ aluno.nome }}')" title="Excluir Aluno">
                                     <i class="fas fa-trash"></i>
@@ -416,6 +490,18 @@
 </body>
 
 <script>
+function toggleContrato() {
+    const cb = document.getElementById('gerarContrato');
+    const box = document.getElementById('contratoCampos');
+    if (cb && box) box.style.display = cb.checked ? 'block' : 'none';
+}
+function toggleCobrancaInfo() {
+    const cb = document.getElementById('gerarCobranca');
+    const box = document.getElementById('cobrancaInfo');
+    const forma = document.querySelector('select[name="forma_pagamento"]');
+    if (cb && box) box.style.display = cb.checked ? 'block' : 'none';
+    if (cb && cb.checked && forma) forma.value = 'mercadopago';
+}
 function confirmDelete(nome) {
     return confirm(`Deseja realmente excluir o aluno "${nome}"?\n\nEsta ação não poderá ser desfeita!`);
 }

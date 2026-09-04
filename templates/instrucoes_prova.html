@@ -235,11 +235,6 @@
         }
 
         // Prevenir F5 e fechamento da janela
-        window.addEventListener('beforeunload', function (e) {
-            if (!document.getElementById('termoAceito').checked) return;
-            e.preventDefault();
-            e.returnValue = 'Se você sair agora, a prova será encerrada. Tem certeza?';
-        });
     </script>
 </body>
 </html>

@@ -655,26 +655,6 @@
             });
         });
 
-        // Prevenir perda de dados acidental
-        window.addEventListener('beforeunload', function (e) {
-            const form = document.querySelector('form');
-            let hasChanges = false;
-            
-            // Verificar se houve alterações nos campos
-            const inputs = form.querySelectorAll('input[type="text"], input[type="url"], textarea');
-            inputs.forEach(input => {
-                if (input.defaultValue !== input.value) {
-                    hasChanges = true;
-                }
-            });
-            
-            if (hasChanges) {
-                e.preventDefault();
-                e.returnValue = 'Você tem alterações não salvas. Deseja realmente sair?';
-            }
-        });
-
-        // URL preview em tempo real
         document.querySelectorAll('input[type="url"]').forEach(input => {
             input.addEventListener('input', function() {
                 const parent = this.parentElement;

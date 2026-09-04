@@ -507,12 +507,6 @@
                 }
             });
         }
-
-        // Registrar quando o usuário sai da página
-        window.addEventListener('beforeunload', function() {
-            // Opcional: registrar quando fecha
-        });
-
         // Mostrar toast se veio de redirecionamento
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('novo') === 'true') {

@@ -199,11 +199,11 @@ def consultar_openai_para_plano(dados):
     """Consulta o ChatGPT para gerar os campos necessários - SEM FALLBACK"""
     
     # DEBUG: Mostrar enquadramento recebido
-    print(f"📚 Enquadramento recebido: {dados.get('enquadramento_curricular', 'VAZIO')}")
+    print(f"Enquadramento recebido: {dados.get('enquadramento_curricular', 'VAZIO')}")
     
     prompt = gerar_prompt_simplificado(dados)
     
-    print(f"\n📘 Gerando plano para: {dados['disciplina']}")
+    print(f"\n Gerando plano para: {dados['disciplina']}")
     print("⏳ Consultando OpenAI...\n")
     
     response = client.chat.completions.create(

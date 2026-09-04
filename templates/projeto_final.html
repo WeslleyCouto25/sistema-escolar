@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto Final</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            background: #f5f7fb;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            color: #2d3748;
+        }
+
+        .topbar {
+            background: #1a237e;
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .topbar h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .voltar {
+            color: white;
+            text-decoration: none;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .container {
+            max-width: 980px;
+            margin: 34px auto;
+            padding: 0 20px 50px;
+        }
+
+        .intro,
+        .card {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.08);
+        }
+
+        .intro {
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .intro h1 {
+            color: #1a237e;
+            margin: 0 0 12px;
+        }
+
+        .intro p {
+            line-height: 1.65;
+            margin: 0;
+        }
+
+        .card {
+            padding: 26px;
+            margin-bottom: 24px;
+        }
+
+        .disciplina-titulo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #1a237e;
+            margin: 0 0 16px;
+            font-size: 22px;
+        }
+
+        .atividade-box {
+            border: 1px solid #dce2f0;
+            border-left: 5px solid #1a237e;
+            background: #fbfcff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 18px 0 22px;
+        }
+
+        .atividade-box h4 {
+            margin: 0 0 14px;
+            color: #1a237e;
+            font-size: 18px;
+        }
+
+        .atividade-conteudo {
+            line-height: 1.7;
+            color: #333;
+            overflow-wrap: anywhere;
+        }
+
+        .atividade-conteudo p:first-child { margin-top: 0; }
+        .atividade-conteudo p:last-child { margin-bottom: 0; }
+
+        .arquivo-atividade {
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid #e3e7ef;
+        }
+
+        .arquivo-atividade small {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .status {
+            display: inline-block;
+            margin: 4px 0 16px;
+            padding: 7px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .status-aguardando { background: #fff3cd; color: #856404; }
+        .status-enviado { background: #d1ecf1; color: #0c5460; }
+        .status-corrigido { background: #d4edda; color: #155724; }
+
+        .envio-box {
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid #edf0f5;
+        }
+
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d5d9e2;
+            border-radius: 8px;
+            margin: 12px 0;
+            background: #fafafa;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 11px 17px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary { background: #1a237e; color: white; }
+        .btn-secondary { background: #5f6b7a; color: white; }
+
+        .nota {
+            font-size: 28px;
+            color: #1a237e;
+            font-weight: 800;
+            margin-top: 10px;
+        }
+
+        .mensagem {
+            padding: 13px 16px;
+            border-radius: 9px;
+            margin-bottom: 20px;
+        }
+
+        .sucesso { background: #d4edda; color: #155724; }
+        .erro { background: #f8d7da; color: #721c24; }
+
+        .vazio {
+            background: white;
+            padding: 34px;
+            border-radius: 14px;
+            text-align: center;
+            color: #666;
+            box-shadow: 0 4px 14px rgba(0,0,0,.08);
+        }
+
+        small { color: #777; }
+
+        @media (max-width: 700px) {
+            .topbar { align-items: flex-start; }
+            .topbar h2 { font-size: 17px; }
+            .container { padding: 0 14px 40px; }
+            .card, .intro { padding: 20px; }
+        }
+    </style>
+</head>
+
+<body>
+<header class="topbar">
+    <h2><i class="fas fa-graduation-cap"></i> PROJETO FINAL</h2>
+    <a href="/dashboard" class="voltar">
+        <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+</header>
+
+<main class="container">
+
+    <section class="intro">
+        <h1>Envie seu Projeto Final</h1>
+        <p>
+            Nesta página aparecem apenas as disciplinas em que o Projeto Final foi liberado para você.
+            Leia atentamente as orientações disponibilizadas pelo responsável da disciplina e, ao concluir,
+            envie seu arquivo para correção.
+        </p>
+    </section>
+
+    {% if request.args.get('sucesso') %}
+    <div class="mensagem sucesso">
+        <i class="fas fa-check-circle"></i>
+        {{ request.args.get('sucesso') }}
+    </div>
+    {% endif %}
+
+    {% if request.args.get('erro') %}
+    <div class="mensagem erro">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ request.args.get('erro') }}
+    </div>
+    {% endif %}
+
+    {% if projetos %}
+        {% for projeto in projetos %}
+        <section class="card">
+
+            <h3 class="disciplina-titulo">
+                <i class="fas fa-book-open"></i>
+                {{ projeto['disciplina_nome'] }}
+            </h3>
+
+            <div class="atividade-box">
+                <h4>
+                    <i class="fas fa-clipboard-list"></i>
+                    {{ projeto['titulo_atividade'] or 'Projeto Final' }}
+                </h4>
+
+                {% if projeto['conteudo_atividade'] %}
+                <div class="atividade-conteudo">
+                    {{ projeto['conteudo_atividade']|safe }}
+                </div>
+                {% endif %}
+
+                {% if projeto['arquivo_atividade_path'] %}
+                <div class="arquivo-atividade">
+                    <small><strong>Arquivo disponibilizado com a atividade:</strong></small>
+                    <a
+                        class="btn btn-secondary"
+                        href="{{ url_for('static', filename=projeto['arquivo_atividade_path']) }}"
+                        target="_blank"
+                    >
+                        <i class="fas fa-file-pdf"></i>
+                        Abrir {{ projeto['nome_arquivo_atividade'] or 'arquivo da atividade' }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="envio-box">
+                {% if projeto['corrigido'] %}
+                    <span class="status status-corrigido">
+                        <i class="fas fa-check"></i> Corrigido
+                    </span>
+
+                    <p>Seu Projeto Final foi corrigido.</p>
+
+                    <div class="nota">
+                        Nota: {{ "%.1f"|format(projeto['nota']) }}/10
+                    </div>
+
+                {% elif projeto['arquivo_path'] %}
+                    <span class="status status-enviado">
+                        <i class="fas fa-clock"></i> Enviado para correção
+                    </span>
+
+                    <p>
+                        <strong>Seu arquivo:</strong> {{ projeto['nome_arquivo'] }}<br>
+                        <small>Enviado em {{ projeto['data_envio'] }}</small>
+                    </p>
+
+                    <form
+                        method="POST"
+                        action="/projeto-final/enviar/{{ projeto['disciplina_id'] }}"
+                        enctype="multipart/form-data"
+                    >
+                        <label><strong>Substituir o arquivo enviado:</strong></label>
+                        <input
+                            type="file"
+                            name="arquivo"
+                            accept=".pdf,.doc,.docx,.zip"
+                            required
+                        >
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Enviar novamente
+                        </button>
+                    </form>
+
+                {% else %}
+                    <span class="status status-aguardando">
+                        <i class="fas fa-folder-open"></i> Disponível para envio
+                    </span>
+
+                    <form
+                        method="POST"
+                        action="/projeto-final/enviar/{{ projeto['disciplina_id'] }}"
+                        enctype="multipart/form-data"
+                    >
+                        <label><strong>Anexe seu Projeto Final:</strong></label>
+                        <input
+                            type="file"
+                            name="arquivo"
+                            accept=".pdf,.doc,.docx,.zip"
+                            required
+                        >
+
+                        <small>Formatos aceitos: PDF, DOC, DOCX ou ZIP.</small><br><br>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i> Enviar para correção
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+
+        </section>
+        {% endfor %}
+    {% else %}
+        <div class="vazio">
+            <i class="fas fa-inbox fa-2x"></i>
+            <h3>Nenhum Projeto Final disponível</h3>
+            <p>No momento, nenhuma disciplina foi liberada para Projeto Final.</p>
+        </div>
+    {% endif %}
+
+</main>
+</body>
+</html>

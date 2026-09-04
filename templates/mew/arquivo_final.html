@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivo Final - MEW</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: #f5f7fb;
+            font-family: Arial, sans-serif;
+            color: #2d3748;
+        }
+
+        .topbar {
+            background: #1a237e;
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .topbar h2 { margin: 0; }
+        .topbar a { color: white; text-decoration: none; font-weight: 700; }
+
+        .container {
+            max-width: 1280px;
+            margin: 30px auto;
+            padding: 0 20px 50px;
+        }
+
+        .box {
+            background: white;
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.08);
+            margin-bottom: 24px;
+        }
+
+        .box h2 {
+            color: #1a237e;
+            margin-top: 0;
+        }
+
+        .subtexto {
+            color: #687386;
+            line-height: 1.55;
+            margin-top: -6px;
+            margin-bottom: 20px;
+        }
+
+        .grid-top {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 700;
+            color: #394150;
+        }
+
+        select,
+        input[type="number"],
+        input[type="text"],
+        input[type="file"] {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid #ccd2dc;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .campo { margin-bottom: 15px; }
+
+        .editor-wrap {
+            border: 1px solid #ccd2dc;
+            border-radius: 9px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 8px;
+            background: #f2f4f8;
+            border-bottom: 1px solid #dce1e9;
+        }
+
+        .toolbar button {
+            min-width: 35px;
+            border: 1px solid #ccd2dc;
+            background: white;
+            border-radius: 6px;
+            padding: 7px 9px;
+            cursor: pointer;
+            color: #28334a;
+        }
+
+        .toolbar button:hover { background: #e8ecf5; }
+
+        .editor {
+            min-height: 210px;
+            padding: 16px;
+            outline: none;
+            line-height: 1.65;
+            overflow-wrap: anywhere;
+        }
+
+        .editor:empty:before {
+            content: attr(data-placeholder);
+            color: #9aa3b2;
+        }
+
+        .acoes-liberar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid #edf0f5;
+        }
+
+        .aviso-substituicao {
+            background: #fff8df;
+            color: #725900;
+            border: 1px solid #f2df9b;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        .btn-primary { background: #1a237e; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-outline { background: white; color: #1a237e; border: 1px solid #1a237e; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e6e9ef;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f2f4f8;
+            color: #1a237e;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .liberado { background: #fff3cd; color: #856404; }
+        .recebido { background: #d1ecf1; color: #0c5460; }
+        .corrigido { background: #d4edda; color: #155724; }
+        .desativado { background: #e2e3e5; color: #555; }
+
+        .nota-form {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 185px;
+        }
+
+        .nota-form input { width: 75px; }
+
+        .mensagem {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .sucesso { background: #d4edda; color: #155724; }
+        .erro { background: #f8d7da; color: #721c24; }
+        .sem-arquivo { color: #8a93a2; }
+
+        .atividade-resumo {
+            max-width: 260px;
+            line-height: 1.45;
+        }
+
+        .atividade-resumo strong { color: #1a237e; }
+
+        details.editar-box {
+            margin-top: 10px;
+        }
+
+        details.editar-box summary {
+            cursor: pointer;
+            color: #1a237e;
+            font-weight: 700;
+        }
+
+        .painel-edicao {
+            margin-top: 14px;
+            padding: 16px;
+            background: #f9fafc;
+            border: 1px solid #e2e6ed;
+            border-radius: 10px;
+            min-width: 430px;
+        }
+
+        .editor.editor-menor { min-height: 150px; }
+
+        .arquivo-atual {
+            font-size: 12px;
+            color: #667085;
+            margin: 6px 0 8px;
+        }
+
+        @media (max-width: 950px) {
+            .grid-top { grid-template-columns: 1fr; }
+            .table-wrap { overflow-x: auto; }
+            .acoes-liberar { align-items: flex-start; flex-direction: column; }
+        }
+    </style>
+</head>
+
+<body>
+<header class="topbar">
+    <h2><i class="fas fa-folder-open"></i> Arquivo Final</h2>
+    <a href="/mew/dashboard"><i class="fas fa-arrow-left"></i> Dashboard</a>
+</header>
+
+<main class="container">
+
+    {% if request.args.get('sucesso') %}
+    <div class="mensagem sucesso">
+        <i class="fas fa-check-circle"></i>
+        {{ request.args.get('sucesso') }}
+    </div>
+    {% endif %}
+
+    {% if request.args.get('erro') %}
+    <div class="mensagem erro">
+        <i class="fas fa-exclamation-circle"></i>
+        {{ request.args.get('erro') }}
+    </div>
+    {% endif %}
+
+    <section class="box">
+        <h2><i class="fas fa-unlock"></i> Liberar Projeto Final</h2>
+        <p class="subtexto">
+            Selecione o aluno e a disciplina. Você pode escrever as orientações diretamente no editor,
+            anexar um PDF/DOC/DOCX da atividade, ou usar as duas opções. Ao liberar o Projeto Final,
+            a prova final normal de 30 questões daquele aluno nessa disciplina será bloqueada.
+        </p>
+
+        <form
+            method="POST"
+            action="/mew/liberar-projeto-final"
+            enctype="multipart/form-data"
+            class="editor-form"
+        >
+            <div class="grid-top">
+                <div>
+                    <label>Aluno</label>
+                    <select name="aluno_id" required>
+                        <option value="">Selecione o aluno</option>
+                        {% for aluno in alunos %}
+                        <option value="{{ aluno['id'] }}">
+                            {{ aluno['nome'] }} — RA {{ aluno['ra'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label>Disciplina</label>
+                    <select name="disciplina_id" required>
+                        <option value="">Selecione a disciplina</option>
+                        {% for disciplina in disciplinas %}
+                        <option value="{{ disciplina['id'] }}">
+                            {{ disciplina['nome'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="campo">
+                <label>Título da atividade</label>
+                <input
+                    type="text"
+                    name="titulo_atividade"
+                    value="Projeto Final"
+                    placeholder="Ex.: Projeto Final — Dimensionamento de Estruturas"
+                >
+            </div>
+
+            <div class="campo">
+                <label>Orientações da atividade</label>
+                <div class="editor-wrap">
+                    <div class="toolbar">
+                        <button type="button" data-cmd="bold" title="Negrito"><i class="fas fa-bold"></i></button>
+                        <button type="button" data-cmd="italic" title="Itálico"><i class="fas fa-italic"></i></button>
+                        <button type="button" data-cmd="underline" title="Sublinhado"><i class="fas fa-underline"></i></button>
+                        <button type="button" data-cmd="formatBlock" data-value="h3" title="Título"><i class="fas fa-heading"></i></button>
+                        <button type="button" data-cmd="insertUnorderedList" title="Lista"><i class="fas fa-list-ul"></i></button>
+                        <button type="button" data-cmd="insertOrderedList" title="Lista numerada"><i class="fas fa-list-ol"></i></button>
+                        <button type="button" data-cmd="createLink" title="Link"><i class="fas fa-link"></i></button>
+                        <button type="button" data-cmd="removeFormat" title="Limpar formatação"><i class="fas fa-eraser"></i></button>
+                    </div>
+
+                    <div
+                        class="editor"
+                        contenteditable="true"
+                        data-placeholder="Escreva aqui as instruções, critérios, etapas, itens obrigatórios, formato de entrega, referências etc."
+                    ></div>
+                </div>
+                <textarea name="conteudo_atividade" class="editor-hidden" hidden></textarea>
+            </div>
+
+            <div class="campo">
+                <label>Arquivo da atividade (opcional)</label>
+                <input type="file" name="arquivo_atividade" accept=".pdf,.doc,.docx">
+                <small>Você pode anexar o enunciado em PDF, DOC ou DOCX.</small>
+            </div>
+
+            <div class="acoes-liberar">
+                <div class="aviso-substituicao">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    Esta modalidade substitui a prova final normal para o aluno e disciplina selecionados.
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check"></i> Liberar Projeto Final
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <section class="box">
+        <h2><i class="fas fa-file-alt"></i> Projetos Finais</h2>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aluno</th>
+                        <th>Disciplina</th>
+                        <th>Status</th>
+                        <th>Atividade</th>
+                        <th>Arquivo do aluno</th>
+                        <th>Nota</th>
+                        <th>Liberação</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                {% for projeto in projetos %}
+                    <tr>
+                        <td>
+                            <strong>{{ projeto['aluno_nome'] }}</strong><br>
+                            <small>RA {{ projeto['aluno_ra'] }}</small>
+                        </td>
+
+                        <td>{{ projeto['disciplina_nome'] }}</td>
+
+                        <td>
+                            {% if projeto['corrigido'] %}
+                                <span class="status corrigido">Corrigido</span>
+                            {% elif projeto['arquivo_path'] %}
+                                <span class="status recebido">Recebido</span>
+                            {% elif projeto['liberado'] %}
+                                <span class="status liberado">Aguardando envio</span>
+                            {% else %}
+                                <span class="status desativado">Não liberado</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <div class="atividade-resumo">
+                                <strong>{{ projeto['titulo_atividade'] or 'Projeto Final' }}</strong>
+
+                                {% if projeto['arquivo_atividade_path'] %}
+                                <div style="margin-top:8px;">
+                                    <a
+                                        class="btn btn-secondary"
+                                        href="{{ url_for('static', filename=projeto['arquivo_atividade_path']) }}"
+                                        target="_blank"
+                                    >
+                                        <i class="fas fa-file"></i> Arquivo da atividade
+                                    </a>
+                                </div>
+                                {% endif %}
+
+                                <details class="editar-box">
+                                    <summary>Editar atividade</summary>
+
+                                    <div class="painel-edicao">
+                                        <form
+                                            method="POST"
+                                            action="/mew/editar-projeto-final/{{ projeto['id'] }}"
+                                            enctype="multipart/form-data"
+                                            class="editor-form"
+                                        >
+                                            <div class="campo">
+                                                <label>Título</label>
+                                                <input
+                                                    type="text"
+                                                    name="titulo_atividade"
+                                                    value="{{ projeto['titulo_atividade'] or 'Projeto Final' }}"
+                                                >
+                                            </div>
+
+                                            <div class="campo">
+                                                <label>Orientações</label>
+                                                <div class="editor-wrap">
+                                                    <div class="toolbar">
+                                                        <button type="button" data-cmd="bold"><i class="fas fa-bold"></i></button>
+                                                        <button type="button" data-cmd="italic"><i class="fas fa-italic"></i></button>
+                                                        <button type="button" data-cmd="underline"><i class="fas fa-underline"></i></button>
+                                                        <button type="button" data-cmd="formatBlock" data-value="h3"><i class="fas fa-heading"></i></button>
+                                                        <button type="button" data-cmd="insertUnorderedList"><i class="fas fa-list-ul"></i></button>
+                                                        <button type="button" data-cmd="insertOrderedList"><i class="fas fa-list-ol"></i></button>
+                                                        <button type="button" data-cmd="createLink"><i class="fas fa-link"></i></button>
+                                                        <button type="button" data-cmd="removeFormat"><i class="fas fa-eraser"></i></button>
+                                                    </div>
+
+                                                    <div class="editor editor-menor" contenteditable="true">
+                                                        {{ projeto['conteudo_atividade']|safe if projeto['conteudo_atividade'] else '' }}
+                                                    </div>
+                                                </div>
+                                                <textarea name="conteudo_atividade" class="editor-hidden" hidden></textarea>
+                                            </div>
+
+                                            <div class="campo">
+                                                <label>Trocar arquivo da atividade (opcional)</label>
+                                                {% if projeto['nome_arquivo_atividade'] %}
+                                                <div class="arquivo-atual">
+                                                    Atual: {{ projeto['nome_arquivo_atividade'] }}
+                                                </div>
+                                                {% endif %}
+                                                <input type="file" name="arquivo_atividade" accept=".pdf,.doc,.docx">
+                                            </div>
+
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="fas fa-save"></i> Salvar alterações
+                                            </button>
+                                        </form>
+                                    </div>
+                                </details>
+                            </div>
+                        </td>
+
+                        <td>
+                            {% if projeto['arquivo_path'] %}
+                                <a
+                                    class="btn btn-secondary"
+                                    href="{{ url_for('static', filename=projeto['arquivo_path']) }}"
+                                    target="_blank"
+                                >
+                                    <i class="fas fa-download"></i> Abrir envio
+                                </a>
+                                <br><small>{{ projeto['nome_arquivo'] }}</small>
+                            {% else %}
+                                <span class="sem-arquivo">Ainda não enviado</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if projeto['arquivo_path'] %}
+                                <form
+                                    method="POST"
+                                    action="/mew/corrigir-projeto-final/{{ projeto['id'] }}"
+                                    class="nota-form"
+                                >
+                                    <input
+                                        type="number"
+                                        name="nota"
+                                        min="0"
+                                        max="10"
+                                        step="0.1"
+                                        value="{{ projeto['nota'] if projeto['nota'] is not none else '' }}"
+                                        required
+                                    >
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-check"></i>
+                                        {% if projeto['corrigido'] %}Atualizar{% else %}Corrigir{% endif %}
+                                    </button>
+                                </form>
+                            {% else %}
+                                <span class="sem-arquivo">—</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% if projeto['liberado'] %}
+                                <a
+                                    class="btn btn-danger"
+                                    href="/mew/remover-projeto-final/{{ projeto['id'] }}"
+                                    onclick="return confirm('Remover a liberação deste Projeto Final?')"
+                                >
+                                    <i class="fas fa-ban"></i> Remover
+                                </a>
+                            {% else %}
+                                <span class="sem-arquivo">Removida</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align:center; color:#777; padding:30px;">
+                            Nenhum Projeto Final cadastrado.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
+
+<script>
+    function executarComando(editor, comando, valor) {
+        editor.focus();
+
+        if (comando === 'createLink') {
+            const url = prompt('Digite o endereço do link:');
+            if (url) {
+                document.execCommand('createLink', false, url);
+            }
+            return;
+        }
+
+        document.execCommand(comando, false, valor || null);
+    }
+
+    document.querySelectorAll('.editor-form').forEach(function(form) {
+        const editor = form.querySelector('.editor');
+        const hidden = form.querySelector('.editor-hidden');
+
+        form.querySelectorAll('.toolbar button').forEach(function(botao) {
+            botao.addEventListener('click', function() {
+                executarComando(
+                    editor,
+                    botao.dataset.cmd,
+                    botao.dataset.value || null
+                );
+            });
+        });
+
+        form.addEventListener('submit', function() {
+            hidden.value = editor.innerHTML.trim();
+        });
+    });
+</script>
+
+</body>
+</html>

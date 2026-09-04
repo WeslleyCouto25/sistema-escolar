@@ -84,22 +84,22 @@
                         <p><strong>{{ q['pergunta'] }}</strong></p>
                         
                         <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'A')">
-                            <input type="radio" name="q{{ loop.index }}" value="A" hidden>
+                            <input type="radio" name="q_{{ q['id'] }}" value="A" hidden>
                             <strong>A)</strong> {{ q['opcao_a'] }}
                         </div>
                         
                         <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'B')">
-                            <input type="radio" name="q{{ loop.index }}" value="B" hidden>
+                            <input type="radio" name="q_{{ q['id'] }}" value="B" hidden>
                             <strong>B)</strong> {{ q['opcao_b'] }}
                         </div>
                         
                         <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'C')">
-                            <input type="radio" name="q{{ loop.index }}" value="C" hidden>
+                            <input type="radio" name="q_{{ q['id'] }}" value="C" hidden>
                             <strong>C)</strong> {{ q['opcao_c'] }}
                         </div>
                         
                         <div class="opcao" onclick="selectOption(this, {{ loop.index }}, 'D')">
-                            <input type="radio" name="q{{ loop.index }}" value="D" hidden>
+                            <input type="radio" name="q_{{ q['id'] }}" value="D" hidden>
                             <strong>D)</strong> {{ q['opcao_d'] }}
                         </div>
                     </div>
@@ -149,12 +149,6 @@
             const radio = div.querySelector('input[type="radio"]');
             radio.checked = true;
         }
-        
-        // Prevenir saída
-        window.addEventListener('beforeunload', function(e) {
-            e.preventDefault();
-            e.returnValue = '⚠️ Se você sair agora, a prova será encerrada.';
-        });
     </script>
 </body>
 </html>

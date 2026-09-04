@@ -1,6 +1,5 @@
 from pydoc import html
 from werkzeug.utils import secure_filename
-import sqlite3
 import json
 import time
 import random
@@ -21,6 +20,8 @@ import qrcode
 import qrcode.image.svg
 import base64
 from io import BytesIO
+from markupsafe import escape
+from pathlib import Path
 import hashlib
 import json
 import plano_ensino  
@@ -34,11 +35,166 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 from api_planos import planos_bp
 app.register_blueprint(planos_bp, url_prefix='/api')
 
+import os
+import psycopg2
+import psycopg2.extras
+
 
 def get_db_connection():
-    conn = sqlite3.connect("database.db")
-    conn.row_factory = sqlite3.Row
-    return conn
+    """Conecta exclusivamente ao PostgreSQL."""
+    return psycopg2.connect(
+        os.environ.get("DATABASE_URL"),
+        sslmode="require",
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+
+
+def init_pagamentos_db():
+    """Garante a tabela de cobranças do Mercado Pago no PostgreSQL."""
+    init_contratos_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pagamentos_mercadopago (
+            id SERIAL PRIMARY KEY,
+            aluno_id INTEGER NOT NULL,
+            contrato_id INTEGER,
+            external_reference TEXT UNIQUE NOT NULL,
+            preference_id TEXT,
+            payment_id TEXT,
+            valor_total NUMERIC(12,2) NOT NULL,
+            checkout_url TEXT,
+            sandbox_checkout_url TEXT,
+            status TEXT DEFAULT 'nao_pago',
+            status_mp TEXT,
+            data_criacao TEXT,
+            data_atualizacao TEXT,
+            data_pagamento TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id),
+            FOREIGN KEY (contrato_id) REFERENCES contratos_alunos(id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pagamentos_mp_aluno ON pagamentos_mercadopago(aluno_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_pagamentos_mp_payment ON pagamentos_mercadopago(payment_id)")
+    conn.commit()
+    conn.close()
+
+
+def get_mercadopago_sdk():
+    token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("MERCADOPAGO_ACCESS_TOKEN não configurado no Render.")
+    return mercadopago.SDK(token)
+
+
+def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_id=None, base_url=None):
+    init_pagamentos_db()
+    valor = round(float(valor_total), 2)
+    external_reference = f"FACOP-ALUNO-{aluno_id}-{int(time.time())}-{secrets.token_hex(3)}"
+    base_url = (base_url or "https://campusvirtualfacop.com.br").rstrip("/")
+    preference_data = {
+        "items": [{
+            "id": f"aluno-{aluno_id}",
+            "title": f"Serviços educacionais - aluno {nome}",
+            "quantity": 1,
+            "currency_id": "BRL",
+            "unit_price": valor
+        }],
+        "payer": {"name": nome, "email": email},
+        "external_reference": external_reference,
+        "back_urls": {
+            "success": f"{base_url}/pagamento/mercadopago/sucesso",
+            "pending": f"{base_url}/pagamento/mercadopago/pendente",
+            "failure": f"{base_url}/pagamento/mercadopago/falha"
+        },
+        "auto_return": "approved",
+        "notification_url": f"{base_url}/webhook/mercadopago",
+        "metadata": {
+            "aluno_id": str(aluno_id),
+            "contrato_id": str(contrato_id) if contrato_id else ""
+        }
+    }
+    sdk = get_mercadopago_sdk()
+    resultado = sdk.preference().create(preference_data)
+    resposta = resultado.get("response", {}) if isinstance(resultado, dict) else {}
+    preference_id = resposta.get("id")
+    init_point = resposta.get("init_point")
+    sandbox_init_point = resposta.get("sandbox_init_point")
+    if not preference_id or not (init_point or sandbox_init_point):
+        raise RuntimeError(f"Mercado Pago não retornou um checkout válido: {resposta}")
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO pagamentos_mercadopago
+        (aluno_id, contrato_id, external_reference, preference_id, valor_total,
+         checkout_url, sandbox_checkout_url, status, status_mp, data_criacao, data_atualizacao)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'nao_pago', 'pending', %s, %s)
+        RETURNING id
+    """, (aluno_id, contrato_id, external_reference, preference_id, valor,
+          init_point, sandbox_init_point, agora, agora))
+    cobranca_id = cursor.fetchone()["id"]
+    conn.commit()
+    conn.close()
+    return {
+        "id": cobranca_id,
+        "preference_id": preference_id,
+        "checkout_url": sandbox_init_point or init_point,
+        "external_reference": external_reference
+    }
+
+
+def gerar_contrato_cadastro(aluno_id, aluno, regras, forma_pagamento, valor_total):
+    init_contratos_db()
+    os.makedirs("static/contratos", exist_ok=True)
+    def esc(v):
+        return str(escape(v if v is not None else ""))
+    regras_html = esc(regras).replace("\n", "<br>")
+    valor_fmt = f"{float(valor_total):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+    html_contrato = f'''<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="UTF-8"><title>Contrato Educacional - {esc(aluno.get('nome'))}</title>
+<style>
+body{{font-family:Arial,sans-serif;background:#e5e7eb;margin:0;padding:24px;color:#111827}}
+.pagina{{max-width:850px;margin:auto;background:#fff;padding:42px 48px;box-shadow:0 4px 18px rgba(0,0,0,.15)}}
+h1{{text-align:center;font-size:22px;margin:0 0 8px}}.sub{{text-align:center;color:#6b7280;margin-bottom:30px}}
+.dados{{border:1px solid #d1d5db;border-radius:8px;padding:18px;margin-bottom:28px;background:#f9fafb}}
+.grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}}.item{{padding:5px 0;border-bottom:1px solid #e5e7eb}}
+.label{{font-size:11px;text-transform:uppercase;color:#6b7280;font-weight:bold}}.valor{{font-size:14px;font-weight:600;margin-top:3px}}
+.regras{{line-height:1.65;text-align:justify}}.rodape{{margin-top:38px;padding-top:16px;border-top:1px solid #d1d5db;font-size:12px;color:#6b7280}}
+@media(max-width:700px){{.pagina{{padding:24px}}.grid{{grid-template-columns:1fr}}}}
+@media print{{body{{background:#fff;padding:0}}.pagina{{box-shadow:none;max-width:none}}}}
+</style></head><body><div class="pagina">
+<h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS EDUCACIONAIS</h1><div class="sub">FACOP / SiGEu • Emitido em {data_emissao}</div>
+<div class="dados"><div class="grid">
+<div class="item"><div class="label">Aluno</div><div class="valor">{esc(aluno.get('nome'))}</div></div>
+<div class="item"><div class="label">RA</div><div class="valor">{esc(aluno.get('ra'))}</div></div>
+<div class="item"><div class="label">CPF</div><div class="valor">{esc(aluno.get('cpf'))}</div></div>
+<div class="item"><div class="label">RG</div><div class="valor">{esc(aluno.get('rg'))}</div></div>
+<div class="item"><div class="label">E-mail</div><div class="valor">{esc(aluno.get('email'))}</div></div>
+<div class="item"><div class="label">Telefone</div><div class="valor">{esc(aluno.get('telefone'))}</div></div>
+<div class="item"><div class="label">Endereço</div><div class="valor">{esc(aluno.get('endereco'))}</div></div>
+<div class="item"><div class="label">Cidade / UF / CEP</div><div class="valor">{esc(aluno.get('cidade'))} / {esc(aluno.get('estado'))} / {esc(aluno.get('cep'))}</div></div>
+<div class="item"><div class="label">Curso de referência</div><div class="valor">{esc(aluno.get('curso_referencia'))}</div></div>
+<div class="item"><div class="label">Forma de pagamento</div><div class="valor">{esc(forma_pagamento)}</div></div>
+<div class="item"><div class="label">Valor total</div><div class="valor">R$ {valor_fmt}</div></div>
+</div></div><h2>Condições e regras gerais</h2><div class="regras">{regras_html}</div>
+<div class="rodape">Este contrato será considerado aceito após a assinatura eletrônica realizada no ambiente do aluno.</div>
+</div></body></html>'''
+    caminho = f"static/contratos/contrato_aluno_{aluno_id}_{int(time.time())}.html"
+    Path(caminho).write_text(html_contrato, encoding="utf-8")
+    caminho_publico = "/" + caminho.replace("\\", "/")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO contratos_alunos (aluno_id, pdf_path, status, data_envio)
+        VALUES (%s, %s, 'pendente', %s)
+        RETURNING id
+    """, (aluno_id, caminho_publico, data_emissao))
+    contrato_id = cursor.fetchone()["id"]
+    conn.commit()
+    conn.close()
+    return contrato_id
 
 
 def init_db():
@@ -48,7 +204,7 @@ def init_db():
     # Tabela de alunos (com RA)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS alunos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             nome TEXT,
             email TEXT,
             ra TEXT UNIQUE,
@@ -59,7 +215,7 @@ def init_db():
     # Tabela de disciplinas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS disciplinas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             nome TEXT
         )
     """)
@@ -67,7 +223,7 @@ def init_db():
     # Tabela de capítulos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS capitulos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             disciplina_id INTEGER,
             titulo TEXT,
             video_url TEXT,
@@ -78,7 +234,7 @@ def init_db():
     # Tabela de provas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS provas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             capitulo_id INTEGER,
             questoes_json TEXT
         )
@@ -87,7 +243,7 @@ def init_db():
     # Tabela de notas
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS notas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             capitulo INTEGER,
@@ -98,7 +254,7 @@ def init_db():
     # Tabela aluno ↔ disciplina
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS aluno_disciplina (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             UNIQUE(aluno_id, disciplina_id)
@@ -108,7 +264,7 @@ def init_db():
     # Tabela de solicitações de material didático
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS solicitacoes_material (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             material TEXT,
@@ -120,7 +276,7 @@ def init_db():
     # Tabela de solicitações de declarações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS solicitacoes_declaracoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             tipo TEXT,
             detalhes TEXT,
@@ -131,7 +287,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS solicitacoes_documentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             tipo_documento TEXT, -- 'conclusao', 'plano_ensino', 'historico', 'sugestao', 'outros'
             disciplinas_ids TEXT, -- IDs das disciplinas separados por vírgula
@@ -147,7 +303,7 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dados_pessoais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER UNIQUE,
             cpf TEXT,
             rg TEXT,
@@ -164,7 +320,7 @@ def init_db():
     # Nova tabela: situacao_financeira do aluno
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS situacao_financeira (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             forma_pagamento TEXT, -- 'avista', 'cartao', 'boleto_pix'
             status TEXT, -- 'pago', 'pendente', 'parcial'
@@ -178,7 +334,7 @@ def init_db():
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS aluno_disciplina_datas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             data_inicio TEXT,
@@ -193,7 +349,7 @@ def init_db():
     # Tabela para controlar liberação da prova final por disciplina
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS liberacao_final (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             data_liberacao TEXT, -- Data em que a prova será liberada (DD/MM/AAAA)
@@ -208,7 +364,7 @@ def init_db():
 # Tabela para notas finais
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS notas_finais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER,
             disciplina_id INTEGER,
             nota_final REAL,
@@ -225,7 +381,7 @@ def init_db():
 # Tabela para questões da prova final (30 questões por disciplina)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS questoes_finais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             disciplina_id INTEGER,
             pergunta TEXT,
             opcao_a TEXT,
@@ -240,13 +396,43 @@ def init_db():
     # Adicione também uma tabela para a prova final
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS provas_finais (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             disciplina_id INTEGER,
             questoes_json TEXT,
             FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id)
         )
     """)
     
+    # Tabela para Projeto Final
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS projetos_finais (
+            id SERIAL PRIMARY KEY,
+            aluno_id INTEGER NOT NULL,
+            disciplina_id INTEGER NOT NULL,
+            liberado INTEGER DEFAULT 0,
+            titulo_atividade TEXT,
+            conteudo_atividade TEXT,
+            arquivo_atividade_path TEXT,
+            nome_arquivo_atividade TEXT,
+            arquivo_path TEXT,
+            nome_arquivo TEXT,
+            data_envio TEXT,
+            nota REAL,
+            corrigido INTEGER DEFAULT 0,
+            data_correcao TEXT,
+            data_liberacao TEXT,
+            UNIQUE(aluno_id, disciplina_id),
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id),
+            FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id)
+        )
+    """)
+
+    # Garante os novos campos mesmo se a tabela projetos_finais já existir no PostgreSQL
+    cursor.execute("ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS titulo_atividade TEXT")
+    cursor.execute("ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS conteudo_atividade TEXT")
+    cursor.execute("ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS arquivo_atividade_path TEXT")
+    cursor.execute("ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS nome_arquivo_atividade TEXT")
+
     conn.commit()
     conn.close()
 
@@ -256,7 +442,7 @@ def init_contratos_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS contratos_alunos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             aluno_id INTEGER NOT NULL,
             pdf_path TEXT NOT NULL,
             status TEXT DEFAULT 'pendente',
@@ -392,7 +578,7 @@ def verificar_disciplina_concluida(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT COUNT(*) as total_provas_feitas 
         FROM notas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     total_provas = cursor.fetchone()["total_provas_feitas"] or 0
@@ -400,7 +586,7 @@ def verificar_disciplina_concluida(aluno_id, disciplina_id):
     # Verificar se já fez a prova final
     cursor.execute("""
         SELECT id FROM notas_finais 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     fez_final = cursor.fetchone() is not None
@@ -427,7 +613,7 @@ def calcular_data_liberacao_final(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT MAX(data_realizacao) as ultima_data 
         FROM notas_finais 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     resultado = cursor.fetchone()
@@ -462,7 +648,7 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
         SELECT nome_pai, nome_mae, naturalidade, nacionalidade, 
                data_nascimento, sexo, estado_civil, curso_referencia
         FROM dados_pessoais 
-        WHERE aluno_id = ?
+        WHERE aluno_id = %s
     """, (aluno_id,))
     
     dados_adicionais = cursor.fetchone()
@@ -473,7 +659,7 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
                addd.data_inicio, addd.data_fim_previsto
         FROM notas_finais nf
         LEFT JOIN aluno_disciplina_datas addd ON nf.aluno_id = addd.aluno_id AND nf.disciplina_id = addd.disciplina_id
-        WHERE nf.aluno_id = ? AND nf.disciplina_id = ?
+        WHERE nf.aluno_id = %s AND nf.disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     info_final = cursor.fetchone()
@@ -1391,7 +1577,7 @@ def verificar_acesso_disciplina(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT data_inicio, data_fim_previsto 
         FROM aluno_disciplina_datas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     data_info = cursor.fetchone()
@@ -1429,7 +1615,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM alunos WHERE ra = ? AND senha = ?",
+            "SELECT * FROM alunos WHERE ra = %s AND senha = %s",
             (ra, senha)
         )
         aluno = cursor.fetchone()
@@ -1480,11 +1666,11 @@ def dashboard():
     cursor = conn.cursor()
 
     # Buscar dados pessoais do aluno
-    cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = ?", (aluno_id,))
+    cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
     dados_pessoais = cursor.fetchone()
     
     # Buscar situação financeira
-    cursor.execute("SELECT * FROM situacao_financeira WHERE aluno_id = ? ORDER BY id DESC LIMIT 1", (aluno_id,))
+    cursor.execute("SELECT * FROM situacao_financeira WHERE aluno_id = %s ORDER BY id DESC LIMIT 1", (aluno_id,))
     situacao_financeira = cursor.fetchone()
     
     # Buscar disciplinas do aluno
@@ -1492,7 +1678,7 @@ def dashboard():
         SELECT d.id, d.nome
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
 
@@ -1501,7 +1687,7 @@ def dashboard():
         SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
         FROM notas n
         JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = ?
+        WHERE n.aluno_id = %s
         ORDER BY n.disciplina_id, n.capitulo
     """, (aluno_id,))
     notas = cursor.fetchall()
@@ -1511,7 +1697,7 @@ def dashboard():
         SELECT sm.*, d.nome AS disciplina_nome
         FROM solicitacoes_material sm
         LEFT JOIN disciplinas d ON sm.disciplina_id = d.id
-        WHERE sm.aluno_id = ?
+        WHERE sm.aluno_id = %s
         ORDER BY sm.data_solicitacao DESC
     """, (aluno_id,))
     solicitacoes_material = cursor.fetchall()
@@ -1520,16 +1706,16 @@ def dashboard():
     cursor.execute("""
         SELECT *
         FROM solicitacoes_declaracoes
-        WHERE aluno_id = ?
+        WHERE aluno_id = %s
         ORDER BY data_solicitacao DESC
     """, (aluno_id,))
     solicitacoes_declaracoes = cursor.fetchall()
 
     # Calcular totais
-    cursor.execute("SELECT COUNT(*) as total FROM notas WHERE aluno_id = ?", (aluno_id,))
+    cursor.execute("SELECT COUNT(*) as total FROM notas WHERE aluno_id = %s", (aluno_id,))
     total_provas = cursor.fetchone()["total"]
     
-    cursor.execute("SELECT AVG(nota) as media FROM notas WHERE aluno_id = ?", (aluno_id,))
+    cursor.execute("SELECT AVG(nota) as media FROM notas WHERE aluno_id = %s", (aluno_id,))
     media_result = cursor.fetchone()
     media = media_result["media"] if media_result["media"] else 0
     media_geral = round(media, 2)
@@ -1538,7 +1724,7 @@ def dashboard():
     cursor.execute("""
         SELECT COUNT(*) as pendente 
         FROM solicitacoes_material 
-        WHERE aluno_id = ? AND entregue = 0
+        WHERE aluno_id = %s AND entregue = 0
     """, (aluno_id,))
     material_pendente_result = cursor.fetchone()
     material_pendente = material_pendente_result["pendente"] if material_pendente_result else 0
@@ -1547,7 +1733,7 @@ def dashboard():
     cursor.execute("""
         SELECT COUNT(*) as pendente 
         FROM solicitacoes_declaracoes 
-        WHERE aluno_id = ? AND entregue = 0
+        WHERE aluno_id = %s AND entregue = 0
     """, (aluno_id,))
     declaracoes_pendentes_result = cursor.fetchone()
     declaracoes_pendentes = declaracoes_pendentes_result["pendente"] if declaracoes_pendentes_result else 0
@@ -1556,7 +1742,7 @@ def dashboard():
     cursor.execute("""
         SELECT COUNT(*) as total 
         FROM documentos_enviados 
-        WHERE aluno_id = ? AND status = 'enviado'
+        WHERE aluno_id = %s AND status = 'enviado'
     """, (aluno_id,))
     nao_visualizados = cursor.fetchone()["total"] or 0
 
@@ -1565,12 +1751,12 @@ def dashboard():
     cursor.execute("""
         SELECT da.*, 
                (SELECT COUNT(*) FROM anexos_disciplina_alternativa 
-                WHERE aluno_id = ? AND disciplina_id = da.id) as total_anexos,
+                WHERE aluno_id = %s AND disciplina_id = da.id) as total_anexos,
                (SELECT AVG(nota) FROM anexos_disciplina_alternativa 
-                WHERE aluno_id = ? AND disciplina_id = da.id AND nota IS NOT NULL) as media_nota
+                WHERE aluno_id = %s AND disciplina_id = da.id AND nota IS NOT NULL) as media_nota
         FROM disciplinas_alternativas da
         JOIN aluno_disciplina_alternativa ada ON da.id = ada.disciplina_id
-        WHERE ada.aluno_id = ? AND da.ativa = 1
+        WHERE ada.aluno_id = %s AND da.ativa = 1
     """, (aluno_id, aluno_id, aluno_id))
     
     disciplinas_alternativas_raw = cursor.fetchall()
@@ -1593,7 +1779,7 @@ def dashboard():
             cursor = conn.cursor()
             
             # Contar capítulos totais da disciplina
-            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = ?", (disciplina_id,))
+            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
             total_result = cursor.fetchone()
             total_capitulos = total_result["total"] if total_result else 0
             
@@ -1605,7 +1791,7 @@ def dashboard():
             cursor.execute("""
                 SELECT COUNT(DISTINCT capitulo) as feitas 
                 FROM notas 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             provas_result = cursor.fetchone()
             provas_feitas = provas_result["feitas"] if provas_result else 0
@@ -1617,7 +1803,7 @@ def dashboard():
             cursor.execute("""
                 SELECT nota_final 
                 FROM notas_finais 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             nota_final_result = cursor.fetchone()
             nota_final = nota_final_result[0] if nota_final_result else None
@@ -1649,7 +1835,7 @@ def dashboard():
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = ?", (disciplina_id,))
+            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
             total_result = cursor.fetchone()
             total = total_result["total"] if total_result else 0
             conn.close()
@@ -1665,7 +1851,7 @@ def dashboard():
             cursor.execute("""
                 SELECT COUNT(DISTINCT capitulo) as total 
                 FROM notas 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             total_result = cursor.fetchone()
             total = total_result["total"] if total_result else 0
@@ -1707,7 +1893,7 @@ def mew_notas_capitulos(aluno_id, disciplina_id):
     cursor = conn.cursor()
     
     # Buscar informações do aluno
-    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
     
     if not aluno:
@@ -1715,7 +1901,7 @@ def mew_notas_capitulos(aluno_id, disciplina_id):
         return "Aluno não encontrado", 404
     
     # Buscar informações da disciplina
-    cursor.execute("SELECT id, nome FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT id, nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     if not disciplina:
@@ -1726,7 +1912,7 @@ def mew_notas_capitulos(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT id, capitulo, nota 
         FROM notas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY capitulo
     """, (aluno_id, disciplina_id))
     notas_capitulos = cursor.fetchall()
@@ -1735,7 +1921,7 @@ def mew_notas_capitulos(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT nota_final 
         FROM notas_finais 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     nota_final_row = cursor.fetchone()
     nota_final = nota_final_row[0] if nota_final_row else None
@@ -1761,7 +1947,7 @@ def mew_questoes_final(disciplina_id):
     cursor = conn.cursor()
     
     # Buscar disciplina
-    cursor.execute("SELECT * FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     if request.method == "POST":
@@ -1780,7 +1966,7 @@ def mew_questoes_final(disciplina_id):
         cursor.execute("""
             INSERT INTO questoes_finais 
             (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta))
         
         conn.commit()
@@ -1788,7 +1974,7 @@ def mew_questoes_final(disciplina_id):
         return redirect(f"/mew/questoes-final/{disciplina_id}?sucesso=Questão+adicionada")
     
     # GET: Listar questões existentes
-    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = ? ORDER BY id", (disciplina_id,))
+    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     questoes = cursor.fetchall()
     
     total_questoes = len(questoes)
@@ -1812,11 +1998,11 @@ def deletar_questao(questao_id):
     cursor = conn.cursor()
     
     # Buscar disciplina_id antes de deletar para redirecionar
-    cursor.execute("SELECT disciplina_id FROM questoes_finais WHERE id = ?", (questao_id,))
+    cursor.execute("SELECT disciplina_id FROM questoes_finais WHERE id = %s", (questao_id,))
     questao = cursor.fetchone()
     disciplina_id = questao["disciplina_id"] if questao else None
     
-    cursor.execute("DELETE FROM questoes_finais WHERE id = ?", (questao_id,))
+    cursor.execute("DELETE FROM questoes_finais WHERE id = %s", (questao_id,))
     
     conn.commit()
     conn.close()
@@ -1835,7 +2021,7 @@ def verificar_questoes(disciplina_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     resultado = cursor.fetchone()
     total = resultado["total"] if resultado else 0
     
@@ -1860,9 +2046,12 @@ def mew_salvar_nota_final():
         nota_final = data['nota_final'] if data['nota_final'] else None
         
         cursor.execute("""
-            INSERT OR REPLACE INTO notas_finais 
+            INSERT INTO notas_finais 
             (aluno_id, disciplina_id, nota_final, data_avaliacao)
-            VALUES (?, ?, ?, datetime('now'))
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+                nota_final = EXCLUDED.nota_final,
+                data_avaliacao = EXCLUDED.data_avaliacao
         """, (data['aluno_id'], data['disciplina_id'], nota_final))
         
         conn.commit()
@@ -1910,7 +2099,7 @@ def disciplina(disciplina_id):
     # Buscar data de início da disciplina para este aluno
     cursor.execute("""
         SELECT data_inicio FROM aluno_disciplina_datas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     data_info = cursor.fetchone()
@@ -1941,14 +2130,14 @@ def disciplina(disciplina_id):
         capitulos_liberados = 0
     
     # Buscar disciplina e capítulos
-    cursor.execute("SELECT * FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     cursor.execute("""
         SELECT c.id, c.titulo, c.video_url, c.pdf_url, p.id AS prova_id
         FROM capitulos c
         LEFT JOIN provas p ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = ?
+        WHERE c.disciplina_id = %s
         ORDER BY c.id
     """, (disciplina_id,))
     capitulos = cursor.fetchall()
@@ -1975,7 +2164,7 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
     
     cursor.execute("""
         SELECT n.id FROM notas n
-        WHERE n.aluno_id = ? AND n.disciplina_id = ? AND n.capitulo = ?
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
     
     if cursor.fetchone():
@@ -2026,20 +2215,20 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
         '''.format(disciplina_id, capitulo_numero, disciplina_id)
     
     # Obter informações do aluno
-    cursor.execute("SELECT nome FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT nome FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
     
     # Obter informações da disciplina e capítulo
-    cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     cursor.execute("""
         SELECT c.titulo, p.questoes_json 
         FROM capitulos c
         LEFT JOIN provas p ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = ?
+        WHERE c.disciplina_id = %s
         ORDER BY c.id
-        LIMIT 1 OFFSET ?
+        LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
     
     capitulo = cursor.fetchone()
@@ -2110,7 +2299,7 @@ def prova(disciplina_id, capitulo_numero):
     
     cursor.execute("""
         SELECT n.id FROM notas n
-        WHERE n.aluno_id = ? AND n.disciplina_id = ? AND n.capitulo = ?
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
     
     if cursor.fetchone():
@@ -2162,9 +2351,9 @@ def prova(disciplina_id, capitulo_numero):
     cursor.execute("""
         SELECT c.id, c.titulo
         FROM capitulos c
-        WHERE c.disciplina_id = ?
+        WHERE c.disciplina_id = %s
         ORDER BY c.id
-        LIMIT 1 OFFSET ?
+        LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
     capitulo_result = cursor.fetchone()
 
@@ -2213,7 +2402,7 @@ def prova(disciplina_id, capitulo_numero):
     cursor.execute("""
         SELECT questoes_json
         FROM provas
-        WHERE capitulo_id = ?
+        WHERE capitulo_id = %s
     """, (capitulo_id,))
     prova = cursor.fetchone()
     conn.close()
@@ -2263,8 +2452,10 @@ def prova(disciplina_id, capitulo_numero):
         resultados = []
         
         for i, q in enumerate(questoes, start=1):
-            resposta_aluno = request.form.get(f"q{i}")
-            acertou = resposta_aluno == q["resposta_certa"]
+            resposta_aluno = request.form.get(f"resposta_{i}")
+            resposta_correta = str(q["resposta_certa"]).strip().upper()
+            resposta_aluno = resposta_aluno.strip().upper() if resposta_aluno else ""
+            acertou = resposta_aluno == resposta_correta
             
             if acertou:
                 acertos += 1
@@ -2284,7 +2475,7 @@ def prova(disciplina_id, capitulo_numero):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (aluno_id, disciplina_id, capitulo_numero, nota))
         conn.commit()
         conn.close()
@@ -2364,10 +2555,10 @@ def resultado_prova(disciplina_id, capitulo_numero):
         
         cursor.execute("""
             SELECT a.nome AS aluno_nome, d.nome AS disciplina_nome, 
-                   (SELECT titulo FROM capitulos WHERE disciplina_id = ? 
-                    ORDER BY id LIMIT 1 OFFSET ?) AS capitulo_titulo
+                   (SELECT titulo FROM capitulos WHERE disciplina_id = %s 
+                    ORDER BY id LIMIT 1 OFFSET %s) AS capitulo_titulo
             FROM alunos a, disciplinas d
-            WHERE a.id = ? AND d.id = ?
+            WHERE a.id = %s AND d.id = %s
         """, (disciplina_id, capitulo_numero - 1, aluno_id, disciplina_id))
         
         info = cursor.fetchone()
@@ -2401,7 +2592,7 @@ def resultado_prova(disciplina_id, capitulo_numero):
         FROM notas n
         JOIN alunos a ON n.aluno_id = a.id
         JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = ? AND n.disciplina_id = ? AND n.capitulo = ?
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
     
     nota_info = cursor.fetchone()
@@ -2452,9 +2643,9 @@ def resultado_prova(disciplina_id, capitulo_numero):
     # Buscar título do capítulo
     cursor.execute("""
         SELECT titulo FROM capitulos 
-        WHERE disciplina_id = ? 
+        WHERE disciplina_id = %s 
         ORDER BY id 
-        LIMIT 1 OFFSET ?
+        LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
     
     capitulo = cursor.fetchone()
@@ -2464,9 +2655,9 @@ def resultado_prova(disciplina_id, capitulo_numero):
         SELECT p.questoes_json
         FROM provas p
         JOIN capitulos c ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = ?
+        WHERE c.disciplina_id = %s
         ORDER BY c.id
-        LIMIT 1 OFFSET ?
+        LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
     
     prova = cursor.fetchone()
@@ -2554,7 +2745,7 @@ def solicitar_material_modal():
         SELECT d.id, d.nome
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
     conn.close()
@@ -2622,7 +2813,7 @@ def solicitar_material():
     cursor = conn.cursor()
     
     # Buscar nome da disciplina
-    cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     disciplina_nome = disciplina["nome"] if disciplina else ""
     
@@ -2635,7 +2826,7 @@ def solicitar_material():
     
     cursor.execute("""
         INSERT INTO solicitacoes_material (aluno_id, disciplina_id, material, data_solicitacao)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (aluno_id, disciplina_id, detalhes_material, data_solicitacao))
     
     conn.commit()
@@ -2716,7 +2907,7 @@ def solicitar_declaracao():
     data_solicitacao = datetime.now().strftime("%d/%m/%Y %H:%M")
     cursor.execute("""
         INSERT INTO solicitacoes_declaracoes (aluno_id, tipo, detalhes, data_solicitacao)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (aluno_id, tipo, detalhes, data_solicitacao))
     
     conn.commit()
@@ -2816,15 +3007,16 @@ def mew_dashboard():
 def mew_alunos():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
+    init_contratos_db()
+    init_pagamentos_db()
+
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM disciplinas")
+    cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
 
     if request.method == "POST":
-        # Dados básicos do aluno
         nome = request.form.get("nome")
         email = request.form.get("email")
         senha = request.form.get("senha")
@@ -2837,11 +3029,10 @@ def mew_alunos():
         cep = request.form.get("cep")
         curso_referencia = request.form.get("curso_referencia")
         forma_pagamento = request.form.get("forma_pagamento")
-        valor_total = request.form.get("valor_total")
+        valor_total_raw = request.form.get("valor_total")
         data_inicio = request.form.get("data_inicio")
         prazo_dias = int(request.form.get("prazo_dias", 60))
-        
-        # === NOVOS CAMPOS DE DADOS PESSOAIS ===
+
         nome_pai = request.form.get("nome_pai", "")
         nome_mae = request.form.get("nome_mae", "")
         data_nascimento = request.form.get("data_nascimento", "")
@@ -2850,82 +3041,14 @@ def mew_alunos():
         nacionalidade = request.form.get("nacionalidade", "Brasileira")
         estado_civil = request.form.get("estado_civil", "")
         email_alternativo = request.form.get("email_alternativo", "")
-        # ======================================
 
-        # ===== RA (MATRÍCULA) =====
-        ra_input = request.form.get("ra")
+        gerar_contrato = request.form.get("gerar_contrato") == "1"
+        regras_contrato = request.form.get("regras_contrato", "").strip()
+        gerar_cobranca = request.form.get("gerar_cobranca") == "1"
 
-        if ra_input:
-            ra = ra_input.strip()
-    # VALIDAÇÃO APENAS PARA O RA (matrícula)
-            if not ra.isdigit() or len(ra) != 8:  # RA continua com 8 dígitos
-                conn.close()
-                return "RA inválido. Deve conter exatamente 8 números.", 400
-
-        cursor.execute("SELECT id FROM alunos WHERE ra = ?", (ra,))
-        if cursor.fetchone():
+        if gerar_contrato and not regras_contrato:
             conn.close()
-            return "RA já existente. Utilize outro número.", 400
-        else:
-            while True:
-                ra = gerar_ra()  # Esta função já gera 8 dígitos
-                cursor.execute("SELECT id FROM alunos WHERE ra = ?", (ra,))
-                if not cursor.fetchone():
-                    break
-
-        # ===== RG (NÃO VALIDAR - PODE TER QUALQUER TAMANHO) =====
-        rg = request.form.get("rg")  # Aceita qualquer valor, sem validação de tamanho
-
-        # ===== INSERIR ALUNO =====
-        cursor.execute("""
-            INSERT INTO alunos (nome, email, ra, senha)
-            VALUES (?, ?, ?, ?)
-        """, (nome, email, ra, senha))
-        aluno_id = cursor.lastrowid
-
-        # ===== DADOS PESSOAIS (COM TODOS OS CAMPOS) =====
-        cursor.execute("""
-            INSERT INTO dados_pessoais 
-            (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep, 
-             curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
-             data_nascimento, sexo, estado_civil, email_alternativo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
-              curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
-              data_nascimento, sexo, estado_civil, email_alternativo))
-
-        # ===== SITUAÇÃO FINANCEIRA =====
-        if forma_pagamento and valor_total:
-            try:
-                valor_total = float(valor_total.replace(",", "."))
-            except ValueError:
-                conn.close()
-                return "Valor total inválido.", 400
-
-            if forma_pagamento in ["avista", "cartao"]:
-                status = "pago"
-                parcelas_total = 1
-                parcelas_pagas = 1
-            else:  # boleto_pix
-                status = "parcial"
-                parcelas_total = 2
-                parcelas_pagas = 1
-
-            cursor.execute("""
-                INSERT INTO situacao_financeira
-                (aluno_id, forma_pagamento, status, parcelas_total, parcelas_pagas, valor_total)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                aluno_id,
-                forma_pagamento,
-                status,
-                parcelas_total,
-                parcelas_pagas,
-                valor_total
-            ))
-
-        # ===== DATAS DAS DISCIPLINAS =====
-        from datetime import datetime, timedelta
+            return "Informe as regras do contrato ou desmarque a opção de gerar contrato.", 400
 
         if not data_inicio:
             conn.close()
@@ -2936,70 +3059,179 @@ def mew_alunos():
         except ValueError:
             conn.close()
             return "Formato de data inválido.", 400
-        
-        data_fim_obj = data_inicio_obj + timedelta(days=prazo_dias)
-        data_fim = data_fim_obj.strftime("%d/%m/%Y")
-        data_inicio_formatada = data_inicio_obj.strftime("%d/%m/%Y")
 
-        disciplinas_selecionadas = request.form.getlist("disciplinas")
+        valor_total = None
+        if valor_total_raw:
+            try:
+                if "," in valor_total_raw:
+                    valor_total = float(valor_total_raw.replace(".", "").replace(",", "."))
+                else:
+                    valor_total = float(valor_total_raw)
+            except ValueError:
+                conn.close()
+                return "Valor total inválido.", 400
 
-        for d_id in disciplinas_selecionadas:
+        if gerar_cobranca and (not valor_total or valor_total <= 0):
+            conn.close()
+            return "Informe um valor total válido para gerar a cobrança.", 400
+
+        ra_input = request.form.get("ra", "").strip()
+        if ra_input:
+            if not ra_input.isdigit() or len(ra_input) != 8:
+                conn.close()
+                return "RA inválido. Deve conter exatamente 8 números.", 400
+            ra = ra_input
+            cursor.execute("SELECT id FROM alunos WHERE ra = %s", (ra,))
+            if cursor.fetchone():
+                conn.close()
+                return "RA já existente. Utilize outro número.", 400
+        else:
+            while True:
+                ra = gerar_ra()
+                cursor.execute("SELECT id FROM alunos WHERE ra = %s", (ra,))
+                if not cursor.fetchone():
+                    break
+
+        try:
             cursor.execute("""
-                INSERT INTO aluno_disciplina (aluno_id, disciplina_id)
-                VALUES (?, ?)
-            """, (aluno_id, d_id))
+                INSERT INTO alunos (nome, email, ra, senha)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (nome, email, ra, senha))
+            aluno_id = cursor.fetchone()["id"]
 
             cursor.execute("""
-                INSERT INTO aluno_disciplina_datas
-                (aluno_id, disciplina_id, data_inicio, data_fim_previsto)
-                VALUES (?, ?, ?, ?)
-            """, (aluno_id, d_id, data_inicio_formatada, data_fim))
+                INSERT INTO dados_pessoais
+                (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
+                 curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
+                 data_nascimento, sexo, estado_civil, email_alternativo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
+                  curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
+                  data_nascimento, sexo, estado_civil, email_alternativo))
 
-        conn.commit()
-        conn.close()
-        return redirect("/mew/alunos")
+            if forma_pagamento and valor_total is not None:
+                if gerar_cobranca:
+                    status_financeiro = "pendente"
+                    parcelas_total = 1
+                    parcelas_pagas = 0
+                elif forma_pagamento == "mercadopago":
+                    status_financeiro = "pendente"
+                    parcelas_total = 1
+                    parcelas_pagas = 0
+                elif forma_pagamento in ["avista", "cartao"]:
+                    status_financeiro = "pago"
+                    parcelas_total = 1
+                    parcelas_pagas = 1
+                else:
+                    status_financeiro = "parcial"
+                    parcelas_total = 2
+                    parcelas_pagas = 1
 
-    # ===== GET: LISTAGEM DE ALUNOS =====
-    cursor.execute("SELECT * FROM alunos")
+                cursor.execute("""
+                    INSERT INTO situacao_financeira
+                    (aluno_id, forma_pagamento, status, parcelas_total, parcelas_pagas, valor_total)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (aluno_id, forma_pagamento, status_financeiro,
+                      parcelas_total, parcelas_pagas, valor_total))
+
+            data_fim_obj = data_inicio_obj + timedelta(days=prazo_dias)
+            data_fim = data_fim_obj.strftime("%d/%m/%Y")
+            data_inicio_formatada = data_inicio_obj.strftime("%d/%m/%Y")
+
+            disciplinas_selecionadas = request.form.getlist("disciplinas")
+            for d_id in disciplinas_selecionadas:
+                cursor.execute("""
+                    INSERT INTO aluno_disciplina (aluno_id, disciplina_id)
+                    VALUES (%s, %s)
+                """, (aluno_id, d_id))
+                cursor.execute("""
+                    INSERT INTO aluno_disciplina_datas
+                    (aluno_id, disciplina_id, data_inicio, data_fim_previsto)
+                    VALUES (%s, %s, %s, %s)
+                """, (aluno_id, d_id, data_inicio_formatada, data_fim))
+
+            conn.commit()
+            conn.close()
+        except Exception:
+            conn.rollback()
+            conn.close()
+            raise
+
+        contrato_id = None
+        if gerar_contrato:
+            contrato_id = gerar_contrato_cadastro(
+                aluno_id,
+                {
+                    "nome": nome, "email": email, "ra": ra, "cpf": cpf, "rg": rg,
+                    "telefone": telefone, "endereco": endereco, "cidade": cidade,
+                    "estado": estado, "cep": cep, "curso_referencia": curso_referencia
+                },
+                regras_contrato,
+                forma_pagamento or "Não informado",
+                valor_total or 0
+            )
+
+        if gerar_cobranca:
+            try:
+                cobranca = criar_preferencia_mercadopago(
+                    aluno_id=aluno_id,
+                    nome=nome,
+                    email=email,
+                    valor_total=valor_total,
+                    contrato_id=contrato_id,
+                    base_url=request.host_url.rstrip("/")
+                )
+                return redirect(f"/mew/alunos?cobranca_id={cobranca['id']}")
+            except Exception as e:
+                print(f"Erro ao criar cobrança Mercado Pago: {e}")
+                return redirect(f"/mew/alunos?erro_mp={str(e)}")
+
+        return redirect("/mew/alunos?sucesso=Aluno+cadastrado+com+sucesso")
+
+    cursor.execute("SELECT * FROM alunos ORDER BY nome")
     alunos = cursor.fetchall()
-
     alunos_completo = []
 
     for aluno in alunos:
-        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = ?", (aluno["id"],))
+        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno["id"],))
         dados_pessoais = cursor.fetchone()
 
         cursor.execute("""
             SELECT * FROM situacao_financeira
-            WHERE aluno_id = ?
-            ORDER BY id DESC
-            LIMIT 1
+            WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
         """, (aluno["id"],))
         situacao_financeira = cursor.fetchone()
 
-        cursor.execute("""
-            SELECT COUNT(*) as total
-            FROM aluno_disciplina
-            WHERE aluno_id = ?
-        """, (aluno["id"],))
+        cursor.execute("SELECT COUNT(*) as total FROM aluno_disciplina WHERE aluno_id = %s", (aluno["id"],))
         count = cursor.fetchone()
 
         cursor.execute("""
             SELECT ad.disciplina_id, d.nome, addd.data_inicio, addd.data_fim_previsto
             FROM aluno_disciplina ad
             LEFT JOIN aluno_disciplina_datas addd
-                ON ad.aluno_id = addd.aluno_id
-               AND ad.disciplina_id = addd.disciplina_id
+              ON ad.aluno_id = addd.aluno_id AND ad.disciplina_id = addd.disciplina_id
             LEFT JOIN disciplinas d ON ad.disciplina_id = d.id
-            WHERE ad.aluno_id = ?
+            WHERE ad.aluno_id = %s
         """, (aluno["id"],))
         disciplinas_aluno = cursor.fetchall()
 
+        cursor.execute("""
+            SELECT * FROM pagamentos_mercadopago
+            WHERE aluno_id = %s
+            ORDER BY CASE WHEN status = 'pago' THEN 0 ELSE 1 END, id DESC
+            LIMIT 1
+        """, (aluno["id"],))
+        pagamento_mp = cursor.fetchone()
+
+        cursor.execute("""
+            SELECT * FROM contratos_alunos
+            WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
+        """, (aluno["id"],))
+        contrato = cursor.fetchone()
+
         alunos_completo.append({
-            "id": aluno["id"],
-            "nome": aluno["nome"],
-            "email": aluno["email"],
-            "ra": aluno["ra"],
+            "id": aluno["id"], "nome": aluno["nome"], "email": aluno["email"], "ra": aluno["ra"],
             "cpf": dados_pessoais["cpf"] if dados_pessoais else "",
             "telefone": dados_pessoais["telefone"] if dados_pessoais else "",
             "forma_pagamento": situacao_financeira["forma_pagamento"] if situacao_financeira else "",
@@ -3009,7 +3241,6 @@ def mew_alunos():
             "parcelas_pagas": situacao_financeira["parcelas_pagas"] if situacao_financeira else 0,
             "total_disciplinas": count["total"] if count else 0,
             "disciplinas_datas": disciplinas_aluno,
-            # NOVOS CAMPOS
             "nome_pai": dados_pessoais["nome_pai"] if dados_pessoais else "",
             "nome_mae": dados_pessoais["nome_mae"] if dados_pessoais else "",
             "data_nascimento": dados_pessoais["data_nascimento"] if dados_pessoais else "",
@@ -3018,15 +3249,194 @@ def mew_alunos():
             "nacionalidade": dados_pessoais["nacionalidade"] if dados_pessoais else "",
             "estado_civil": dados_pessoais["estado_civil"] if dados_pessoais else "",
             "email_alternativo": dados_pessoais["email_alternativo"] if dados_pessoais else "",
+            "pagamento_mp": pagamento_mp,
+            "contrato": contrato
         })
 
-    conn.close()
+    cobranca_criada = None
+    cobranca_id = request.args.get("cobranca_id")
+    if cobranca_id and cobranca_id.isdigit():
+        cursor.execute("SELECT * FROM pagamentos_mercadopago WHERE id = %s", (int(cobranca_id),))
+        cobranca_criada = cursor.fetchone()
 
+    conn.close()
     return render_template(
         "mew/alunos.html",
         disciplinas=disciplinas,
-        alunos=alunos_completo
+        alunos=alunos_completo,
+        cobranca_criada=cobranca_criada,
+        erro_mp=request.args.get("erro_mp"),
+        sucesso=request.args.get("sucesso")
     )
+
+
+@app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
+def mew_gerar_cobranca_aluno(aluno_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    init_pagamentos_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.id, a.nome, a.email, sf.valor_total
+        FROM alunos a
+        LEFT JOIN LATERAL (
+            SELECT valor_total FROM situacao_financeira
+            WHERE aluno_id = a.id ORDER BY id DESC LIMIT 1
+        ) sf ON TRUE
+        WHERE a.id = %s
+    """, (aluno_id,))
+    aluno = cursor.fetchone()
+    cursor.execute("SELECT id FROM contratos_alunos WHERE aluno_id = %s ORDER BY id DESC LIMIT 1", (aluno_id,))
+    contrato = cursor.fetchone()
+    conn.close()
+
+    if not aluno or not aluno["valor_total"]:
+        return redirect("/mew/alunos?erro_mp=Aluno+sem+valor+financeiro+cadastrado")
+
+    try:
+        cobranca = criar_preferencia_mercadopago(
+            aluno_id=aluno_id,
+            nome=aluno["nome"],
+            email=aluno["email"],
+            valor_total=aluno["valor_total"],
+            contrato_id=contrato["id"] if contrato else None,
+            base_url=request.host_url.rstrip("/")
+        )
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE situacao_financeira
+            SET status = 'pendente', parcelas_pagas = 0
+            WHERE id = (SELECT id FROM situacao_financeira WHERE aluno_id = %s ORDER BY id DESC LIMIT 1)
+        """, (aluno_id,))
+        conn.commit()
+        conn.close()
+        return redirect(f"/mew/alunos?cobranca_id={cobranca['id']}")
+    except Exception as e:
+        return redirect(f"/mew/alunos?erro_mp={str(e)}")
+
+
+@app.route("/webhook/mercadopago", methods=["POST"])
+def webhook_mercadopago():
+    init_pagamentos_db()
+    dados = request.get_json(silent=True) or {}
+    tipo = dados.get("type") or request.args.get("type")
+    payment_id = (dados.get("data") or {}).get("id") or request.args.get("data.id") or request.args.get("id")
+
+    if tipo not in (None, "payment") or not payment_id:
+        return jsonify({"ok": True}), 200
+
+    # Se a chave secreta do Webhook estiver configurada, valida a assinatura x-signature.
+    webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET")
+    if webhook_secret:
+        x_signature = request.headers.get("x-signature")
+        x_request_id = request.headers.get("x-request-id")
+        data_id_assinatura = request.args.get("data.id")
+        if not x_signature or not x_request_id or not data_id_assinatura:
+            return jsonify({"ok": False, "erro": "assinatura ausente"}), 401
+        try:
+            partes = {}
+            for parte in x_signature.split(","):
+                if "=" in parte:
+                    chave, valor = parte.split("=", 1)
+                    partes[chave.strip()] = valor.strip()
+            ts = partes.get("ts")
+            v1 = partes.get("v1")
+            manifest = f"id:{str(data_id_assinatura).lower()};request-id:{x_request_id};ts:{ts};"
+            import hmac
+            esperado = hmac.new(webhook_secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+            if not v1 or not hmac.compare_digest(esperado, v1):
+                return jsonify({"ok": False, "erro": "assinatura inválida"}), 401
+        except Exception as e:
+            print(f"Erro ao validar assinatura Mercado Pago: {e}")
+            return jsonify({"ok": False, "erro": "falha na assinatura"}), 401
+
+    try:
+        sdk = get_mercadopago_sdk()
+        resultado = sdk.payment().get(payment_id)
+        pagamento = resultado.get("response", {}) if isinstance(resultado, dict) else {}
+        external_reference = pagamento.get("external_reference")
+        status_mp = pagamento.get("status") or "unknown"
+
+        if not external_reference:
+            return jsonify({"ok": True}), 200
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM pagamentos_mercadopago WHERE external_reference = %s", (external_reference,))
+        cobranca = cursor.fetchone()
+        if not cobranca:
+            conn.close()
+            return jsonify({"ok": True}), 200
+
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        ja_pago = cobranca.get("status") == "pago"
+        status_local = "pago" if (status_mp == "approved" or ja_pago) else "nao_pago"
+        data_pagamento = agora if status_mp == "approved" else cobranca.get("data_pagamento")
+
+        cursor.execute("""
+            UPDATE pagamentos_mercadopago
+            SET payment_id = %s, status = %s, status_mp = %s,
+                data_atualizacao = %s, data_pagamento = %s
+            WHERE id = %s
+        """, (str(payment_id), status_local, status_mp, agora, data_pagamento, cobranca["id"]))
+
+        if status_mp == "approved":
+            cursor.execute("""
+                UPDATE situacao_financeira
+                SET status = 'pago', parcelas_pagas = parcelas_total
+                WHERE id = (
+                    SELECT id FROM situacao_financeira
+                    WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
+                )
+            """, (cobranca["aluno_id"],))
+        elif not ja_pago:
+            cursor.execute("""
+                UPDATE situacao_financeira
+                SET status = 'pendente', parcelas_pagas = 0
+                WHERE id = (
+                    SELECT id FROM situacao_financeira
+                    WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
+                )
+            """, (cobranca["aluno_id"],))
+
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        print(f"Erro webhook Mercado Pago: {e}")
+        return jsonify({"ok": False}), 500
+
+
+@app.route("/pagamento/mercadopago/sucesso")
+def pagamento_mercadopago_sucesso():
+    return render_template_string("""
+    <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
+      <h1 style='color:#15803d'>✅ Pagamento recebido</h1>
+      <p>O Mercado Pago informou que o pagamento foi aprovado. O status também será confirmado automaticamente pelo sistema.</p>
+      <a href='/dashboard'>Ir para o ambiente do aluno</a>
+    </div>""")
+
+
+@app.route("/pagamento/mercadopago/pendente")
+def pagamento_mercadopago_pendente():
+    return render_template_string("""
+    <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
+      <h1>⏳ Pagamento pendente</h1><p>Assim que o Mercado Pago aprovar, o sistema atualizará o status automaticamente.</p>
+      <a href='/'>Voltar</a>
+    </div>""")
+
+
+@app.route("/pagamento/mercadopago/falha")
+def pagamento_mercadopago_falha():
+    return render_template_string("""
+    <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
+      <h1 style='color:#b91c1c'>❌ Pagamento não concluído</h1><p>Nenhuma baixa financeira foi realizada.</p>
+      <a href='/'>Voltar</a>
+    </div>""")
+
 
 @app.route("/mew/disciplinas", methods=["GET", "POST"])
 def mew_disciplinas():
@@ -3039,8 +3449,8 @@ def mew_disciplinas():
     if request.method == "POST":
         # 1. Criar a disciplina
         nome_disciplina = request.form.get("nome_disciplina")
-        cursor.execute("INSERT INTO disciplinas (nome) VALUES (?)", (nome_disciplina,))
-        disciplina_id = cursor.lastrowid
+        cursor.execute("INSERT INTO disciplinas (nome) VALUES (%s) RETURNING id", (nome_disciplina,))
+        disciplina_id = cursor.fetchone()["id"]
 
         # 2. Criar os 4 capítulos com seus materiais e provas
         for i in range(1, 5):
@@ -3065,15 +3475,16 @@ def mew_disciplinas():
             # Inserir capítulo
             cursor.execute("""
                 INSERT INTO capitulos (disciplina_id, titulo, video_url, pdf_url)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
             """, (disciplina_id, titulo, video_url, pdf_url))
             
-            capitulo_id = cursor.lastrowid
+            capitulo_id = cursor.fetchone()["id"]
 
             # Inserir prova com as questões
             cursor.execute("""
                 INSERT INTO provas (capitulo_id, questoes_json)
-                VALUES (?, ?)
+                VALUES (%s, %s)
             """, (capitulo_id, questoes_json))
 
         conn.commit()
@@ -3099,10 +3510,10 @@ def mew_editar_disciplina(disciplina_id):
     if request.method == "POST":
         # Atualizar nome da disciplina
         nome = request.form.get("nome_disciplina")
-        cursor.execute("UPDATE disciplinas SET nome = ? WHERE id = ?", (nome, disciplina_id))   
+        cursor.execute("UPDATE disciplinas SET nome = %s WHERE id = %s", (nome, disciplina_id))   
 
         # Atualizar capítulos
-        cursor.execute("SELECT id FROM capitulos WHERE disciplina_id = ? ORDER BY id", (disciplina_id,))
+        cursor.execute("SELECT id FROM capitulos WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
         capitulos = cursor.fetchall()
 
 
@@ -3121,11 +3532,11 @@ def mew_editar_disciplina(disciplina_id):
 
             cursor.execute("""
                 UPDATE capitulos
-                SET titulo = ?, video_url = ?, pdf_url = ?
-                WHERE id = ?
+                SET titulo = %s, video_url = %s, pdf_url = %s
+                WHERE id = %s
             """, (titulo, video, pdf, cap["id"]))
 
-            cursor.execute("UPDATE provas SET questoes_json = ? WHERE capitulo_id = ?",
+            cursor.execute("UPDATE provas SET questoes_json = %s WHERE capitulo_id = %s",
             (questoes, cap["id"]))
 
         conn.commit()
@@ -3133,14 +3544,14 @@ def mew_editar_disciplina(disciplina_id):
         return redirect("/mew/disciplinas")
 
     # GET
-    cursor.execute("SELECT * FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
 
     cursor.execute("""
         SELECT c.*, p.questoes_json
         FROM capitulos c
         LEFT JOIN provas p ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = ?
+        WHERE c.disciplina_id = %s
         ORDER BY c.id
     """, (disciplina_id,))
 
@@ -3194,9 +3605,9 @@ def mew_solicitacoes():
         if disciplinas_ids:
             ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
             if ids_list:
-                placeholders = ','.join(['?'] * len(ids_list))
+                placeholders = ','.join(['%s'] * len(ids_list))
                 cursor.execute(f"""
-                    SELECT GROUP_CONCAT(nome) as nomes
+                    SELECT STRING_AGG(nome, ',') as nomes
                     FROM disciplinas 
                     WHERE id IN ({placeholders})
                 """, ids_list)
@@ -3228,13 +3639,13 @@ def mew_marcar_entregue(tipo, id):
         cursor.execute("""
             UPDATE solicitacoes_material 
             SET entregue = 1 
-            WHERE id = ?
+            WHERE id = %s
         """, (id,))
     elif tipo == "declaracao":
         cursor.execute("""
             UPDATE solicitacoes_declaracoes 
             SET entregue = 1 
-            WHERE id = ?
+            WHERE id = %s
         """, (id,))
     
     conn.commit()
@@ -3252,9 +3663,9 @@ def mew_deletar_solicitacao(tipo, id):
     cursor = conn.cursor()
     
     if tipo == "material":
-        cursor.execute("DELETE FROM solicitacoes_material WHERE id = ?", (id,))
+        cursor.execute("DELETE FROM solicitacoes_material WHERE id = %s", (id,))
     elif tipo == "declaracao":
-        cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE id = ?", (id,))
+        cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE id = %s", (id,))
     
     conn.commit()
     conn.close()
@@ -3307,29 +3718,29 @@ def mew_editar_aluno(aluno_id):
             if senha:
                 cursor.execute("""
                     UPDATE alunos 
-                    SET nome = ?, email = ?, senha = ?
-                    WHERE id = ?
+                    SET nome = %s, email = %s, senha = %s
+                    WHERE id = %s
                 """, (nome, email, senha, aluno_id))
             else:
                 cursor.execute("""
                     UPDATE alunos 
-                    SET nome = ?, email = ?
-                    WHERE id = ?
+                    SET nome = %s, email = %s
+                    WHERE id = %s
                 """, (nome, email, aluno_id))
             
             # Verificar se já existem dados pessoais
-            cursor.execute("SELECT id FROM dados_pessoais WHERE aluno_id = ?", (aluno_id,))
+            cursor.execute("SELECT id FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
             dados_existentes = cursor.fetchone()
             
             if dados_existentes:
                 # Atualizar dados existentes (COM TODOS OS CAMPOS)
                 cursor.execute("""
                     UPDATE dados_pessoais 
-                    SET cpf = ?, rg = ?, telefone = ?, endereco = ?, 
-                        cidade = ?, estado = ?, cep = ?, curso_referencia = ?,
-                        nome_pai = ?, nome_mae = ?, naturalidade = ?, nacionalidade = ?,
-                        data_nascimento = ?, sexo = ?, estado_civil = ?, email_alternativo = ?
-                    WHERE aluno_id = ?
+                    SET cpf = %s, rg = %s, telefone = %s, endereco = %s, 
+                        cidade = %s, estado = %s, cep = %s, curso_referencia = %s,
+                        nome_pai = %s, nome_mae = %s, naturalidade = %s, nacionalidade = %s,
+                        data_nascimento = %s, sexo = %s, estado_civil = %s, email_alternativo = %s
+                    WHERE aluno_id = %s
                 """, (cpf, rg, telefone, endereco, cidade, estado, cep, curso_referencia,
                       nome_pai, nome_mae, naturalidade, nacionalidade,
                       data_nascimento, sexo, estado_civil, email_alternativo, aluno_id))
@@ -3340,7 +3751,7 @@ def mew_editar_aluno(aluno_id):
                     (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
                      curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
                      data_nascimento, sexo, estado_civil, email_alternativo)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
                       curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
                       data_nascimento, sexo, estado_civil, email_alternativo))
@@ -3372,17 +3783,17 @@ def mew_editar_aluno(aluno_id):
                         status_financeiro = "pago"
                 
                 # Verificar se já existe situação financeira
-                cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = ?", (aluno_id,))
+                cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
                 situacao_existente = cursor.fetchone()
                 
                 if situacao_existente:
                     # Atualizar
                     cursor.execute("""
                         UPDATE situacao_financeira 
-                        SET forma_pagamento = ?, status = ?, 
-                            parcelas_total = ?, parcelas_pagas = ?, 
-                            valor_total = ?
-                        WHERE aluno_id = ?
+                        SET forma_pagamento = %s, status = %s, 
+                            parcelas_total = %s, parcelas_pagas = %s, 
+                            valor_total = %s
+                        WHERE aluno_id = %s
                     """, (forma_pagamento, status_financeiro, 
                           parcelas_total, parcelas_pagas, 
                           valor_total_float, aluno_id))
@@ -3392,7 +3803,7 @@ def mew_editar_aluno(aluno_id):
                         INSERT INTO situacao_financeira 
                         (aluno_id, forma_pagamento, status, 
                          parcelas_total, parcelas_pagas, valor_total)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (aluno_id, forma_pagamento, status_financeiro,
                           parcelas_total, parcelas_pagas, valor_total_float))
             
@@ -3401,16 +3812,16 @@ def mew_editar_aluno(aluno_id):
                 disciplinas_selecionadas = request.form.getlist("disciplinas")
                 
                 # Buscar disciplinas atuais
-                cursor.execute("SELECT disciplina_id FROM aluno_disciplina WHERE aluno_id = ?", (aluno_id,))
+                cursor.execute("SELECT disciplina_id FROM aluno_disciplina WHERE aluno_id = %s", (aluno_id,))
                 disciplinas_atuais = [str(row['disciplina_id']) for row in cursor.fetchall()]
                 
                 # Remover disciplinas desmarcadas
                 for d_id in disciplinas_atuais:
                     if d_id not in disciplinas_selecionadas:
                         try:
-                            cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = ? AND disciplina_id = ?", 
+                            cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s", 
                                           (aluno_id, d_id))
-                            cursor.execute("DELETE FROM aluno_disciplina_datas WHERE aluno_id = ? AND disciplina_id = ?", 
+                            cursor.execute("DELETE FROM aluno_disciplina_datas WHERE aluno_id = %s AND disciplina_id = %s", 
                                           (aluno_id, d_id))
                         except:
                             pass  # Ignorar erros em exclusões
@@ -3418,7 +3829,7 @@ def mew_editar_aluno(aluno_id):
                 # Adicionar/atualizar disciplinas selecionadas
                 for d_id in disciplinas_selecionadas:
                     # Verificar se já existe matrícula
-                    cursor.execute("SELECT id FROM aluno_disciplina WHERE aluno_id = ? AND disciplina_id = ?", 
+                    cursor.execute("SELECT id FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s", 
                                   (aluno_id, d_id))
                     existe = cursor.fetchone()
                     
@@ -3426,7 +3837,7 @@ def mew_editar_aluno(aluno_id):
                         # Adicionar nova matrícula
                         cursor.execute("""
                             INSERT INTO aluno_disciplina (aluno_id, disciplina_id)
-                            VALUES (?, ?)
+                            VALUES (%s, %s)
                         """, (aluno_id, d_id))
                     
                     # Obter data específica para esta disciplina
@@ -3442,9 +3853,13 @@ def mew_editar_aluno(aluno_id):
                             data_inicio_formatada = data_inicio_obj.strftime("%d/%m/%Y")
                             
                             cursor.execute("""
-                                INSERT OR REPLACE INTO aluno_disciplina_datas 
+                                INSERT INTO aluno_disciplina_datas 
                                 (aluno_id, disciplina_id, data_inicio, data_fim_previsto)
-                                VALUES (?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s)
+                                ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+                                    data_inicio = EXCLUDED.data_inicio,
+                                    data_fim_previsto = EXCLUDED.data_fim_previsto,
+                                    prova_final_aberta = 0
                             """, (aluno_id, d_id, data_inicio_formatada, data_fim))
                         except Exception as e:
                             print(f"Erro ao processar data da disciplina {d_id}: {e}")
@@ -3466,20 +3881,20 @@ def mew_editar_aluno(aluno_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,))
+        cursor.execute("SELECT * FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
         
         if not aluno:
             conn.close()
             return "Aluno não encontrado", 404
         
-        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = ?", (aluno_id,))
+        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
         dados_pessoais = cursor.fetchone()
         
         # Buscar situação financeira
         cursor.execute("""
             SELECT * FROM situacao_financeira 
-            WHERE aluno_id = ? 
+            WHERE aluno_id = %s 
             ORDER BY id DESC 
             LIMIT 1
         """, (aluno_id,))
@@ -3495,7 +3910,7 @@ def mew_editar_aluno(aluno_id):
             FROM aluno_disciplina ad
             LEFT JOIN disciplinas d ON ad.disciplina_id = d.id
             LEFT JOIN aluno_disciplina_datas addd ON ad.aluno_id = addd.aluno_id AND ad.disciplina_id = addd.disciplina_id
-            WHERE ad.aluno_id = ?
+            WHERE ad.aluno_id = %s
         """, (aluno_id,))
         disciplinas_aluno = cursor.fetchall()
         
@@ -3540,13 +3955,13 @@ def mew_deletar_aluno(aluno_id):
     cursor = conn.cursor()
     
     # Deletar em cascata (começando pelas tabelas dependentes)
-    cursor.execute("DELETE FROM situacao_financeira WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM dados_pessoais WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM notas WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM solicitacoes_material WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE aluno_id = ?", (aluno_id,))
-    cursor.execute("DELETE FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("DELETE FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM notas WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM solicitacoes_material WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE aluno_id = %s", (aluno_id,))
+    cursor.execute("DELETE FROM alunos WHERE id = %s", (aluno_id,))
     
     conn.commit()
     conn.close()
@@ -3569,7 +3984,7 @@ def solicitar_documentos_modal():
         SELECT d.id, d.nome
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
     
@@ -3667,7 +4082,7 @@ def solicitar_documento():
     cursor.execute("""
         INSERT INTO solicitacoes_documentos 
         (aluno_id, tipo_documento, disciplinas_ids, detalhes, data_solicitacao)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (aluno_id, tipo, disciplinas_str, detalhes_formatado, data_solicitacao))
     
     conn.commit()
@@ -3688,7 +4103,7 @@ def historico_documentos():
     cursor.execute("""
         SELECT sd.*
         FROM solicitacoes_documentos sd
-        WHERE sd.aluno_id = ?
+        WHERE sd.aluno_id = %s
         ORDER BY sd.data_solicitacao DESC
     """, (aluno_id,))
     
@@ -3706,9 +4121,9 @@ def historico_documentos():
             ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
             if ids_list:
                 # Buscar nomes das disciplinas
-                placeholders = ','.join(['?'] * len(ids_list))
+                placeholders = ','.join(['%s'] * len(ids_list))
                 cursor.execute(f"""
-                    SELECT GROUP_CONCAT(nome) as nomes
+                    SELECT STRING_AGG(nome, ',') as nomes
                     FROM disciplinas 
                     WHERE id IN ({placeholders})
                 """, ids_list)
@@ -3754,7 +4169,7 @@ def mew_solicitacoes_documentos():
     # Converter para lista de dicionários
     solicitacoes = []
     for s in solicitacoes_raw:
-        # Converter sqlite3.Row para dicionário
+        # Converter registro para dicionário
         s_dict = dict(s)
         
         # Buscar nomes das disciplinas
@@ -3764,9 +4179,9 @@ def mew_solicitacoes_documentos():
             ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
             if ids_list:
                 # Buscar nomes das disciplinas
-                placeholders = ','.join(['?'] * len(ids_list))
+                placeholders = ','.join(['%s'] * len(ids_list))
                 cursor.execute(f"""
-                    SELECT GROUP_CONCAT(nome) as nomes
+                    SELECT STRING_AGG(nome, ',') as nomes
                     FROM disciplinas 
                     WHERE id IN ({placeholders})
                 """, ids_list)
@@ -3801,8 +4216,8 @@ def mew_responder_documento(id):
     
     cursor.execute("""
         UPDATE solicitacoes_documentos 
-        SET status = ?, resposta = ?, arquivo_url = ?, data_resposta = ?
-        WHERE id = ?
+        SET status = %s, resposta = %s, arquivo_url = %s, data_resposta = %s
+        WHERE id = %s
     """, (status, resposta, arquivo_url, data_resposta, id))
     
     conn.commit()
@@ -3819,7 +4234,7 @@ def mew_deletar_solicitacao_doc(id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM solicitacoes_documentos WHERE id = ?", (id,))
+    cursor.execute("DELETE FROM solicitacoes_documentos WHERE id = %s", (id,))
     
     conn.commit()
     conn.close()
@@ -3844,14 +4259,14 @@ def avaliacao_final():
     cursor.execute("""
         SELECT d.id, d.nome, lf.data_liberacao,
                (SELECT COUNT(*) FROM notas_finais nf 
-                WHERE nf.aluno_id = ? AND nf.disciplina_id = d.id) as ja_realizada,
+                WHERE nf.aluno_id = %s AND nf.disciplina_id = d.id) as ja_realizada,
                (SELECT COUNT(*) FROM questoes_finais qf WHERE qf.disciplina_id = d.id) as total_questoes
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        LEFT JOIN liberacao_final lf ON d.id = lf.disciplina_id AND lf.aluno_id = ?
-        WHERE ad.aluno_id = ?
+        LEFT JOIN liberacao_final lf ON d.id = lf.disciplina_id AND lf.aluno_id = %s
+        WHERE ad.aluno_id = %s
         AND lf.liberada = 1
-        AND date(lf.data_liberacao) <= date('now')
+        AND CAST(lf.data_liberacao AS DATE) <= CURRENT_DATE
     """, (aluno_id, aluno_id, aluno_id))
     
     disciplinas = cursor.fetchall()
@@ -3861,7 +4276,7 @@ def avaliacao_final():
         SELECT nf.*, d.nome as disciplina_nome
         FROM notas_finais nf
         JOIN disciplinas d ON nf.disciplina_id = d.id
-        WHERE nf.aluno_id = ?
+        WHERE nf.aluno_id = %s
         ORDER BY nf.data_realizacao DESC
     """, (aluno_id,))
     
@@ -3889,46 +4304,46 @@ def mew_deletar_disciplina(disciplina_id):
     try:
         # Deletar em ordem correta (começando pelas tabelas dependentes)
         # 1. Notas finais relacionadas à disciplina
-        cursor.execute("DELETE FROM notas_finais WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM notas_finais WHERE disciplina_id = %s", (disciplina_id,))
         
         # 2. Questões finais
-        cursor.execute("DELETE FROM questoes_finais WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
         
         # 3. Provas finais
-        cursor.execute("DELETE FROM provas_finais WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM provas_finais WHERE disciplina_id = %s", (disciplina_id,))
         
         # 4. Liberações finais
-        cursor.execute("DELETE FROM liberacao_final WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM liberacao_final WHERE disciplina_id = %s", (disciplina_id,))
         
         # 5. Notas dos alunos
-        cursor.execute("DELETE FROM notas WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM notas WHERE disciplina_id = %s", (disciplina_id,))
         
         # 6. Solicitações de material
-        cursor.execute("DELETE FROM solicitacoes_material WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM solicitacoes_material WHERE disciplina_id = %s", (disciplina_id,))
         
         # 7. Solicitações de documentos
-        cursor.execute("DELETE FROM solicitacoes_documentos WHERE disciplinas_ids LIKE ?", 
+        cursor.execute("DELETE FROM solicitacoes_documentos WHERE disciplinas_ids LIKE %s", 
                       (f'%{disciplina_id}%',))
         
         # 8. Datas das disciplinas dos alunos
-        cursor.execute("DELETE FROM aluno_disciplina_datas WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM aluno_disciplina_datas WHERE disciplina_id = %s", (disciplina_id,))
         
         # 9. Associações aluno-disciplina
-        cursor.execute("DELETE FROM aluno_disciplina WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM aluno_disciplina WHERE disciplina_id = %s", (disciplina_id,))
         
         # 10. Provas dos capítulos (primeiro deletar provas)
         cursor.execute("""
             DELETE FROM provas 
             WHERE capitulo_id IN (
-                SELECT id FROM capitulos WHERE disciplina_id = ?
+                SELECT id FROM capitulos WHERE disciplina_id = %s
             )
         """, (disciplina_id,))
         
         # 11. Capítulos
-        cursor.execute("DELETE FROM capitulos WHERE disciplina_id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
         
         # 12. Finalmente, a disciplina
-        cursor.execute("DELETE FROM disciplinas WHERE id = ?", (disciplina_id,))
+        cursor.execute("DELETE FROM disciplinas WHERE id = %s", (disciplina_id,))
         
         conn.commit()
         conn.close()
@@ -3950,8 +4365,21 @@ def prova_final(disciplina_id):
     # Verificar se já fez esta prova
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Se o Projeto Final estiver liberado, a prova final normal fica bloqueada
+    cursor.execute("""
+        SELECT id
+        FROM projetos_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+          AND liberado = 1
+    """, (aluno_id, disciplina_id))
+
+    if cursor.fetchone():
+        conn.close()
+        return redirect("/projeto-final?erro=Esta+disciplina+está+em+modalidade+Projeto+Final")
     
-    cursor.execute("SELECT id FROM notas_finais WHERE aluno_id = ? AND disciplina_id = ?", 
+    cursor.execute("SELECT id FROM notas_finais WHERE aluno_id = %s AND disciplina_id = %s", 
                    (aluno_id, disciplina_id))
     if cursor.fetchone():
         conn.close()
@@ -3996,7 +4424,7 @@ def prova_final(disciplina_id):
     # Buscar questões da prova final
     cursor.execute("""
         SELECT * FROM questoes_finais 
-        WHERE disciplina_id = ? 
+        WHERE disciplina_id = %s 
         ORDER BY RANDOM() 
         LIMIT 30
     """, (disciplina_id,))
@@ -4043,7 +4471,7 @@ def prova_final(disciplina_id):
         '''
     
     # Buscar informações da disciplina
-    cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     conn.close()
@@ -4065,17 +4493,32 @@ def correcao_final(disciplina_id):
     
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Segurança: não permite corrigir prova normal se o Projeto Final estiver liberado
+    cursor.execute("""
+        SELECT id
+        FROM projetos_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+          AND liberado = 1
+    """, (aluno_id, disciplina_id))
+
+    if cursor.fetchone():
+        conn.close()
+        return redirect("/projeto-final?erro=Esta+disciplina+está+em+modalidade+Projeto+Final")
     
     # Buscar questões
-    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     todas_questoes = cursor.fetchall()
     
     # Contar acertos
     acertos = 0
-    for i, questao in enumerate(todas_questoes[:30], 1):
-        resposta_aluno = request.form.get(f"q{i}")
-        if resposta_aluno == questao["resposta_correta"]:
-            acertos += 1
+    for questao in todas_questoes:
+        resposta_aluno = request.form.get(f"q_{questao['id']}")
+
+        if resposta_aluno is not None:
+            if resposta_aluno.strip().upper() == str(questao["resposta_correta"]).strip().upper():
+                acertos += 1
     
     # Calcular nota da prova final (0-10)
     nota_final = round((acertos / 30) * 10, 2)
@@ -4084,7 +4527,7 @@ def correcao_final(disciplina_id):
     cursor.execute("""
         SELECT AVG(nota) as media_disciplina 
         FROM notas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     result = cursor.fetchone()
@@ -4101,7 +4544,7 @@ def correcao_final(disciplina_id):
     cursor.execute("""
         INSERT INTO notas_finais 
         (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao))
     
     conn.commit()
@@ -4138,7 +4581,7 @@ def resultado_final(disciplina_id):
             SELECT nf.*, d.nome as disciplina_nome
             FROM notas_finais nf
             JOIN disciplinas d ON nf.disciplina_id = d.id
-            WHERE nf.aluno_id = ? AND nf.disciplina_id = ?
+            WHERE nf.aluno_id = %s AND nf.disciplina_id = %s
         """, (aluno_id, disciplina_id))
         
         resultado_db = cursor.fetchone()
@@ -4245,8 +4688,21 @@ def liberar_prova_final_aluno():
     # Verificar se existem 30 questões para esta disciplina
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Se houver Projeto Final liberado, não permite liberar também a prova de 30 questões
+    cursor.execute("""
+        SELECT id
+        FROM projetos_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+          AND liberado = 1
+    """, (aluno_id, disciplina_id))
+
+    if cursor.fetchone():
+        conn.close()
+        return redirect("/mew/avaliacao-final?erro=Projeto+Final+já+está+liberado+para+este+aluno+e+disciplina")
     
-    cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     total_questoes = cursor.fetchone()["total"] or 0
     
     if total_questoes < 30:
@@ -4254,21 +4710,21 @@ def liberar_prova_final_aluno():
         return redirect(f"/mew/avaliacao-final?erro=Disciplina+precisa+de+30+questões+({total_questoes}/30)")
     
     # Verificar se já existe liberação para este aluno nesta disciplina
-    cursor.execute("SELECT id FROM liberacao_final WHERE aluno_id = ? AND disciplina_id = ?", 
+    cursor.execute("SELECT id FROM liberacao_final WHERE aluno_id = %s AND disciplina_id = %s", 
                   (aluno_id, disciplina_id))
     
     if cursor.fetchone():
         # Atualizar data e liberar
         cursor.execute("""
             UPDATE liberacao_final 
-            SET data_liberacao = ?, liberada = 1 
-            WHERE aluno_id = ? AND disciplina_id = ?
+            SET data_liberacao = %s, liberada = 1 
+            WHERE aluno_id = %s AND disciplina_id = %s
         """, (data_liberacao, aluno_id, disciplina_id))
     else:
         # Inserir nova liberação
         cursor.execute("""
             INSERT INTO liberacao_final (aluno_id, disciplina_id, data_liberacao, liberada)
-            VALUES (?, ?, ?, 1)
+            VALUES (%s, %s, %s, 1)
         """, (aluno_id, disciplina_id, data_liberacao))
     
     conn.commit()
@@ -4285,7 +4741,7 @@ def remover_liberacao(liberacao_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM liberacao_final WHERE id = ?", (liberacao_id,))
+    cursor.execute("DELETE FROM liberacao_final WHERE id = %s", (liberacao_id,))
     
     conn.commit()
     conn.close()
@@ -4302,11 +4758,11 @@ def visualizar_prova_final(disciplina_id):
     cursor = conn.cursor()
     
     # Buscar disciplina
-    cursor.execute("SELECT * FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     # Buscar TODAS as questões (sem limite)
-    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = ? ORDER BY id", (disciplina_id,))
+    cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     questoes = cursor.fetchall()
     
     # Contar questões
@@ -4352,7 +4808,7 @@ def importar_questoes_json(disciplina_id):
                     cursor.execute("""
                         INSERT INTO questoes_finais 
                         (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         disciplina_id,
                         q['pergunta'],
@@ -4373,7 +4829,7 @@ def importar_questoes_json(disciplina_id):
                     cursor.execute("""
                         INSERT INTO questoes_finais 
                         (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         disciplina_id,
                         q['pergunta'],
@@ -4414,7 +4870,7 @@ def exportar_questoes_json(disciplina_id):
     cursor.execute("""
         SELECT pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta
         FROM questoes_finais 
-        WHERE disciplina_id = ?
+        WHERE disciplina_id = %s
         ORDER BY id
     """, (disciplina_id,))
     
@@ -4441,7 +4897,7 @@ def situacao_academica():
     cursor = conn.cursor()
     
     # Buscar dados do aluno
-    cursor.execute("SELECT nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
     
     if not aluno:
@@ -4453,7 +4909,7 @@ def situacao_academica():
         SELECT d.id, d.nome
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
@@ -4463,7 +4919,7 @@ def situacao_academica():
         SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
         FROM notas n
         JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = ?
+        WHERE n.aluno_id = %s
         ORDER BY n.disciplina_id, n.capitulo
     """, (aluno_id,))
     notas_capitulos = cursor.fetchall()
@@ -4473,7 +4929,7 @@ def situacao_academica():
         SELECT nf.*, d.nome as disciplina_nome
         FROM notas_finais nf
         JOIN disciplinas d ON nf.disciplina_id = d.id
-        WHERE nf.aluno_id = ?
+        WHERE nf.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
     notas_finais = cursor.fetchall()
@@ -4567,7 +5023,7 @@ def ver_resultado_validacao(codigo):
         cursor.execute("""
             SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento
             FROM documentos_autenticados 
-            WHERE codigo = ?
+            WHERE codigo = %s
         """, (codigo.upper(),))
         
         documento = cursor.fetchone()
@@ -4622,7 +5078,7 @@ def mew_deletar_documento(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo_autenticacao = ?", (codigo,))
+    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
     
     conn.commit()
     conn.close()
@@ -4649,7 +5105,7 @@ def validar_documento_publico():
         cursor = conn.cursor()
         
         # Verificar se o código existe na tabela documentos_autenticados
-        cursor.execute("SELECT id FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+        cursor.execute("SELECT id FROM documentos_autenticados WHERE codigo = %s", (codigo,))
         documento = cursor.fetchone()
         conn.close()
         
@@ -4676,7 +5132,7 @@ def buscar_documento_db(codigo):
         cursor = conn.cursor()
         
         # Buscar pelo código (conforme sua tabela documentos_autenticados)
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
         
         documento = cursor.fetchone()
         conn.close()
@@ -4730,7 +5186,7 @@ def api_validar_qrcode():
         cursor.execute("""
             SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, data_validade, hash_documento
             FROM documentos_autenticados 
-            WHERE codigo = ?
+            WHERE codigo = %s
         """, (codigo.upper(),))
         
         documento = cursor.fetchone()
@@ -4779,7 +5235,7 @@ def buscar_documento_db(codigo):
         cursor = conn.cursor()
         
         # Buscar pelo código (conforme sua tabela documentos_autenticados)
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
         
         documento = cursor.fetchone()
         conn.close()
@@ -4856,8 +5312,8 @@ def mew_gerenciar_disciplinas(aluno_id):
 
             cursor.execute("""
                 UPDATE aluno_disciplina_datas
-                SET data_inicio = ?, data_fim_previsto = ?
-                WHERE aluno_id = ? AND disciplina_id = ?
+                SET data_inicio = %s, data_fim_previsto = %s
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (data_inicio_fmt, data_fim, aluno_id, disciplina_id))
 
         # ➕ ADICIONAR DISCIPLINA
@@ -4869,14 +5325,19 @@ def mew_gerenciar_disciplinas(aluno_id):
             data_fim = (data_inicio_obj + timedelta(days=60)).strftime("%d/%m/%Y")
 
             cursor.execute("""
-                INSERT OR IGNORE INTO aluno_disciplina (aluno_id, disciplina_id)
-                VALUES (?, ?)
+                INSERT INTO aluno_disciplina (aluno_id, disciplina_id)
+                VALUES (%s, %s)
+                ON CONFLICT (aluno_id, disciplina_id) DO NOTHING
             """, (aluno_id, disciplina_id))
 
             cursor.execute("""
-                INSERT OR REPLACE INTO aluno_disciplina_datas
+                INSERT INTO aluno_disciplina_datas
                 (aluno_id, disciplina_id, data_inicio, data_fim_previsto)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+                    data_inicio = EXCLUDED.data_inicio,
+                    data_fim_previsto = EXCLUDED.data_fim_previsto,
+                    prova_final_aberta = 0
             """, (aluno_id, disciplina_id,
                   data_inicio_obj.strftime("%d/%m/%Y"),
                   data_fim))
@@ -4885,18 +5346,18 @@ def mew_gerenciar_disciplinas(aluno_id):
         elif acao == "remover":
             cursor.execute("""
                 DELETE FROM aluno_disciplina
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
 
             cursor.execute("""
                 DELETE FROM aluno_disciplina_datas
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
 
         conn.commit()
 
     # 🔎 DADOS PARA O GET
-    cursor.execute("SELECT id, nome FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT id, nome FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
 
     cursor.execute("""
@@ -4911,7 +5372,7 @@ def mew_gerenciar_disciplinas(aluno_id):
         FROM disciplinas d
         LEFT JOIN aluno_disciplina_datas addd
             ON d.id = addd.disciplina_id
-            AND addd.aluno_id = ?
+            AND addd.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
@@ -4955,7 +5416,7 @@ def mew_notas_aluno(aluno_id):
     cursor = conn.cursor()
     
     # Buscar informações do aluno
-    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
     
     if not aluno:
@@ -4967,10 +5428,10 @@ def mew_notas_aluno(aluno_id):
         SELECT d.id, d.nome, 
                (SELECT COUNT(*) FROM capitulos WHERE disciplina_id = d.id) as total_capitulos,
                (SELECT COUNT(DISTINCT capitulo) FROM notas 
-                WHERE aluno_id = ? AND disciplina_id = d.id) as provas_feitas
+                WHERE aluno_id = %s AND disciplina_id = d.id) as provas_feitas
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id, aluno_id))
     
@@ -4994,10 +5455,10 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
     cursor = conn.cursor()
     
     # Buscar informações do aluno e disciplina
-    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+    cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
     
-    cursor.execute("SELECT id, nome FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT id, nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     if not aluno or not disciplina:
@@ -5005,14 +5466,14 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
         return "Aluno ou disciplina não encontrados", 404
     
     # Buscar capítulos da disciplina
-    cursor.execute("SELECT id, titulo FROM capitulos WHERE disciplina_id = ? ORDER BY id", (disciplina_id,))
+    cursor.execute("SELECT id, titulo FROM capitulos WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     capitulos = cursor.fetchall()
     
     # Buscar notas existentes
     cursor.execute("""
         SELECT capitulo, nota 
         FROM notas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY capitulo
     """, (aluno_id, disciplina_id))
     notas_existentes = {row['capitulo']: row['nota'] for row in cursor.fetchall()}
@@ -5021,7 +5482,7 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT nota_final, media_disciplina, media_final, status 
         FROM notas_finais 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     nota_final = cursor.fetchone()
     
@@ -5029,7 +5490,7 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
     cursor.execute("""
         SELECT data_inicio, prova_final_aberta 
         FROM aluno_disciplina_datas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     datas_info = cursor.fetchone()
     
@@ -5094,20 +5555,20 @@ def mew_salvar_notas():
             # Verificar se já existe nota
             cursor.execute("""
                 SELECT id FROM notas 
-                WHERE aluno_id = ? AND disciplina_id = ? AND capitulo = ?
+                WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
             """, (aluno_id, disciplina_id, capitulo))
             
             if cursor.fetchone():
                 # Atualizar
                 cursor.execute("""
-                    UPDATE notas SET nota = ? 
-                    WHERE aluno_id = ? AND disciplina_id = ? AND capitulo = ?
+                    UPDATE notas SET nota = %s 
+                    WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
                 """, (nota, aluno_id, disciplina_id, capitulo))
             else:
                 # Inserir
                 cursor.execute("""
                     INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota)
-                    VALUES (?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s)
                 """, (aluno_id, disciplina_id, capitulo, nota))
             
             message = "Nota salva com sucesso"
@@ -5121,7 +5582,7 @@ def mew_salvar_notas():
             
             cursor.execute("""
                 DELETE FROM notas 
-                WHERE aluno_id = ? AND disciplina_id = ? AND capitulo = ?
+                WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
             """, (aluno_id, disciplina_id, capitulo))
             
             message = "Nota excluída com sucesso"
@@ -5139,15 +5600,15 @@ def mew_salvar_notas():
             # Verificar se já existe nota final
             cursor.execute("""
                 SELECT id FROM notas_finais 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             
             if cursor.fetchone():
                 # Atualizar
                 cursor.execute("""
                     UPDATE notas_finais 
-                    SET nota_final = ?, media_disciplina = ?, media_final = ?, status = ?
-                    WHERE aluno_id = ? AND disciplina_id = ?
+                    SET nota_final = %s, media_disciplina = %s, media_final = %s, status = %s
+                    WHERE aluno_id = %s AND disciplina_id = %s
                 """, (nota_final_val, media_disciplina, media_final, status, aluno_id, disciplina_id))
             else:
                 # Inserir
@@ -5155,7 +5616,7 @@ def mew_salvar_notas():
                 cursor.execute("""
                     INSERT INTO notas_finais 
                     (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (aluno_id, disciplina_id, nota_final_val, media_disciplina, media_final, status, data_realizacao))
             
             message = "Nota final salva com sucesso"
@@ -5163,7 +5624,7 @@ def mew_salvar_notas():
         elif acao == "excluir_final":
             cursor.execute("""
                 DELETE FROM notas_finais 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             
             message = "Nota final excluída com sucesso"
@@ -5192,13 +5653,13 @@ def mew_salvar_notas():
             if cap_feitos < 4:
                 cursor.execute("""
                     DELETE FROM notas 
-                    WHERE aluno_id = ? AND disciplina_id = ? AND capitulo > ?
+                    WHERE aluno_id = %s AND disciplina_id = %s AND capitulo > %s
                 """, (aluno_id, disciplina_id, cap_feitos))
             
             # Atualizar datas
             cursor.execute("""
                 SELECT id FROM aluno_disciplina_datas 
-                WHERE aluno_id = ? AND disciplina_id = ?
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
             
             if cursor.fetchone():
@@ -5206,14 +5667,14 @@ def mew_salvar_notas():
                 if data_inicio:
                     cursor.execute("""
                         UPDATE aluno_disciplina_datas 
-                        SET data_inicio = ?, prova_final_aberta = ?
-                        WHERE aluno_id = ? AND disciplina_id = ?
+                        SET data_inicio = %s, prova_final_aberta = %s
+                        WHERE aluno_id = %s AND disciplina_id = %s
                     """, (data_inicio, prova_final_aberta, aluno_id, disciplina_id))
                 else:
                     cursor.execute("""
                         UPDATE aluno_disciplina_datas 
-                        SET prova_final_aberta = ?
-                        WHERE aluno_id = ? AND disciplina_id = ?
+                        SET prova_final_aberta = %s
+                        WHERE aluno_id = %s AND disciplina_id = %s
                     """, (prova_final_aberta, aluno_id, disciplina_id))
             else:
                 # Inserir (se tiver data_inicio)
@@ -5221,7 +5682,7 @@ def mew_salvar_notas():
                     cursor.execute("""
                         INSERT INTO aluno_disciplina_datas 
                         (aluno_id, disciplina_id, data_inicio, prova_final_aberta)
-                        VALUES (?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s)
                     """, (aluno_id, disciplina_id, data_inicio, prova_final_aberta))
             
             message = "Progresso atualizado com sucesso"
@@ -5373,7 +5834,7 @@ def buscar_dados_pessoais_completos(aluno_id):
                dp.nacionalidade, dp.data_nascimento, dp.sexo, dp.estado_civil
         FROM alunos a
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
-        WHERE a.id = ?
+        WHERE a.id = %s
     """, (aluno_id,))
     
     aluno_row = cursor.fetchone()
@@ -5421,7 +5882,7 @@ def salvar_documento_autenticado(documento_data):
         # Verificar se a tabela existe
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documentos_autenticados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             codigo TEXT UNIQUE,
             aluno_nome TEXT,
             aluno_ra TEXT,
@@ -5436,7 +5897,8 @@ def salvar_documento_autenticado(documento_data):
             INSERT INTO documentos_autenticados 
             (codigo_autenticacao, aluno_id, tipo_documento, hash_documento, 
              conteudo_html, data_emissao, observacoes, aluno_nome, aluno_ra)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             documento_data['codigo_autenticacao'],
             documento_data['aluno_id'],
@@ -5449,7 +5911,7 @@ def salvar_documento_autenticado(documento_data):
             documento_data.get('aluno_ra', '')
         ))
         
-        documento_id = cursor.lastrowid
+        documento_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
         
@@ -5472,7 +5934,7 @@ def buscar_aluno_por_id(aluno_id):
                dp.curso_referencia
         FROM alunos a
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
-        WHERE a.id = ?
+        WHERE a.id = %s
     """, (aluno_id,))
     
     aluno_row = cursor.fetchone()
@@ -5533,7 +5995,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
         LEFT JOIN notas n3 ON ad.aluno_id = n3.aluno_id AND d.id = n3.disciplina_id AND n3.capitulo = 3
         LEFT JOIN notas n4 ON ad.aluno_id = n4.aluno_id AND d.id = n4.disciplina_id AND n4.capitulo = 4
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
         GROUP BY d.id
         ORDER BY d.nome
     """, (aluno_id,))
@@ -5618,7 +6080,7 @@ def buscar_dados_pessoais_completos(aluno_id):
                dp.curso_referencia
         FROM alunos a
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
-        WHERE a.id = ?
+        WHERE a.id = %s
     """, (aluno_id,))
     
     aluno_row = cursor.fetchone()
@@ -5662,7 +6124,7 @@ def salvar_documento_autenticado(documento_data):
         # Verificar se a tabela existe
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documentos_autenticados (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 codigo_autenticacao TEXT UNIQUE,
                 aluno_id INTEGER,
                 tipo_documento TEXT,
@@ -5681,7 +6143,8 @@ def salvar_documento_autenticado(documento_data):
             INSERT INTO documentos_autenticados 
             (codigo_autenticacao, aluno_id, tipo_documento, hash_documento, 
              conteudo_html, data_emissao, observacoes, aluno_nome, aluno_ra)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             documento_data['codigo_autenticacao'],
             documento_data['aluno_id'],
@@ -5694,7 +6157,7 @@ def salvar_documento_autenticado(documento_data):
             documento_data.get('aluno_ra', '')
         ))
         
-        documento_id = cursor.lastrowid
+        documento_id = cursor.fetchone()["id"]
         conn.commit()
         
     except Exception as e:
@@ -5714,7 +6177,7 @@ def mew_visualizar_documento(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = ?", (codigo,))
+    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
     documento = cursor.fetchone()
     
     conn.close()
@@ -5808,7 +6271,7 @@ def mew_visualizar_documento_completo(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = ?", (codigo,))
+    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
     documento = cursor.fetchone()
     
     conn.close()
@@ -5860,7 +6323,7 @@ def salvar_documento_simples(codigo, aluno_nome, aluno_ra, tipo, conteudo_html):
     cursor.execute("""
         INSERT INTO documentos_autenticados 
         (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """, (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao))
     
     conn.commit()
@@ -5873,7 +6336,7 @@ def buscar_documento_por_codigo(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
     documento = cursor.fetchone()
     conn.close()
     
@@ -5920,7 +6383,7 @@ def calcular_ira_aluno_completo(aluno_id):
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     
     disciplinas = cursor.fetchall()
@@ -5979,7 +6442,7 @@ def calcular_ira_aluno_completo(aluno_id):
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     
     disciplinas = cursor.fetchall()
@@ -6050,13 +6513,13 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         # Contar apenas disciplinas com status APROVADO
         if d.get('status', '').upper() == 'APROVADO':
             # Buscar carga horária real da disciplina
-            cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = ?", (d['id'],))
+            cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = %s", (d['id'],))
             disciplina_info = cursor.fetchone()
             carga = disciplina_info['carga_horaria'] if disciplina_info and disciplina_info['carga_horaria'] else 80
             carga_total_aprovada += int(carga)
         
         # Para carga total cursada (todas disciplinas)
-        cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = ?", (d['id'],))
+        cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = %s", (d['id'],))
         disciplina_info = cursor.fetchone()
         carga = disciplina_info['carga_horaria'] if disciplina_info and disciplina_info['carga_horaria'] else 80
         carga_total_cursada += int(carga)
@@ -6088,7 +6551,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         SELECT nome_pai, nome_mae, naturalidade, nacionalidade, 
                data_nascimento, sexo, estado_civil, curso_referencia
         FROM dados_pessoais 
-        WHERE aluno_id = ?
+        WHERE aluno_id = %s
     """, (aluno_id,))
     
     dados_adicionais = cursor.fetchone()
@@ -6138,7 +6601,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             FROM disciplinas d
             LEFT JOIN disciplina_docente dd ON d.id = dd.disciplina_id
             LEFT JOIN docentes doc ON dd.docente_id = doc.id
-            WHERE d.id = ?
+            WHERE d.id = %s
             ORDER BY dd.ano_semestre DESC
             LIMIT 1
         """, (d['id'],))
@@ -6159,7 +6622,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         # Determinar período
         cursor.execute("""
             SELECT data_inicio FROM aluno_disciplina_datas 
-            WHERE aluno_id = ? AND disciplina_id = ?
+            WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, d['id']))
 
         data_info = cursor.fetchone()
@@ -6179,7 +6642,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         cursor.execute("""
             SELECT media_final
             FROM notas_finais
-            WHERE aluno_id = ? AND disciplina_id = ?
+            WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, d['id']))
 
         nota_row = cursor.fetchone()
@@ -7254,7 +7717,7 @@ def ver_documento_completo(codigo):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = ?", (codigo.upper(),))
+        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo.upper(),))
         documento = cursor.fetchone()
         conn.close()
         
@@ -7321,7 +7784,7 @@ def mew_listar_documentos():
     # Criar tabela se não existir
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS documentos_autenticados (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             codigo TEXT UNIQUE NOT NULL,
             aluno_id INTEGER,
             aluno_nome TEXT,
@@ -7353,7 +7816,7 @@ def deletar_documento(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo = ?", (codigo,))
+    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo = %s", (codigo,))
     
     conn.commit()
     conn.close()
@@ -7393,7 +7856,7 @@ def mew_docentes():
         
         cursor.execute("""
             INSERT INTO docentes (nome, titulacao, email, telefone)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (nome, titulacao, email, telefone))
         
         conn.commit()
@@ -7426,8 +7889,8 @@ def mew_editar_docente(docente_id):
         
         cursor.execute("""
             UPDATE docentes 
-            SET nome = ?, titulacao = ?, email = ?, telefone = ?, ativo = ?
-            WHERE id = ?
+            SET nome = %s, titulacao = %s, email = %s, telefone = %s, ativo = %s
+            WHERE id = %s
         """, (nome, titulacao, email, telefone, ativo, docente_id))
         
         conn.commit()
@@ -7435,7 +7898,7 @@ def mew_editar_docente(docente_id):
         return redirect("/mew/docentes?sucesso=Docente+atualizado")
     
     # GET: Buscar docente
-    cursor.execute("SELECT * FROM docentes WHERE id = ?", (docente_id,))
+    cursor.execute("SELECT * FROM docentes WHERE id = %s", (docente_id,))
     docente = cursor.fetchone()
     
     if not docente:
@@ -7456,12 +7919,12 @@ def mew_deletar_docente(docente_id):
     cursor = conn.cursor()
     
     # Verificar se docente está associado a alguma disciplina
-    cursor.execute("SELECT id FROM disciplina_docente WHERE docente_id = ? LIMIT 1", (docente_id,))
+    cursor.execute("SELECT id FROM disciplina_docente WHERE docente_id = %s LIMIT 1", (docente_id,))
     if cursor.fetchone():
         conn.close()
         return redirect("/mew/docentes?erro=Docente+está+associado+a+disciplinas")
     
-    cursor.execute("DELETE FROM docentes WHERE id = ?", (docente_id,))
+    cursor.execute("DELETE FROM docentes WHERE id = %s", (docente_id,))
     
     conn.commit()
     conn.close()
@@ -7490,8 +7953,8 @@ def mew_atribuir_info_disciplina():
         # Atualizar carga horária da disciplina
         cursor.execute("""
             UPDATE disciplinas 
-            SET carga_horaria = ?
-            WHERE id = ?
+            SET carga_horaria = %s
+            WHERE id = %s
         """, (carga_horaria, disciplina_id))
         
         # Se tiver docente, associar
@@ -7499,13 +7962,13 @@ def mew_atribuir_info_disciplina():
             # Remover associação anterior para este ano/semestre
             cursor.execute("""
                 DELETE FROM disciplina_docente 
-                WHERE disciplina_id = ? AND ano_semestre = ?
+                WHERE disciplina_id = %s AND ano_semestre = %s
             """, (disciplina_id, ano_semestre))
             
             # Adicionar nova associação
             cursor.execute("""
                 INSERT INTO disciplina_docente (disciplina_id, docente_id, ano_semestre)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (disciplina_id, docente_id, ano_semestre))
         
         conn.commit()
@@ -7549,7 +8012,7 @@ def buscar_info_disciplina(disciplina_id):
     cursor = conn.cursor()
     
     # Buscar informações da disciplina
-    cursor.execute("SELECT id, nome, carga_horaria FROM disciplinas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT id, nome, carga_horaria FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     if not disciplina:
@@ -7561,7 +8024,7 @@ def buscar_info_disciplina(disciplina_id):
         SELECT d.id, d.nome, dd.ano_semestre
         FROM docentes d
         JOIN disciplina_docente dd ON d.id = dd.docente_id
-        WHERE dd.disciplina_id = ?
+        WHERE dd.disciplina_id = %s
         ORDER BY dd.ano_semestre DESC
         LIMIT 1
     """, (disciplina_id,))
@@ -7674,22 +8137,22 @@ def mew_salvar_rendimento():
         # Verificar se já existe
         cursor.execute("""
             SELECT id FROM rendimento_academico 
-            WHERE aluno_id = ? AND disciplina_id = ?
+            WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, disciplina_id))
         
         if cursor.fetchone():
             # Atualizar
             cursor.execute("""
                 UPDATE rendimento_academico 
-                SET nota_final = ?, carga_horaria = ?, conceito = ?, peso = ?
-                WHERE aluno_id = ? AND disciplina_id = ?
+                SET nota_final = %s, carga_horaria = %s, conceito = %s, peso = %s
+                WHERE aluno_id = %s AND disciplina_id = %s
             """, (nota_final, carga_horaria, conceito, peso, aluno_id, disciplina_id))
         else:
             # Inserir
             cursor.execute("""
                 INSERT INTO rendimento_academico 
                 (aluno_id, disciplina_id, nota_final, carga_horaria, conceito, peso)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (aluno_id, disciplina_id, nota_final, carga_horaria, conceito, peso))
         
         conn.commit()
@@ -7719,7 +8182,7 @@ def buscar_rendimento(aluno_id, disciplina_id):
         FROM rendimento_academico ra
         JOIN alunos a ON ra.aluno_id = a.id
         JOIN disciplinas d ON ra.disciplina_id = d.id
-        WHERE ra.aluno_id = ? AND ra.disciplina_id = ?
+        WHERE ra.aluno_id = %s AND ra.disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     rendimento = cursor.fetchone()
@@ -7746,7 +8209,7 @@ def calcular_ira_aluno_completo(aluno_id):
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     
     disciplinas = cursor.fetchall()
@@ -7841,7 +8304,7 @@ def calcular_ira_aluno_completo(aluno_id):
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = ?
+        WHERE ad.aluno_id = %s
     """, (aluno_id,))
     
     disciplinas = cursor.fetchall()
@@ -7915,7 +8378,7 @@ def api_validar_codigo():
         cursor.execute("""
             SELECT id, codigo 
             FROM documentos_autenticados 
-            WHERE codigo = ?
+            WHERE codigo = %s
         """, (codigo,))
         
         documento = cursor.fetchone()
@@ -7979,7 +8442,7 @@ def gerar_declaracao_conclusao_route():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id FROM notas_finais 
-            WHERE aluno_id = ? AND disciplina_id = ?
+            WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, disciplina_id))
         
         if not cursor.fetchone():
@@ -8099,7 +8562,7 @@ def gerar_declaracao_conclusao_route():
             INSERT INTO documentos_autenticados 
             (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
              qr_code, hash_documento, data_emissao, data_validade, metadados, disciplina_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             codigo, 
             aluno_id, 
@@ -8150,11 +8613,11 @@ def buscar_documentos_aluno(aluno_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    query = "SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, disciplina_id FROM documentos_autenticados WHERE aluno_id = ?"
+    query = "SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, disciplina_id FROM documentos_autenticados WHERE aluno_id = %s"
     params = [aluno_id]
     
     if tipo:
-        query += " AND tipo = ?"
+        query += " AND tipo = %s"
         params.append(tipo)
     
     query += " ORDER BY data_emissao DESC"
@@ -8167,7 +8630,7 @@ def buscar_documentos_aluno(aluno_id):
     for doc in documentos:
         doc_dict = dict(doc)
         if doc_dict.get('disciplina_id'):
-            cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (doc_dict['disciplina_id'],))
+            cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (doc_dict['disciplina_id'],))
             disc = cursor.fetchone()
             doc_dict['disciplina_nome'] = disc['nome'] if disc else None
         result.append(doc_dict)
@@ -8355,7 +8818,7 @@ def gerar_historico_automatico_route():
             INSERT INTO documentos_autenticados 
             (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
              qr_code, hash_documento, data_emissao, data_validade, metadados)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             codigo, 
             aluno_id, 
@@ -8414,7 +8877,7 @@ def mew_enviar_documento_aluno(documento_id):
         # Buscar documento original
         cursor.execute("""
             SELECT * FROM documentos_autenticados 
-            WHERE id = ?
+            WHERE id = %s
         """, (documento_id,))
         
         documento_row = cursor.fetchone()
@@ -8427,7 +8890,7 @@ def mew_enviar_documento_aluno(documento_id):
         documento = dict(documento_row)
         
         # Verificar se o aluno existe
-        cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+        cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
         if not aluno:
             conn.close()
@@ -8436,7 +8899,7 @@ def mew_enviar_documento_aluno(documento_id):
         # Buscar nome da disciplina se houver
         disciplina_nome = None
         if documento.get('disciplina_id'):
-            cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (documento['disciplina_id'],))
+            cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (documento['disciplina_id'],))
             disc = cursor.fetchone()
             disciplina_nome = disc['nome'] if disc else None
         
@@ -8466,7 +8929,8 @@ def mew_enviar_documento_aluno(documento_id):
         cursor.execute("""
             INSERT INTO documentos_enviados 
             (documento_original_id, aluno_id, codigo, tipo, titulo, disciplina_id, data_envio, mensagem, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'enviado')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'enviado')
+            RETURNING id
         """, (
             documento_id,
             aluno_id,  # 👈 USA O ALUNO_ID DO FORMULÁRIO
@@ -8478,7 +8942,7 @@ def mew_enviar_documento_aluno(documento_id):
             mensagem_final
         ))
         
-        envio_id = cursor.lastrowid
+        envio_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
         
@@ -8516,7 +8980,7 @@ def meus_documentos():
         FROM documentos_enviados de
         JOIN documentos_autenticados da ON de.documento_original_id = da.id
         LEFT JOIN disciplinas d ON de.disciplina_id = d.id
-        WHERE de.aluno_id = ?
+        WHERE de.aluno_id = %s
         ORDER BY de.data_envio DESC
     """, (aluno_id,))
     
@@ -8550,7 +9014,7 @@ def visualizar_documento(envio_id):
         FROM documentos_enviados de
         JOIN documentos_autenticados da ON de.documento_original_id = da.id
         JOIN alunos a ON de.aluno_id = a.id
-        WHERE de.id = ? AND de.aluno_id = ?
+        WHERE de.id = %s AND de.aluno_id = %s
     """, (envio_id, aluno_id))
     
     documento = cursor.fetchone()
@@ -8564,8 +9028,8 @@ def visualizar_documento(envio_id):
         data_visualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
         cursor.execute("""
             UPDATE documentos_enviados 
-            SET status = 'visualizado', data_visualizacao = ?
-            WHERE id = ?
+            SET status = 'visualizado', data_visualizacao = %s
+            WHERE id = %s
         """, (data_visualizacao, envio_id))
         conn.commit()
     
@@ -8661,7 +9125,7 @@ def registrar_download_documento(envio_id):
     cursor.execute("""
         UPDATE documentos_enviados 
         SET status = 'baixado' 
-        WHERE id = ? AND aluno_id = ?
+        WHERE id = %s AND aluno_id = %s
     """, (envio_id, aluno_id))
     
     conn.commit()
@@ -8701,11 +9165,11 @@ def mew_filtrar_documentos():
     params = []
     
     if aluno_id:
-        query += " AND da.aluno_id = ?"
+        query += " AND da.aluno_id = %s"
         params.append(aluno_id)
     
     if categoria and categoria != 'todos':
-        query += " AND da.tipo = ?"
+        query += " AND da.tipo = %s"
         params.append(categoria)
     
     if status:
@@ -8743,15 +9207,15 @@ def mew_excluir_documento(documento_id):
     
     try:
         # Verificar se tem envios
-        cursor.execute("SELECT id FROM documentos_enviados WHERE documento_original_id = ?", (documento_id,))
+        cursor.execute("SELECT id FROM documentos_enviados WHERE documento_original_id = %s", (documento_id,))
         tem_envios = cursor.fetchone()
         
         if tem_envios:
             # Primeiro excluir os envios
-            cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id = ?", (documento_id,))
+            cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id = %s", (documento_id,))
         
         # Depois excluir o documento original
-        cursor.execute("DELETE FROM documentos_autenticados WHERE id = ?", (documento_id,))
+        cursor.execute("DELETE FROM documentos_autenticados WHERE id = %s", (documento_id,))
         
         conn.commit()
         conn.close()
@@ -8776,8 +9240,8 @@ def registrar_visualizacao_documento(envio_id):
     
     cursor.execute("""
         UPDATE documentos_enviados 
-        SET status = 'visualizado', data_visualizacao = ?
-        WHERE id = ? AND aluno_id = ? AND status = 'enviado'
+        SET status = 'visualizado', data_visualizacao = %s
+        WHERE id = %s AND aluno_id = %s AND status = 'enviado'
     """, (data_visualizacao, envio_id, aluno_id))
     
     conn.commit()
@@ -8810,7 +9274,7 @@ def meus_documentos_api():
             d.nome as disciplina_nome
         FROM documentos_enviados de
         LEFT JOIN disciplinas d ON de.disciplina_id = d.id
-        WHERE de.aluno_id = ?
+        WHERE de.aluno_id = %s
         ORDER BY de.data_envio DESC
     """, (aluno_id,))
     
@@ -9053,7 +9517,7 @@ def mew_processar_plano_ensino():
             # Garantir que a tabela tem as colunas necessárias
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS documentos_autenticados (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     codigo TEXT UNIQUE,
                     aluno_id INTEGER,
                     aluno_nome TEXT,
@@ -9074,7 +9538,8 @@ def mew_processar_plano_ensino():
                 INSERT INTO documentos_autenticados 
                 (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
                  qr_code, hash_documento, data_emissao, data_validade, metadados)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (
                 codigo,
                 None,
@@ -9090,7 +9555,7 @@ def mew_processar_plano_ensino():
                 metadados
             ))
             
-            documento_id = cursor.lastrowid
+            documento_id = cursor.fetchone()["id"]
             conn.commit()
             print(f"Documento salvo com ID: {documento_id}")
             
@@ -10178,7 +10643,7 @@ def mew_excluir_documentos_lote():
         cursor = conn.cursor()
         
         # Criar placeholders para a query
-        placeholders = ','.join(['?'] * len(documento_ids))
+        placeholders = ','.join(['%s'] * len(documento_ids))
         
         # Primeiro excluir envios relacionados
         cursor.execute(f"""
@@ -10227,7 +10692,7 @@ def mew_enviar_plano_aluno(documento_id):
         # Buscar documento original (plano de ensino)
         cursor.execute("""
             SELECT * FROM documentos_autenticados 
-            WHERE id = ? AND tipo = 'plano_ensino'
+            WHERE id = %s AND tipo = 'plano_ensino'
         """, (documento_id,))
         
         documento = cursor.fetchone()
@@ -10236,14 +10701,14 @@ def mew_enviar_plano_aluno(documento_id):
             return jsonify({"success": False, "message": "Plano de ensino não encontrado"})
         
         # Buscar dados do aluno
-        cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = ?", (aluno_id,))
+        cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
         if not aluno:
             conn.close()
             return jsonify({"success": False, "message": "Aluno não encontrado"})
         
         # Buscar nome da disciplina (do documento original)
-        cursor.execute("SELECT nome FROM disciplinas WHERE id = ?", (documento['disciplina_id'],))
+        cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (documento['disciplina_id'],))
         disciplina = cursor.fetchone()
         disciplina_nome = disciplina['nome'] if disciplina else "Disciplina"
         
@@ -10273,7 +10738,8 @@ Coordenação Acadêmica FACOP/SiGEU"""
         cursor.execute("""
             INSERT INTO documentos_enviados 
             (documento_original_id, aluno_id, codigo, tipo, titulo, disciplina_id, data_envio, mensagem, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'enviado')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'enviado')
+            RETURNING id
         """, (
             documento_id,
             aluno_id,
@@ -10285,7 +10751,7 @@ Coordenação Acadêmica FACOP/SiGEU"""
             mensagem_final
         ))
         
-        envio_id = cursor.lastrowid
+        envio_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
         
@@ -10334,7 +10800,7 @@ def disciplina_alternativa(disciplina_id):
     # Verificar se o aluno está matriculado
     cursor.execute("""
         SELECT * FROM aluno_disciplina_alternativa 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     if not cursor.fetchone():
@@ -10377,7 +10843,7 @@ def disciplina_alternativa(disciplina_id):
         '''
     
     # Buscar dados da disciplina
-    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     if not disciplina:
@@ -10387,7 +10853,7 @@ def disciplina_alternativa(disciplina_id):
     # Buscar anexos do aluno nesta disciplina
     cursor.execute("""
         SELECT * FROM anexos_disciplina_alternativa 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY data_envio DESC
     """, (aluno_id, disciplina_id))
     
@@ -10396,7 +10862,7 @@ def disciplina_alternativa(disciplina_id):
     # Buscar nota final
     cursor.execute("""
         SELECT * FROM notas_finais_alternativas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     nota_final = cursor.fetchone()
@@ -10456,7 +10922,7 @@ def enviar_anexo():
         cursor.execute("""
             INSERT INTO anexos_disciplina_alternativa 
             (aluno_id, disciplina_id, nome_arquivo, url_arquivo, descricao, data_envio, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'pendente')
+            VALUES (%s, %s, %s, %s, %s, %s, 'pendente')
         """, (aluno_id, disciplina_id, arquivo.filename, url_arquivo, descricao, 
               datetime.now().strftime("%d/%m/%Y %H:%M")))
         
@@ -10484,7 +10950,7 @@ def excluir_anexo(anexo_id):
     # Verificar se o anexo pertence ao aluno e está pendente
     cursor.execute("""
         SELECT url_arquivo, status FROM anexos_disciplina_alternativa 
-        WHERE id = ? AND aluno_id = ?
+        WHERE id = %s AND aluno_id = %s
     """, (anexo_id, aluno_id))
     
     anexo = cursor.fetchone()
@@ -10506,7 +10972,7 @@ def excluir_anexo(anexo_id):
         pass  # Se não conseguir deletar o arquivo, continua
     
     # Deletar do banco
-    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE id = ?", (anexo_id,))
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE id = %s", (anexo_id,))
     
     conn.commit()
     conn.close()
@@ -10560,10 +11026,11 @@ def mew_criar_disciplina_alternativa():
         
         cursor.execute("""
             INSERT INTO disciplinas_alternativas (nome, mural, data_criacao, ativa)
-            VALUES (?, ?, ?, 1)
+            VALUES (%s, %s, %s, 1)
+            RETURNING id
         """, (nome, mural, datetime.now().strftime("%d/%m/%Y %H:%M")))
         
-        disciplina_id = cursor.lastrowid
+        disciplina_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
         
@@ -10588,15 +11055,15 @@ def mew_editar_disciplina_alternativa(disciplina_id):
         
         cursor.execute("""
             UPDATE disciplinas_alternativas 
-            SET nome = ?, mural = ?, ativa = ?
-            WHERE id = ?
+            SET nome = %s, mural = %s, ativa = %s
+            WHERE id = %s
         """, (nome, mural, ativa, disciplina_id))
         
         conn.commit()
         flash("Disciplina atualizada com sucesso!", "success")
     
     # GET: Buscar dados
-    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     
     # Buscar alunos matriculados
@@ -10604,7 +11071,7 @@ def mew_editar_disciplina_alternativa(disciplina_id):
         SELECT a.id, a.nome, a.ra, ada.data_matricula
         FROM alunos a
         JOIN aluno_disciplina_alternativa ada ON a.id = ada.aluno_id
-        WHERE ada.disciplina_id = ?
+        WHERE ada.disciplina_id = %s
         ORDER BY a.nome
     """, (disciplina_id,))
     
@@ -10619,7 +11086,7 @@ def mew_editar_disciplina_alternativa(disciplina_id):
         SELECT a.*, al.nome as aluno_nome, al.ra as aluno_ra
         FROM anexos_disciplina_alternativa a
         JOIN alunos al ON a.aluno_id = al.id
-        WHERE a.disciplina_id = ?
+        WHERE a.disciplina_id = %s
         ORDER BY a.data_envio DESC
     """, (disciplina_id,))
     
@@ -10650,7 +11117,7 @@ def mew_matricular_aluno_alternativa():
     try:
         cursor.execute("""
             INSERT INTO aluno_disciplina_alternativa (aluno_id, disciplina_id, data_matricula)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (aluno_id, disciplina_id, datetime.now().strftime("%d/%m/%Y")))
         
         conn.commit()
@@ -10675,7 +11142,7 @@ def mew_remover_matricula_alternativa():
     
     cursor.execute("""
         DELETE FROM aluno_disciplina_alternativa 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     
     conn.commit()
@@ -10701,7 +11168,7 @@ def mew_corrigir_anexo(anexo_id):
     cursor = conn.cursor()
     
     # 1. BUSCAR DADOS DO ANEXO
-    cursor.execute("SELECT disciplina_id, aluno_id FROM anexos_disciplina_alternativa WHERE id = ?", (anexo_id,))
+    cursor.execute("SELECT disciplina_id, aluno_id FROM anexos_disciplina_alternativa WHERE id = %s", (anexo_id,))
     anexo = cursor.fetchone()
     
     if not anexo:
@@ -10715,23 +11182,25 @@ def mew_corrigir_anexo(anexo_id):
     try:
         cursor.execute("""
             UPDATE anexos_disciplina_alternativa 
-            SET nota = ?, feedback = ?, status = ?, data_correcao = ?
-            WHERE id = ?
+            SET nota = %s, feedback = %s, status = %s, data_correcao = %s
+            WHERE id = %s
         """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
-    except sqlite3.OperationalError:
-        # Se a coluna feedback não existir, recriar a tabela
-        cursor.execute("ALTER TABLE anexos_disciplina_alternativa ADD COLUMN feedback TEXT")
+    except psycopg2.errors.UndefinedColumn:
+        # Se a coluna feedback não existir, adicioná-la no PostgreSQL
+        conn.rollback()
+        cursor = conn.cursor()
+        cursor.execute("ALTER TABLE anexos_disciplina_alternativa ADD COLUMN IF NOT EXISTS feedback TEXT")
         cursor.execute("""
             UPDATE anexos_disciplina_alternativa 
-            SET nota = ?, feedback = ?, status = ?, data_correcao = ?
-            WHERE id = ?
+            SET nota = %s, feedback = %s, status = %s, data_correcao = %s
+            WHERE id = %s
         """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
     
     # 3. CALCULAR MÉDIA DO ALUNO NESTA DISCIPLINA
     cursor.execute("""
         SELECT AVG(nota) as media 
         FROM anexos_disciplina_alternativa 
-        WHERE aluno_id = ? AND disciplina_id = ? AND nota IS NOT NULL
+        WHERE aluno_id = %s AND disciplina_id = %s AND nota IS NOT NULL
     """, (aluno_id, disciplina_id))
     
     resultado = cursor.fetchone()
@@ -10739,12 +11208,12 @@ def mew_corrigir_anexo(anexo_id):
     nota_final = round(media, 2)
     
     # 4. BUSCAR O NOME DA DISCIPLINA ALTERNATIVA
-    cursor.execute("SELECT nome FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    cursor.execute("SELECT nome FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina_alt = cursor.fetchone()
     nome_disciplina = disciplina_alt['nome'] if disciplina_alt else f"Disciplina Alternativa {disciplina_id}"
     
     # 5. VERIFICAR SE JÁ EXISTE UMA DISCIPLINA NORMAL COM ESTE NOME
-    cursor.execute("SELECT id FROM disciplinas WHERE nome = ?", (nome_disciplina,))
+    cursor.execute("SELECT id FROM disciplinas WHERE nome = %s", (nome_disciplina,))
     disciplina_normal = cursor.fetchone()
     
     if disciplina_normal:
@@ -10752,21 +11221,22 @@ def mew_corrigir_anexo(anexo_id):
         disciplina_normal_id = disciplina_normal['id']
     else:
         # Criar nova disciplina normal
-        cursor.execute("INSERT INTO disciplinas (nome) VALUES (?)", (nome_disciplina,))
-        disciplina_normal_id = cursor.lastrowid
+        cursor.execute("INSERT INTO disciplinas (nome) VALUES (%s) RETURNING id", (nome_disciplina,))
+        disciplina_normal_id = cursor.fetchone()["id"]
         
         # Criar 4 capítulos vazios para esta disciplina (para fins de estrutura)
         for i in range(1, 5):
             cursor.execute("""
                 INSERT INTO capitulos (disciplina_id, titulo, video_url, pdf_url)
-                VALUES (?, ?, '', '')
+                VALUES (%s, %s, '', '')
+                RETURNING id
             """, (disciplina_normal_id, f"Capítulo {i}"))
             
-            capitulo_id = cursor.lastrowid
+            capitulo_id = cursor.fetchone()["id"]
             # Criar prova vazia
             cursor.execute("""
                 INSERT INTO provas (capitulo_id, questoes_json)
-                VALUES (?, '[]')
+                VALUES (%s, '[]')
             """, (capitulo_id,))
     
     # 6. SALVAR NA TABELA notas_finais (disciplinas normais)
@@ -10774,7 +11244,7 @@ def mew_corrigir_anexo(anexo_id):
     cursor.execute("""
         SELECT AVG(nota) as media_capitulos 
         FROM notas 
-        WHERE aluno_id = ? AND disciplina_id = ?
+        WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_normal_id))
     
     media_capitulos = cursor.fetchone()
@@ -10786,17 +11256,27 @@ def mew_corrigir_anexo(anexo_id):
     
     # Salvar/Atualizar nota final na tabela de disciplinas normais
     cursor.execute("""
-        INSERT OR REPLACE INTO notas_finais 
+        INSERT INTO notas_finais 
         (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+            nota_final = EXCLUDED.nota_final,
+            media_disciplina = EXCLUDED.media_disciplina,
+            media_final = EXCLUDED.media_final,
+            status = EXCLUDED.status,
+            data_realizacao = EXCLUDED.data_realizacao
     """, (aluno_id, disciplina_normal_id, nota_final, media_capitulos_valor, media_final, status_final, 
           datetime.now().strftime("%d/%m/%Y %H:%M")))
     
     # 7. TAMBÉM SALVAR NA TABELA DE NOTAS FINAIS ALTERNATIVAS
     cursor.execute("""
-        INSERT OR REPLACE INTO notas_finais_alternativas 
+        DELETE FROM notas_finais_alternativas
+        WHERE aluno_id = %s AND disciplina_id = %s
+    """, (aluno_id, disciplina_id))
+    cursor.execute("""
+        INSERT INTO notas_finais_alternativas 
         (aluno_id, disciplina_id, nota_final, status, data_realizacao)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (aluno_id, disciplina_id, nota_final, status_final, datetime.now().strftime("%d/%m/%Y %H:%M")))
     
     conn.commit()
@@ -10821,7 +11301,7 @@ def mew_excluir_disciplina_alternativa(disciplina_id):
     cursor = conn.cursor()
     
     # Buscar anexos para deletar arquivos
-    cursor.execute("SELECT url_arquivo FROM anexos_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
+    cursor.execute("SELECT url_arquivo FROM anexos_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
     anexos = cursor.fetchall()
     
     for anexo in anexos:
@@ -10833,10 +11313,10 @@ def mew_excluir_disciplina_alternativa(disciplina_id):
             pass
     
     # Deletar dados relacionados
-    cursor.execute("DELETE FROM notas_finais_alternativas WHERE disciplina_id = ?", (disciplina_id,))
-    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
-    cursor.execute("DELETE FROM aluno_disciplina_alternativa WHERE disciplina_id = ?", (disciplina_id,))
-    cursor.execute("DELETE FROM disciplinas_alternativas WHERE id = ?", (disciplina_id,))
+    cursor.execute("DELETE FROM notas_finais_alternativas WHERE disciplina_id = %s", (disciplina_id,))
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
+    cursor.execute("DELETE FROM aluno_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
+    cursor.execute("DELETE FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     
     # Tentar deletar pasta de uploads
     try:
@@ -10867,7 +11347,7 @@ def contrato_pendente():
         SELECT c.*, a.nome, a.ra
         FROM contratos_alunos c
         JOIN alunos a ON a.id = c.aluno_id
-        WHERE c.aluno_id = ? AND c.status = 'pendente'
+        WHERE c.aluno_id = %s AND c.status = 'pendente'
         ORDER BY c.id DESC
         LIMIT 1
     """, (aluno_id,))
@@ -11051,10 +11531,10 @@ def contrato_pendente():
         cursor.execute("""
             UPDATE contratos_alunos
             SET status = 'assinado',
-                assinatura_base64 = ?,
-                arquivo_assinado_path = ?,
-                data_assinatura = ?
-            WHERE id = ?
+                assinatura_base64 = %s,
+                arquivo_assinado_path = %s,
+                data_assinatura = %s
+            WHERE id = %s
         """, (
             assinatura,
             caminho_publico,
@@ -11288,7 +11768,7 @@ def mew_contratos():
         cursor.execute("""
             INSERT INTO contratos_alunos
             (aluno_id, pdf_path, status, data_envio)
-            VALUES (?, ?, 'pendente', ?)
+            VALUES (%s, %s, 'pendente', %s)
         """, (
             aluno_id,
             "/" + caminho.replace("\\", "/"),
@@ -11417,7 +11897,7 @@ def bloquear_aluno_com_contrato_pendente():
 
     cursor.execute("""
         SELECT id FROM contratos_alunos
-        WHERE aluno_id = ? AND status = 'pendente'
+        WHERE aluno_id = %s AND status = 'pendente'
         LIMIT 1
     """, (aluno_id,))
 
@@ -11428,78 +11908,6 @@ def bloquear_aluno_com_contrato_pendente():
         return redirect(url_for("contrato_pendente"))
 
 
-@app.route('/emergency-recover')
-def emergency_recover():
-    """Procura todos os bancos de dados no servidor"""
-    import os, sqlite3
-    from datetime import datetime
-    
-    html = "<h1>🔍 RECUPERAÇÃO DE EMERGÊNCIA</h1>"
-    db_files = []
-    
-    search_paths = [
-        '/opt/render/project/src',
-        '/opt/render',
-        '/tmp',
-        '/var/tmp',
-        '.',
-        'instance',
-        'data'
-    ]
-    
-    for path in search_paths:
-        if os.path.exists(path):
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    if file.endswith('.db') or file.endswith('.sqlite'):
-                        full_path = os.path.join(root, file)
-                        size = os.path.getsize(full_path)
-                        mtime = datetime.fromtimestamp(os.path.getmtime(full_path))
-                        db_files.append((full_path, size, mtime))
-    
-    if not db_files:
-        return html + "<p>❌ NENHUM banco de dados encontrado!</p>"
-    
-    html += "<h2>Bancos encontrados:</h2><ul>"
-    for path, size, mtime in db_files:
-        html += f"""
-        <li>
-            <strong>{path}</strong><br>
-            Tamanho: {size} bytes ({size/1024:.1f} KB)<br>
-            Modificado: {mtime}<br>
-            <a href="/emergency-download?file={path}">⬇️ Download</a>
-        </li>
-        """
-    html += "</ul>"
-    return html
-
-@app.route('/emergency-download')
-def emergency_download():
-    """Baixa o banco selecionado"""
-    import os, base64
-    from flask import request
-    
-    filepath = request.args.get('file')
-    if not filepath or not os.path.exists(filepath):
-        return "Arquivo não encontrado", 404
-    
-    with open(filepath, 'rb') as f:
-        b64 = base64.b64encode(f.read()).decode()
-    
-    return f"""
-    <h1>📥 Backup do Banco</h1>
-    <p><strong>Arquivo:</strong> {filepath}</p>
-    <p><strong>Tamanho:</strong> {os.path.getsize(filepath)} bytes</p>
-    <textarea style="width:100%;height:400px;font-size:12px;font-family:monospace;" onclick="this.select()">
-{b64}
-    </textarea>
-    <br>
-    <button onclick="navigator.clipboard.writeText(document.querySelector('textarea').value)" 
-            style="margin-top:10px;padding:10px;background:blue;color:white;border:none;border-radius:5px;cursor:pointer;">
-        📋 Copiar Tudo
-    </button>
-    """
-    
 @app.route("/mew/anexar-documento", methods=["GET", "POST"])
 def mew_anexar_documento():
     """Anexa qualquer arquivo e gera documento autenticado com QR Code - VERSÃO SIMPLES"""
@@ -12120,7 +12528,7 @@ def mew_anexar_documento():
             INSERT INTO documentos_autenticados 
             (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
              qr_code, hash_documento, data_emissao, data_validade, metadados)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
             codigo,
             None,
@@ -12190,7 +12598,577 @@ def mew_anexar_documento():
         return f"❌ Erro: {str(e)}", 500
     
     
+
+# ==========================================================
+# PROJETO FINAL
+# ==========================================================
+
+@app.route("/projeto-final")
+def projeto_final():
+    aluno_id = session.get("aluno_id")
+
+    if not aluno_id:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            pf.*,
+            d.nome AS disciplina_nome
+        FROM projetos_finais pf
+        JOIN disciplinas d ON d.id = pf.disciplina_id
+        WHERE pf.aluno_id = %s
+          AND pf.liberado = 1
+        ORDER BY d.nome
+    """, (aluno_id,))
+
+    projetos = cursor.fetchall()
+    conn.close()
+
+    return render_template(
+        "projeto_final.html",
+        projetos=projetos
+    )
+
+
+@app.route("/projeto-final/enviar/<int:disciplina_id>", methods=["POST"])
+def enviar_projeto_final(disciplina_id):
+    aluno_id = session.get("aluno_id")
+
+    if not aluno_id:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM projetos_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+          AND liberado = 1
+    """, (aluno_id, disciplina_id))
+
+    projeto = cursor.fetchone()
+
+    if not projeto:
+        conn.close()
+        return redirect("/projeto-final?erro=Projeto+Final+não+liberado")
+
+    if projeto["corrigido"]:
+        conn.close()
+        return redirect("/projeto-final?erro=Este+projeto+já+foi+corrigido")
+
+    arquivo = request.files.get("arquivo")
+
+    if not arquivo or arquivo.filename == "":
+        conn.close()
+        return redirect("/projeto-final?erro=Selecione+um+arquivo")
+
+    extensoes_permitidas = {"pdf", "doc", "docx", "zip"}
+    nome_original = arquivo.filename
+    extensao = nome_original.rsplit(".", 1)[1].lower() if "." in nome_original else ""
+
+    if extensao not in extensoes_permitidas:
+        conn.close()
+        return redirect(
+            "/projeto-final?erro=Formato+não+permitido.+Use+PDF,+DOC,+DOCX+ou+ZIP"
+        )
+
+    upload_dir = os.path.join(
+        "static",
+        "uploads",
+        "projetos_finais",
+        str(aluno_id),
+        str(disciplina_id)
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    nome_seguro = secure_filename(nome_original)
+    nome_salvo = f"{timestamp}_{nome_seguro}"
+    caminho_completo = os.path.join(upload_dir, nome_salvo)
+
+    arquivo.save(caminho_completo)
+
+    arquivo_path = os.path.join(
+        "uploads",
+        "projetos_finais",
+        str(aluno_id),
+        str(disciplina_id),
+        nome_salvo
+    ).replace("\\", "/")
+
+    data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    cursor.execute("""
+        UPDATE projetos_finais
+        SET arquivo_path = %s,
+            nome_arquivo = %s,
+            data_envio = %s,
+            nota = NULL,
+            corrigido = 0,
+            data_correcao = NULL
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (
+        arquivo_path,
+        nome_original,
+        data_envio,
+        aluno_id,
+        disciplina_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/projeto-final?sucesso=Projeto+enviado+com+sucesso")
+
+
+@app.route("/mew/arquivo-final")
+def arquivo_final():
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
+    alunos = cursor.fetchall()
+
+    cursor.execute("SELECT id, nome FROM disciplinas ORDER BY nome")
+    disciplinas = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT
+            pf.*,
+            a.nome AS aluno_nome,
+            a.ra AS aluno_ra,
+            d.nome AS disciplina_nome
+        FROM projetos_finais pf
+        JOIN alunos a ON a.id = pf.aluno_id
+        JOIN disciplinas d ON d.id = pf.disciplina_id
+        ORDER BY
+            CASE
+                WHEN pf.arquivo_path IS NOT NULL
+                 AND pf.corrigido = 0
+                THEN 0
+                ELSE 1
+            END,
+            pf.id DESC
+    """)
+
+    projetos = cursor.fetchall()
+    conn.close()
+
+    return render_template(
+        "mew/arquivo_final.html",
+        alunos=alunos,
+        disciplinas=disciplinas,
+        projetos=projetos
+    )
+
+
+@app.route("/mew/liberar-projeto-final", methods=["POST"])
+def liberar_projeto_final():
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    aluno_id = request.form.get("aluno_id")
+    disciplina_id = request.form.get("disciplina_id")
+    titulo_atividade = (request.form.get("titulo_atividade") or "Projeto Final").strip()
+    conteudo_atividade = (request.form.get("conteudo_atividade") or "").strip()
+    arquivo_atividade = request.files.get("arquivo_atividade")
+
+    if not aluno_id or not disciplina_id:
+        return redirect(
+            "/mew/arquivo-final?erro=Selecione+aluno+e+disciplina"
+        )
+
+    if not conteudo_atividade and (not arquivo_atividade or arquivo_atividade.filename == ""):
+        return redirect(
+            "/mew/arquivo-final?erro=Escreva+as+orientações+ou+anexe+o+arquivo+da+atividade"
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM projetos_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (aluno_id, disciplina_id))
+
+    existente = cursor.fetchone()
+
+    arquivo_atividade_path = existente["arquivo_atividade_path"] if existente else None
+    nome_arquivo_atividade = existente["nome_arquivo_atividade"] if existente else None
+
+    if arquivo_atividade and arquivo_atividade.filename:
+        extensoes_atividade = {"pdf", "doc", "docx"}
+        nome_original_atividade = arquivo_atividade.filename
+        extensao_atividade = (
+            nome_original_atividade.rsplit(".", 1)[1].lower()
+            if "." in nome_original_atividade
+            else ""
+        )
+
+        if extensao_atividade not in extensoes_atividade:
+            conn.close()
+            return redirect(
+                "/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX"
+            )
+
+        upload_dir = os.path.join(
+            "static",
+            "uploads",
+            "projetos_finais",
+            "atividades",
+            str(aluno_id),
+            str(disciplina_id)
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_seguro = secure_filename(nome_original_atividade)
+        nome_salvo = f"{timestamp}_{nome_seguro}"
+        arquivo_atividade.save(os.path.join(upload_dir, nome_salvo))
+
+        arquivo_atividade_path = os.path.join(
+            "uploads",
+            "projetos_finais",
+            "atividades",
+            str(aluno_id),
+            str(disciplina_id),
+            nome_salvo
+        ).replace("\\", "/")
+        nome_arquivo_atividade = nome_original_atividade
+
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    if existente:
+        cursor.execute("""
+            UPDATE projetos_finais
+            SET liberado = 1,
+                titulo_atividade = %s,
+                conteudo_atividade = %s,
+                arquivo_atividade_path = %s,
+                nome_arquivo_atividade = %s,
+                data_liberacao = %s
+            WHERE aluno_id = %s
+              AND disciplina_id = %s
+        """, (
+            titulo_atividade,
+            conteudo_atividade,
+            arquivo_atividade_path,
+            nome_arquivo_atividade,
+            agora,
+            aluno_id,
+            disciplina_id
+        ))
+    else:
+        cursor.execute("""
+            INSERT INTO projetos_finais
+            (
+                aluno_id,
+                disciplina_id,
+                liberado,
+                titulo_atividade,
+                conteudo_atividade,
+                arquivo_atividade_path,
+                nome_arquivo_atividade,
+                data_liberacao
+            )
+            VALUES (%s, %s, 1, %s, %s, %s, %s, %s)
+        """, (
+            aluno_id,
+            disciplina_id,
+            titulo_atividade,
+            conteudo_atividade,
+            arquivo_atividade_path,
+            nome_arquivo_atividade,
+            agora
+        ))
+
+    # Projeto Final substitui a prova final normal: desativa a liberação de 30 questões
+    cursor.execute("""
+        UPDATE liberacao_final
+        SET liberada = 0
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (aluno_id, disciplina_id))
+
+    # Mantém coerência com qualquer flag antiga de abertura da prova final
+    cursor.execute("""
+        UPDATE aluno_disciplina_datas
+        SET prova_final_aberta = 0
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (aluno_id, disciplina_id))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        "/mew/arquivo-final?sucesso=Projeto+Final+liberado+e+prova+final+normal+bloqueada"
+    )
+
+
+@app.route("/mew/editar-projeto-final/<int:projeto_id>", methods=["POST"])
+def editar_projeto_final(projeto_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    titulo_atividade = (request.form.get("titulo_atividade") or "Projeto Final").strip()
+    conteudo_atividade = (request.form.get("conteudo_atividade") or "").strip()
+    arquivo_atividade = request.files.get("arquivo_atividade")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM projetos_finais WHERE id = %s", (projeto_id,))
+    projeto = cursor.fetchone()
+
+    if not projeto:
+        conn.close()
+        return redirect("/mew/arquivo-final?erro=Projeto+não+encontrado")
+
+    arquivo_atividade_path = projeto["arquivo_atividade_path"]
+    nome_arquivo_atividade = projeto["nome_arquivo_atividade"]
+
+    if arquivo_atividade and arquivo_atividade.filename:
+        extensoes_atividade = {"pdf", "doc", "docx"}
+        nome_original_atividade = arquivo_atividade.filename
+        extensao_atividade = (
+            nome_original_atividade.rsplit(".", 1)[1].lower()
+            if "." in nome_original_atividade
+            else ""
+        )
+
+        if extensao_atividade not in extensoes_atividade:
+            conn.close()
+            return redirect(
+                "/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX"
+            )
+
+        upload_dir = os.path.join(
+            "static",
+            "uploads",
+            "projetos_finais",
+            "atividades",
+            str(projeto["aluno_id"]),
+            str(projeto["disciplina_id"])
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_seguro = secure_filename(nome_original_atividade)
+        nome_salvo = f"{timestamp}_{nome_seguro}"
+        arquivo_atividade.save(os.path.join(upload_dir, nome_salvo))
+
+        arquivo_atividade_path = os.path.join(
+            "uploads",
+            "projetos_finais",
+            "atividades",
+            str(projeto["aluno_id"]),
+            str(projeto["disciplina_id"]),
+            nome_salvo
+        ).replace("\\", "/")
+        nome_arquivo_atividade = nome_original_atividade
+
+    cursor.execute("""
+        UPDATE projetos_finais
+        SET titulo_atividade = %s,
+            conteudo_atividade = %s,
+            arquivo_atividade_path = %s,
+            nome_arquivo_atividade = %s
+        WHERE id = %s
+    """, (
+        titulo_atividade,
+        conteudo_atividade,
+        arquivo_atividade_path,
+        nome_arquivo_atividade,
+        projeto_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect("/mew/arquivo-final?sucesso=Conteúdo+da+atividade+atualizado")
+
+
+@app.route("/mew/remover-projeto-final/<int:projeto_id>")
+def remover_projeto_final(projeto_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE projetos_finais
+        SET liberado = 0
+        WHERE id = %s
+    """, (projeto_id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        "/mew/arquivo-final?sucesso=Liberação+removida"
+    )
+
+
+@app.route(
+    "/mew/corrigir-projeto-final/<int:projeto_id>",
+    methods=["POST"]
+)
+def corrigir_projeto_final(projeto_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    try:
+        nota = float(request.form.get("nota", "").replace(",", "."))
+    except (ValueError, AttributeError):
+        return redirect(
+            "/mew/arquivo-final?erro=Nota+inválida"
+        )
+
+    if nota < 0 or nota > 10:
+        return redirect(
+            "/mew/arquivo-final?erro=A+nota+deve+estar+entre+0+e+10"
+        )
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT *
+        FROM projetos_finais
+        WHERE id = %s
+    """, (projeto_id,))
+
+    projeto = cursor.fetchone()
+
+    if not projeto:
+        conn.close()
+        return redirect(
+            "/mew/arquivo-final?erro=Projeto+não+encontrado"
+        )
+
+    if not projeto["arquivo_path"]:
+        conn.close()
+        return redirect(
+            "/mew/arquivo-final?erro=O+aluno+ainda+não+enviou+o+arquivo"
+        )
+
+    aluno_id = projeto["aluno_id"]
+    disciplina_id = projeto["disciplina_id"]
+
+    cursor.execute("""
+        SELECT AVG(nota) AS media_disciplina
+        FROM notas
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (
+        aluno_id,
+        disciplina_id
+    ))
+
+    resultado_media = cursor.fetchone()
+
+    if resultado_media and resultado_media["media_disciplina"] is not None:
+        media_disciplina = float(resultado_media["media_disciplina"])
+    else:
+        media_disciplina = 0
+
+    nota_final = round(nota, 2)
+    media_final = round((nota_final + media_disciplina) / 2, 2)
+    status = "aprovado" if media_final >= 7.0 else "reprovado"
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    cursor.execute("""
+        UPDATE projetos_finais
+        SET nota = %s,
+            corrigido = 1,
+            data_correcao = %s
+        WHERE id = %s
+    """, (
+        nota_final,
+        agora,
+        projeto_id
+    ))
+
+    cursor.execute("""
+        SELECT id
+        FROM notas_finais
+        WHERE aluno_id = %s
+          AND disciplina_id = %s
+    """, (
+        aluno_id,
+        disciplina_id
+    ))
+
+    nota_existente = cursor.fetchone()
+
+    if nota_existente:
+        cursor.execute("""
+            UPDATE notas_finais
+            SET nota_final = %s,
+                media_disciplina = %s,
+                media_final = %s,
+                status = %s,
+                data_realizacao = %s
+            WHERE aluno_id = %s
+              AND disciplina_id = %s
+        """, (
+            nota_final,
+            media_disciplina,
+            media_final,
+            status,
+            agora,
+            aluno_id,
+            disciplina_id
+        ))
+    else:
+        cursor.execute("""
+            INSERT INTO notas_finais
+            (
+                aluno_id,
+                disciplina_id,
+                nota_final,
+                media_disciplina,
+                media_final,
+                status,
+                data_realizacao
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            aluno_id,
+            disciplina_id,
+            nota_final,
+            media_disciplina,
+            media_final,
+            status,
+            agora
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        "/mew/arquivo-final?sucesso=Nota+lançada.+Projeto+Final+substituiu+a+Prova+Final"
+    )
+
+
 if __name__ == "__main__":
+    # Inicializa o banco de dados PostgreSQL
     init_db()
     init_contratos_db()
+    init_pagamentos_db()
+    
+    # Só roda localmente
     app.run(debug=True)
