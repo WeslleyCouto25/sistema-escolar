@@ -1,0 +1,824 @@
+/* ======================================================================
+   SIGEU EDUCACIONAL — PORTAL 07 DEFINITIVO
+   Linguagem visual: portal acadêmico tradicional, cinza + preto + laranja
+   Escopo: páginas web do aluno, AVA, avaliações e MEW.
+   O CSS é carregado por último para neutralizar estilos legados sem alterar
+   a lógica da aplicação.
+   ====================================================================== */
+
+:root {
+  --p07-ink: #1f2428;
+  --p07-ink-2: #343a40;
+  --p07-charcoal: #353b40;
+  --p07-charcoal-dark: #262b2f;
+  --p07-gray-950: #202428;
+  --p07-gray-900: #2f3438;
+  --p07-gray-800: #42494f;
+  --p07-gray-700: #586169;
+  --p07-gray-600: #6f7880;
+  --p07-gray-500: #8b949b;
+  --p07-gray-400: #aeb7bd;
+  --p07-gray-300: #c9d0d5;
+  --p07-gray-250: #d5dbe0;
+  --p07-gray-200: #e1e5e8;
+  --p07-gray-150: #e9ecef;
+  --p07-gray-100: #f1f3f4;
+  --p07-gray-050: #f7f8f9;
+  --p07-white: #ffffff;
+  --p07-orange: #c86d20;
+  --p07-orange-dark: #a85616;
+  --p07-orange-soft: #fff3e7;
+  --p07-green: #28733d;
+  --p07-green-soft: #e8f3eb;
+  --p07-red: #a43c3c;
+  --p07-red-soft: #f8e9e9;
+  --p07-amber: #9a6b00;
+  --p07-amber-soft: #fff5d9;
+  --p07-radius: 3px;
+  --p07-shadow: 0 2px 7px rgba(28,34,39,.08);
+
+  /* neutraliza variáveis antigas que davam aparência azul/startup */
+  --primary: var(--p07-charcoal) !important;
+  --primary-light: #4a5157 !important;
+  --primary-dark: var(--p07-charcoal-dark) !important;
+  --secondary: var(--p07-orange) !important;
+  --secondary-light: #db8338 !important;
+  --accent: var(--p07-orange) !important;
+  --info: #596a76 !important;
+  --gray-50: var(--p07-gray-050) !important;
+  --gray-100: var(--p07-gray-100) !important;
+  --gray-200: var(--p07-gray-200) !important;
+  --gray-300: var(--p07-gray-300) !important;
+  --gray-400: var(--p07-gray-500) !important;
+  --gray-500: var(--p07-gray-600) !important;
+  --gray-600: var(--p07-gray-700) !important;
+  --gray-700: var(--p07-gray-800) !important;
+  --gray-800: var(--p07-ink) !important;
+  --gray-900: var(--p07-gray-950) !important;
+  --radius-sm: 2px !important;
+  --radius-md: 3px !important;
+  --radius-lg: 4px !important;
+  --radius-xl: 5px !important;
+
+  --sigeu-navy-950: var(--p07-gray-950) !important;
+  --sigeu-navy-900: var(--p07-charcoal) !important;
+  --sigeu-navy-800: #444c52 !important;
+  --sigeu-navy-700: #59636a !important;
+  --sigeu-navy-100: var(--p07-gray-150) !important;
+  --sigeu-navy-050: var(--p07-gray-050) !important;
+  --sigeu-orange-600: var(--p07-orange-dark) !important;
+  --sigeu-orange-500: var(--p07-orange) !important;
+  --sigeu-orange-100: var(--p07-orange-soft) !important;
+  --sigeu-bg: #e9ecef !important;
+  --sigeu-surface: var(--p07-white) !important;
+  --sigeu-surface-soft: var(--p07-gray-050) !important;
+  --sigeu-border: var(--p07-gray-300) !important;
+  --sigeu-border-soft: var(--p07-gray-200) !important;
+  --sigeu-text: var(--p07-ink) !important;
+  --sigeu-muted: var(--p07-gray-700) !important;
+  --sigeu-radius: var(--p07-radius) !important;
+  --sigeu-radius-lg: 4px !important;
+  --sigeu-shadow: var(--p07-shadow) !important;
+
+  --primary-color: var(--p07-charcoal) !important;
+  --primary-light: #4a5157 !important;
+  --primary-dark: var(--p07-charcoal-dark) !important;
+  --secondary-color: var(--p07-orange) !important;
+  --secondary-light: #db8338 !important;
+  --secondary-dark: var(--p07-orange-dark) !important;
+  --accent-color: #59636a !important;
+  --accent-light: #6f7980 !important;
+  --light-color: var(--p07-gray-100) !important;
+  --light-gray: var(--p07-gray-200) !important;
+  --medium-gray: var(--p07-gray-700) !important;
+  --dark-gray: var(--p07-ink) !important;
+  --white: #fff !important;
+  --border-radius: var(--p07-radius) !important;
+}
+
+html { background: #e9ecef !important; }
+body.portal07 {
+  margin: 0 !important;
+  min-height: 100vh;
+  background: #e9ecef !important;
+  color: var(--p07-ink) !important;
+  font-family: Tahoma, "Segoe UI", Arial, Helvetica, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+body.portal07 *, body.portal07 *::before, body.portal07 *::after { box-sizing: border-box; }
+body.portal07 h1, body.portal07 h2, body.portal07 h3, body.portal07 h4,
+body.portal07 h5, body.portal07 h6, body.portal07 p, body.portal07 label,
+body.portal07 li, body.portal07 td, body.portal07 th, body.portal07 span {
+  text-shadow: none !important;
+}
+body.portal07 a { text-decoration: none; }
+body.portal07 img, body.portal07 video, body.portal07 iframe, body.portal07 canvas { max-width: 100%; }
+
+/* ----------------------------------------------------------------------
+   CABEÇALHO — cinza institucional, sem gradiente azul/pílulas
+   ---------------------------------------------------------------------- */
+body.portal07 .topbar,
+body.portal07 .header-mew,
+body.portal07 .mew-header,
+body.portal07 header.topbar {
+  min-height: 56px !important;
+  height: auto !important;
+  background: var(--p07-charcoal) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 3px solid var(--p07-orange) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15) !important;
+  color: #fff !important;
+  padding: 7px 14px !important;
+}
+body.portal07 .topbar *, body.portal07 .header-mew * { color: #fff !important; }
+body.portal07 .logo-text {
+  max-width: min(58vw, 480px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #fff !important;
+  font-family: Tahoma, "Segoe UI", Arial, sans-serif !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+}
+body.portal07 .user-menu { gap: 7px !important; flex-wrap: wrap; justify-content: flex-end; }
+body.portal07 .logout-btn,
+body.portal07 .topbar .btn,
+body.portal07 .topbar a.btn {
+  min-height: 32px !important;
+  padding: 6px 10px !important;
+  border: 1px solid #788087 !important;
+  border-radius: 2px !important;
+  background: #454c51 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  transform: none !important;
+}
+body.portal07 .logout-btn:hover, body.portal07 .topbar .btn:hover {
+  background: var(--p07-orange) !important;
+  border-color: var(--p07-orange) !important;
+}
+
+/* ----------------------------------------------------------------------
+   LAYOUT GERAL
+   ---------------------------------------------------------------------- */
+body.portal07 .main-container {
+  width: min(100%, 1560px) !important;
+  max-width: 1560px !important;
+  min-height: calc(100vh - 56px) !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  align-items: stretch !important;
+  background: #fff !important;
+  border-left: 1px solid var(--p07-gray-300) !important;
+  border-right: 1px solid var(--p07-gray-300) !important;
+  box-shadow: none !important;
+}
+body.portal07 .content-area {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  background: #fff !important;
+  color: var(--p07-ink) !important;
+  padding: 20px 22px 34px !important;
+  overflow-x: hidden !important;
+}
+body.portal07 .content-area > * { min-width: 0; }
+body.portal07 .container:not(.login-container):not(.prova-container),
+body.portal07 .mew-container {
+  max-width: 1480px !important;
+  width: 100% !important;
+}
+
+/* ----------------------------------------------------------------------
+   SIDEBAR — clara, legível; perfil em cinza escuro
+   ---------------------------------------------------------------------- */
+body.portal07 .sidebar {
+  flex: 0 0 220px !important;
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  background: #f2f4f5 !important;
+  background-image: none !important;
+  color: var(--p07-ink) !important;
+  border-right: 1px solid var(--p07-gray-300) !important;
+  box-shadow: none !important;
+  overflow-x: hidden !important;
+}
+body.portal07 .user-profile {
+  padding: 16px 12px !important;
+  background: #41474c !important;
+  background-image: none !important;
+  border-bottom: 3px solid var(--p07-orange) !important;
+  color: #fff !important;
+  text-align: center !important;
+}
+body.portal07 .profile-img {
+  width: 58px !important;
+  height: 58px !important;
+  margin: 0 auto 8px !important;
+  background: #fff !important;
+  border: 2px solid #d6dadd !important;
+  border-radius: 50% !important;
+  box-shadow: none !important;
+}
+body.portal07 .profile-img i { color: #343a40 !important; font-size: 28px !important; }
+body.portal07 .profile-text .name,
+body.portal07 .user-profile .name { color: #fff !important; font-size: 12px !important; font-weight: 700 !important; }
+body.portal07 .profile-text .ra,
+body.portal07 .user-profile .ra {
+  color: #f0f2f3 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 1px 0 !important;
+  font-size: 10px !important;
+  opacity: .9 !important;
+}
+body.portal07 .main-menu,
+body.portal07 .section-menu { margin: 0 !important; padding: 0 0 12px !important; background: #f2f4f5 !important; }
+body.portal07 .dashboard-menu-header,
+body.portal07 .menu-section-title,
+body.portal07 .main-menu .menu-section-title {
+  margin: 0 !important;
+  padding: 9px 11px 7px !important;
+  background: #dfe3e6 !important;
+  color: #3e454a !important;
+  border-top: 1px solid var(--p07-gray-300) !important;
+  border-bottom: 1px solid var(--p07-gray-300) !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  opacity: 1 !important;
+}
+body.portal07 .menu-item,
+body.portal07 .section-menu-item,
+body.portal07 .sidebar a.menu-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 8px 10px !important;
+  border: 0 !important;
+  border-left: 4px solid transparent !important;
+  border-bottom: 1px solid #dde1e4 !important;
+  border-radius: 0 !important;
+  background: #f7f8f9 !important;
+  color: #252a2e !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+body.portal07 .menu-item *, body.portal07 .section-menu-item * { color: inherit !important; opacity: 1 !important; }
+body.portal07 .menu-item i, body.portal07 .section-menu-item i {
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  color: #535b61 !important;
+  text-align: center !important;
+  font-size: 13px !important;
+}
+body.portal07 .menu-item:hover, body.portal07 .section-menu-item:hover {
+  background: #fff !important;
+  color: #111416 !important;
+  border-left-color: #9aa2a8 !important;
+}
+body.portal07 .menu-item.active, body.portal07 .section-menu-item.active {
+  background: #fff !important;
+  color: #15191c !important;
+  border-left-color: var(--p07-orange) !important;
+  font-weight: 700 !important;
+}
+body.portal07 .menu-item.active i, body.portal07 .section-menu-item.active i { color: var(--p07-orange-dark) !important; }
+body.portal07 .badge-menu { background: var(--p07-orange) !important; color: #fff !important; border-radius: 9px !important; }
+
+/* ----------------------------------------------------------------------
+   TÍTULOS / BREADCRUMBS
+   ---------------------------------------------------------------------- */
+body.portal07 .page-title,
+body.portal07 .section-title,
+body.portal07 .mew-title,
+body.portal07 .titlebar {
+  margin-top: 0 !important;
+  background: #e7eaec !important;
+  background-image: none !important;
+  color: #202428 !important;
+  border: 1px solid var(--p07-gray-300) !important;
+  border-left: 4px solid #4c5358 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+body.portal07 .page-title { padding: 10px 12px !important; font-size: 18px !important; line-height: 1.25 !important; }
+body.portal07 .section-title, body.portal07 .mew-title { padding: 9px 11px !important; font-size: 13px !important; }
+body.portal07 .page-title *, body.portal07 .section-title *, body.portal07 .mew-title * { color: #202428 !important; }
+body.portal07 .page-subtitle, body.portal07 .breadcrumb { color: #687078 !important; font-size: 11px !important; }
+
+/* ----------------------------------------------------------------------
+   CARTÕES / CAIXAS — aparência de sistema acadêmico, não "cards de IA"
+   ---------------------------------------------------------------------- */
+body.portal07 .cards-container {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+body.portal07 .card,
+body.portal07 .mew-card,
+body.portal07 .menu-card,
+body.portal07 .info-card,
+body.portal07 .stat-card,
+body.portal07 .content-card,
+body.portal07 .chapter-card,
+body.portal07 .disciplina-card,
+body.portal07 .card-disciplina,
+body.portal07 .card-resultado {
+  min-width: 0 !important;
+  background: #fff !important;
+  background-image: none !important;
+  color: var(--p07-ink) !important;
+  border: 1px solid var(--p07-gray-300) !important;
+  border-radius: var(--p07-radius) !important;
+  box-shadow: var(--p07-shadow) !important;
+  transform: none !important;
+}
+body.portal07 .card:hover, body.portal07 .menu-card:hover, body.portal07 .chapter-card:hover {
+  transform: none !important;
+  box-shadow: 0 3px 9px rgba(30,35,39,.11) !important;
+  border-color: #aab2b8 !important;
+}
+body.portal07 .card-header,
+body.portal07 .disciplina-header,
+body.portal07 .disciplina-notas-header,
+body.portal07 .chart-header {
+  background: #e9ecef !important;
+  background-image: none !important;
+  color: #1f2428 !important;
+  border-bottom: 1px solid var(--p07-gray-300) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body.portal07 .card-header *, body.portal07 .disciplina-header * { color: #1f2428 !important; }
+body.portal07 .course-name,
+body.portal07 .card h3,
+body.portal07 .menu-card h3,
+body.portal07 .disciplina-title,
+body.portal07 .chapter-title { color: #1e2327 !important; font-family: Tahoma, "Segoe UI", Arial, sans-serif !important; }
+body.portal07 .card-content, body.portal07 .disciplina-content { color: #262b2f !important; }
+body.portal07 .card p, body.portal07 .menu-card p, body.portal07 .card-content p { color: #4e565c !important; }
+body.portal07 .card-badge, body.portal07 .status-badge, body.portal07 .badge {
+  border-radius: 9px !important;
+  box-shadow: none !important;
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  letter-spacing: .02em !important;
+}
+body.portal07 .badge-success, body.portal07 .status-aprovado, body.portal07 .status-completed,
+body.portal07 .status-approved, body.portal07 .status-delivered {
+  background: var(--p07-green-soft) !important;
+  color: #235e34 !important;
+  border-color: #b9d3bf !important;
+}
+body.portal07 .badge-warning, body.portal07 .status-cursando, body.portal07 .status-pending,
+body.portal07 .status-aguardando, body.portal07 .status-pending-approval {
+  background: var(--p07-amber-soft) !important;
+  color: #765300 !important;
+  border-color: #e5d39c !important;
+}
+body.portal07 .status-reprovado, body.portal07 .status-denied {
+  background: var(--p07-red-soft) !important;
+  color: #7f3232 !important;
+  border-color: #e0bcbc !important;
+}
+
+/* Botões quadrados/funcionais */
+body.portal07 .btn,
+body.portal07 button:not(.chapter-toggle):not(.menu-toggle) {
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+body.portal07 .btn-primary,
+body.portal07 .btn-prova-primary,
+body.portal07 .btn-submit,
+body.portal07 .principal {
+  background: #3e454a !important;
+  border-color: #3e454a !important;
+  color: #fff !important;
+}
+body.portal07 .btn-primary:hover,
+body.portal07 .btn-prova-primary:hover,
+body.portal07 .btn-submit:hover,
+body.portal07 .principal:hover { background: #262b2f !important; border-color: #262b2f !important; }
+body.portal07 .btn-secondary, body.portal07 .btn-prova-secondary, body.portal07 .secundario {
+  background: #687178 !important; border-color: #687178 !important; color: #fff !important;
+}
+body.portal07 .btn-warning { background: var(--p07-orange) !important; border-color: var(--p07-orange) !important; color: #fff !important; }
+body.portal07 .btn-success { background: var(--p07-green) !important; border-color: var(--p07-green) !important; color: #fff !important; }
+
+/* ----------------------------------------------------------------------
+   DISCIPLINAS — "sala" vira página acadêmica compacta
+   ---------------------------------------------------------------------- */
+body.portal07.disciplina-page .discipline-header,
+body.portal07 .discipline-header {
+  width: 100% !important;
+  margin: 0 0 14px !important;
+  padding: 16px 18px !important;
+  background: #f0f2f3 !important;
+  background-image: none !important;
+  color: #1f2428 !important;
+  border: 1px solid var(--p07-gray-300) !important;
+  border-left: 5px solid #42494f !important;
+  border-bottom: 1px solid var(--p07-gray-300) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+body.portal07 .discipline-header *, body.portal07 .discipline-stats * { color: #1f2428 !important; }
+body.portal07 .discipline-header .page-title,
+body.portal07 .discipline-header h1 {
+  background: transparent !important; border: 0 !important; padding: 0 !important; margin: 0 0 5px !important;
+  color: #1c2023 !important; font-size: 20px !important;
+}
+body.portal07 .discipline-stats {
+  display: flex !important; flex-wrap: wrap !important; gap: 6px !important; margin-top: 10px !important;
+}
+body.portal07 .discipline-stats .stat-card {
+  min-width: 110px !important; padding: 7px 10px !important; background: #fff !important; border: 1px solid #cbd1d5 !important; box-shadow: none !important;
+}
+body.portal07 .discipline-stats .stat-number { color: #202428 !important; font-size: 16px !important; }
+body.portal07 .discipline-stats .stat-label { color: #5b6369 !important; font-size: 9px !important; }
+body.portal07 .progress-tracker {
+  background: #fafbfb !important; border: 1px solid var(--p07-gray-300) !important; border-radius: 2px !important;
+  box-shadow: none !important; padding: 14px 16px !important; margin-bottom: 14px !important;
+}
+body.portal07 .progress-line { background: #cfd5d9 !important; }
+body.portal07 .progress-step.completed .progress-line, body.portal07 .progress-step.completed .step-icon { background: var(--p07-green) !important; }
+body.portal07 .progress-step.current .step-icon { background: #fff !important; color: var(--p07-orange-dark) !important; border-color: var(--p07-orange) !important; }
+body.portal07 .chapter-card {
+  margin-bottom: 12px !important; padding: 0 !important; overflow: hidden !important; border-left: 4px solid #6c747a !important;
+}
+body.portal07 .chapter-card.current { border-left-color: var(--p07-orange) !important; }
+body.portal07 .chapter-header {
+  padding: 13px 15px !important; background: #fff !important; border-bottom: 1px solid var(--p07-gray-200) !important;
+}
+body.portal07 .chapter-number { color: #d9dde0 !important; }
+body.portal07 .chapter-title { font-size: 16px !important; color: #1d2226 !important; }
+body.portal07 .chapter-subtitle { color: #657078 !important; font-size: 11px !important; }
+body.portal07 .chapter-content { padding: 14px !important; background: #fff !important; }
+body.portal07 .learning-objectives {
+  background: #f5f6f7 !important; color: #252a2e !important; border: 1px solid #d8dde0 !important;
+  border-left: 4px solid var(--p07-orange) !important; border-radius: 2px !important; padding: 12px 14px !important;
+}
+body.portal07 .learning-objectives * { color: #252a2e !important; }
+body.portal07 .content-grid {
+  display: grid !important; grid-template-columns: minmax(0,1fr) minmax(0,1fr) !important; gap: 12px !important;
+}
+body.portal07 .content-section {
+  background: #fff !important; border: 1px solid var(--p07-gray-300) !important; border-radius: 2px !important; box-shadow: none !important;
+}
+body.portal07 .content-section .section-title {
+  margin: 0 !important; border-left: 0 !important; border-top: 0 !important; border-right: 0 !important; background: #e9ecef !important;
+}
+body.portal07 .video-wrapper, body.portal07 .pdf-wrapper { background: #f7f8f9 !important; border-radius: 0 !important; }
+body.portal07 .secure-video { width: 100% !important; background: #111 !important; border-radius: 0 !important; }
+body.portal07 .resource-badge { background: #f1f3f4 !important; color: #343a40 !important; border: 1px solid #cfd5d9 !important; border-radius: 9px !important; }
+body.portal07 .chapter-actions { border-top: 1px solid var(--p07-gray-200) !important; padding-top: 12px !important; }
+
+/* ----------------------------------------------------------------------
+   SITUAÇÃO ACADÊMICA / NOTAS
+   ---------------------------------------------------------------------- */
+body.portal07 .stats-container {
+  display: grid !important; grid-template-columns: repeat(4,minmax(0,1fr)) !important; gap: 8px !important;
+}
+body.portal07 .stats-container .stat-card {
+  padding: 12px !important; border-left: 4px solid #6a7278 !important; text-align: center !important; min-height: 92px !important;
+}
+body.portal07 .stats-container .stat-number { color: #1f2428 !important; font-size: 22px !important; }
+body.portal07 .chart-container { border: 1px solid var(--p07-gray-300) !important; background: #fff !important; box-shadow: none !important; border-radius: 2px !important; }
+body.portal07 .grades-grid, body.portal07 .notas-summary { gap: 7px !important; }
+body.portal07 .grade-item, body.portal07 .summary-item {
+  background: #f7f8f9 !important; border: 1px solid #d9dee1 !important; border-radius: 2px !important; color: #23282b !important;
+}
+
+/* ----------------------------------------------------------------------
+   AVALIAÇÕES — folha de prova institucional
+   ---------------------------------------------------------------------- */
+body.portal07.prova-page,
+body.portal07.instrucoes-page,
+body.portal07.prova-final-page,
+body.portal07.resultado-prova-page {
+  background: #e6eaed !important;
+}
+body.portal07.prova-page .content-area,
+body.portal07.instrucoes-page .content-area,
+body.portal07.prova-final-page .content-area,
+body.portal07.resultado-prova-page .content-area { background: #edf0f2 !important; }
+body.portal07 .prova-container {
+  width: min(100%, 900px) !important; max-width: 900px !important; margin: 18px auto 30px !important;
+  padding: 26px 30px !important; background: #fff !important; border: 1px solid #bdc5ca !important;
+  border-top: 5px solid #343a40 !important; border-radius: 0 !important; box-shadow: 0 3px 12px rgba(30,35,40,.08) !important;
+}
+body.portal07 .prova-header,
+body.portal07 .disciplina-info {
+  margin-bottom: 16px !important; padding: 15px 16px !important; background: #eceff1 !important;
+  border: 1px solid #c8ced2 !important; border-left: 4px solid #444b50 !important; border-radius: 0 !important; text-align: left !important;
+}
+body.portal07 .prova-header *, body.portal07 .disciplina-info * { color: #1e2327 !important; }
+body.portal07 .prova-header h1, body.portal07 .prova-header h2 { font-size: 20px !important; color: #1b1f22 !important; }
+body.portal07 .questao,
+body.portal07 .questao-resultado {
+  position: relative !important; margin: 0 0 14px !important; padding: 18px 18px 18px 20px !important;
+  background: #fff !important; border: 1px solid #cbd1d5 !important; border-left: 4px solid #555d63 !important;
+  border-radius: 0 !important; box-shadow: none !important; color: #171b1e !important;
+}
+body.portal07 .questao h3,
+body.portal07 .questao .question-number,
+body.portal07 .questao-resultado h3 {
+  margin: 0 0 10px !important; color: #212629 !important; font-family: Tahoma,Arial,sans-serif !important;
+  font-size: 11px !important; font-weight: 800 !important; letter-spacing: .05em !important; text-transform: uppercase !important;
+}
+body.portal07 .questao p, body.portal07 .pergunta-texto {
+  color: #141719 !important; font-size: 12px !important; line-height: 1.5 !important; font-weight: 600 !important;
+}
+body.portal07 .opcao {
+  display: block !important; width: 100% !important; min-height: 42px !important; margin: 6px 0 !important;
+  padding: 10px 12px !important; background: #f8f9fa !important; color: #1b1f22 !important;
+  border: 1px solid #cbd1d5 !important; border-radius: 0 !important; box-shadow: none !important; cursor: pointer !important;
+}
+body.portal07 .opcao:hover { background: #f0f1f2 !important; border-color: #9ea6ac !important; }
+body.portal07 .opcao.selected,
+body.portal07 .opcao:has(input:checked) {
+  background: var(--p07-orange-soft) !important; border-color: #c99665 !important; box-shadow: inset 4px 0 var(--p07-orange) !important;
+}
+body.portal07 .timer-container {
+  background: #fff !important; color: #8d3333 !important; border: 1px solid #d8b6b6 !important;
+  border-radius: 2px !important; box-shadow: 0 2px 6px rgba(0,0,0,.08) !important; font-weight: 700 !important;
+}
+body.portal07 .aviso-box {
+  background: #fff6dc !important; color: #5d4915 !important; border: 1px solid #e6d29a !important;
+  border-left: 4px solid #b98718 !important; border-radius: 0 !important;
+}
+body.portal07 .termo-box {
+  background: #f7f8f9 !important; color: #24292d !important; border: 1px solid #d2d8dc !important; border-radius: 0 !important;
+}
+body.portal07 .checkbox-container {
+  padding: 12px !important; background: #fff !important; color: #1e2327 !important; border: 1px solid #cbd2d6 !important;
+  border-left: 4px solid var(--p07-orange) !important; border-radius: 0 !important;
+}
+body.portal07 .checkbox-container * { color: #1e2327 !important; }
+body.portal07 .btn-group { display: flex !important; gap: 8px !important; flex-wrap: wrap !important; }
+
+/* ----------------------------------------------------------------------
+   MEW / ADMIN — mesma identidade, sem bloco azul dominante
+   ---------------------------------------------------------------------- */
+body.portal07.admin-page .content-area { background: #fff !important; }
+body.portal07.admin-page .menu-grid {
+  display: grid !important; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)) !important; gap: 10px !important;
+}
+body.portal07.admin-page .menu-card {
+  min-height: 120px !important; padding: 12px !important; border-top: 3px solid #5d656b !important;
+}
+body.portal07.admin-page .menu-icon {
+  width: 34px !important; height: 34px !important; background: #454c51 !important; background-image: none !important;
+  color: #fff !important; border-radius: 2px !important; font-size: 15px !important;
+}
+body.portal07.admin-page .menu-card h3 { color: #1f2428 !important; font-size: 13px !important; }
+body.portal07.admin-page .menu-card p { color: #596168 !important; font-size: 10px !important; }
+body.portal07 table { color: #1f2428 !important; }
+body.portal07 table th {
+  background: #e7eaec !important; color: #202428 !important; border-color: #c9d0d5 !important; font-weight: 800 !important;
+}
+body.portal07 table td { background: #fff !important; color: #272c30 !important; border-color: #d7dde0 !important; }
+body.portal07 table tbody tr:nth-child(even) td { background: #fafbfb !important; }
+
+/* ----------------------------------------------------------------------
+   FORMULÁRIOS / MODAIS / ALERTAS
+   ---------------------------------------------------------------------- */
+body.portal07 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+body.portal07 select,
+body.portal07 textarea,
+body.portal07 .form-control {
+  background: #fff !important; color: #1e2327 !important; border: 1px solid #aeb6bc !important; border-radius: 2px !important;
+  box-shadow: none !important;
+}
+body.portal07 input:focus, body.portal07 select:focus, body.portal07 textarea:focus {
+  outline: 2px solid rgba(200,109,32,.15) !important; border-color: #b77035 !important;
+}
+body.portal07 .modal-content, body.portal07 .modal-dialog > div {
+  border-radius: 2px !important; border: 1px solid #aeb6bc !important; box-shadow: 0 10px 30px rgba(0,0,0,.18) !important;
+}
+body.portal07 .modal-header { background: #e9ecef !important; color: #202428 !important; border-bottom: 1px solid #cbd2d6 !important; }
+body.portal07 .modal-header * { color: #202428 !important; }
+body.portal07 .alert, body.portal07 .error-box { border-radius: 0 !important; box-shadow: none !important; }
+
+/* ----------------------------------------------------------------------
+   LOGIN — sem fundo azul/roxo; painel acadêmico sóbrio
+   ---------------------------------------------------------------------- */
+body.portal07.login-page,
+body.portal07.admin-login {
+  min-height: 100vh !important; background: #dfe3e6 !important; background-image: none !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; padding: 18px !important;
+}
+body.portal07 .login-container {
+  width: min(100%, 430px) !important; margin: 0 auto !important; background: #fff !important;
+  border: 1px solid #aeb6bc !important; border-top: 5px solid var(--p07-orange) !important; border-radius: 2px !important;
+  box-shadow: 0 8px 24px rgba(25,30,34,.16) !important; overflow: hidden !important;
+}
+body.portal07 .login-academic-header {
+  min-height: 90px !important; padding: 14px 17px !important; background: #3d4348 !important; color: #fff !important;
+  border-bottom: 1px solid #2c3135 !important;
+}
+body.portal07 .login-title { color: #fff !important; font-family: Tahoma,"Segoe UI",Arial,sans-serif !important; font-size: 20px !important; }
+body.portal07 .login-kicker { color: #f2c18f !important; }
+body.portal07 .login-subtitle { color: #e4e7e9 !important; }
+body.portal07 .login-help { background: #f4f5f6 !important; color: #4c545a !important; border-left-color: var(--p07-orange) !important; }
+body.portal07 .login-help strong { color: #23282c !important; }
+
+/* ----------------------------------------------------------------------
+   ASSINATURA DO CONTRATO
+   ---------------------------------------------------------------------- */
+body.portal07.signature-page { display: block !important; background: #e4e7e9 !important; padding: 0 !important; }
+body.portal07.signature-page .container {
+  width: min(calc(100% - 24px), 1040px) !important; max-width: 1040px !important; margin: 18px auto 40px !important;
+  padding: 20px !important; background: #fff !important; border: 1px solid #bfc6cb !important; border-top: 5px solid #3f464b !important;
+  box-shadow: 0 4px 15px rgba(28,33,37,.09) !important;
+}
+body.portal07.signature-page h1 { color: #202428 !important; font-size: 21px !important; border-bottom: 1px solid #ccd2d6 !important; }
+body.portal07.signature-page h2 {
+  color: #202428 !important; background: #e9ecef !important; border: 1px solid #c9d0d5 !important; border-left: 4px solid var(--p07-orange) !important;
+  font-size: 14px !important; border-radius: 0 !important;
+}
+body.portal07.signature-page .aviso,
+body.portal07.signature-page .juridico,
+body.portal07.signature-page .privacidade,
+body.portal07.signature-page .check,
+body.portal07.signature-page .camera-box,
+body.portal07.signature-page .typed-signature {
+  background: #f8f9fa !important; color: #212629 !important; border: 1px solid #d0d6da !important; border-radius: 0 !important; box-shadow: none !important;
+}
+body.portal07.signature-page .aviso { border-left: 4px solid #51595f !important; }
+body.portal07.signature-page .juridico, body.portal07.signature-page .check { border-left: 4px solid var(--p07-orange) !important; }
+body.portal07.signature-page .privacidade { background: #fff8ec !important; border-left: 4px solid #b98718 !important; }
+body.portal07.signature-page iframe { height: min(68vh,700px) !important; border: 1px solid #bfc6cb !important; border-radius: 0 !important; background: #fff !important; }
+body.portal07.signature-page .camera { background: #4f585e !important; color: #fff !important; }
+body.portal07.signature-page video, body.portal07.signature-page #fotoPreview { border-radius: 0 !important; border: 1px solid #aeb6bc !important; }
+body.portal07.signature-page canvas { border: 1px solid #8f989e !important; border-left: 4px solid var(--p07-orange) !important; border-radius: 0 !important; }
+body.portal07.signature-page .typed-preview { font-size: clamp(25px,5vw,34px) !important; color: #111 !important; }
+body.portal07.signature-page .sigeu-toast { border-left-color: var(--p07-orange) !important; border-radius: 0 !important; }
+body.portal07.signature-page .sigeu-toast strong { color: #202428 !important; }
+body.portal07 .sigeu-modal-backdrop {
+  position: fixed; inset: 0; z-index: 100000; display: none; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(27,31,34,.58);
+}
+body.portal07 .sigeu-modal-backdrop.show { display: flex; }
+body.portal07 .sigeu-modal {
+  width: min(100%,520px); background: #fff; border: 1px solid #aeb6bc; border-top: 5px solid var(--p07-orange); box-shadow: 0 12px 36px rgba(0,0,0,.22);
+  color: #202428;
+}
+body.portal07 .sigeu-modal h3 { margin: 0; padding: 13px 15px; background: #eceff1; border-bottom: 1px solid #ccd2d6; font-size: 15px; color: #202428; }
+body.portal07 .sigeu-modal p { margin: 0; padding: 16px 15px; color: #3e464c; }
+body.portal07 .sigeu-modal-actions { display: flex; justify-content: flex-end; gap: 7px; padding: 0 15px 15px; }
+
+/* ----------------------------------------------------------------------
+   RESPONSIVIDADE
+   ---------------------------------------------------------------------- */
+@media (max-width: 1050px) {
+  body.portal07 .sidebar { flex-basis: 205px !important; width: 205px !important; min-width: 205px !important; max-width: 205px !important; }
+  body.portal07 .content-area { padding: 16px 15px 28px !important; }
+  body.portal07 .cards-container { grid-template-columns: repeat(auto-fit,minmax(220px,1fr)) !important; }
+  body.portal07 .content-grid { grid-template-columns: 1fr !important; }
+  body.portal07 .stats-container { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 820px) {
+  body.portal07 { font-size: 12px !important; }
+  body.portal07 .topbar { min-height: 52px !important; padding: 6px 9px !important; }
+  body.portal07 .logo-text { font-size: 15px !important; max-width: 60vw !important; }
+  body.portal07 .main-container { display: block !important; min-height: auto !important; border: 0 !important; }
+  body.portal07 .sidebar {
+    width: 100% !important; min-width: 0 !important; max-width: none !important; height: auto !important;
+    border-right: 0 !important; border-bottom: 1px solid var(--p07-gray-300) !important; overflow: visible !important;
+  }
+  body.portal07 .user-profile {
+    min-height: 54px !important; padding: 7px 10px !important; display: flex !important; align-items: center !important; gap: 9px !important; text-align: left !important;
+  }
+  body.portal07 .profile-img { width: 38px !important; height: 38px !important; min-width: 38px !important; margin: 0 !important; }
+  body.portal07 .profile-img i { font-size: 19px !important; }
+  body.portal07 .profile-text { min-width: 0 !important; }
+  body.portal07 .main-menu, body.portal07 .section-menu {
+    display: flex !important; flex-wrap: nowrap !important; overflow-x: auto !important; overflow-y: hidden !important; padding: 0 !important;
+    background: #f2f4f5 !important; -webkit-overflow-scrolling: touch !important; scrollbar-width: thin;
+  }
+  body.portal07 .menu-section { display: contents !important; }
+  body.portal07 .menu-section-title, body.portal07 .dashboard-menu-header { display: none !important; }
+  body.portal07 .menu-item, body.portal07 .section-menu-item {
+    flex: 0 0 auto !important; min-height: 44px !important; padding: 9px 11px !important; border-left: 0 !important;
+    border-right: 1px solid #d8dde0 !important; border-bottom: 3px solid transparent !important; white-space: nowrap !important;
+  }
+  body.portal07 .menu-item.active, body.portal07 .section-menu-item.active { border-left: 0 !important; border-bottom-color: var(--p07-orange) !important; }
+  body.portal07 .content-area { width: 100% !important; padding: 12px 10px 24px !important; }
+  body.portal07 .page-title { font-size: 16px !important; }
+  body.portal07 .cards-container, body.portal07.admin-page .menu-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 8px !important; }
+  body.portal07 .discipline-header { padding: 12px !important; }
+  body.portal07 .discipline-header .page-title, body.portal07 .discipline-header h1 { font-size: 17px !important; }
+  body.portal07 .prova-container { margin: 9px auto 20px !important; padding: 18px 14px !important; }
+  body.portal07 .questao { padding: 15px 12px !important; }
+  body.portal07 .timer-container { top: 57px !important; right: 7px !important; padding: 6px 8px !important; font-size: 11px !important; }
+  body.portal07.signature-page .container { width: 100% !important; margin: 0 !important; border-left: 0 !important; border-right: 0 !important; padding: 12px 10px !important; }
+  body.portal07.signature-page iframe { height: 62vh !important; }
+}
+
+@media (max-width: 560px) {
+  body.portal07 .logo-text { max-width: 52vw !important; font-size: 14px !important; }
+  body.portal07 .user-menu > span, body.portal07 .user-menu .user-name { display: none !important; }
+  body.portal07 .cards-container, body.portal07.admin-page .menu-grid, body.portal07 .stats-container { grid-template-columns: 1fr !important; }
+  body.portal07 .card-header { padding: 8px 9px !important; }
+  body.portal07 .card-content { padding: 10px !important; }
+  body.portal07 .course-info { grid-template-columns: 1fr 1fr !important; }
+  body.portal07 .action-buttons, body.portal07 .card-actions, body.portal07 .btn-group, body.portal07 .assinatura-acoes { flex-direction: column !important; }
+  body.portal07 .action-buttons .btn, body.portal07 .card-actions .btn, body.portal07 .btn-group .btn, body.portal07 .assinatura-acoes .btn { width: 100% !important; }
+  body.portal07 input:not([type="checkbox"]):not([type="radio"]), body.portal07 select, body.portal07 textarea { font-size: 16px !important; }
+  body.portal07 .prova-container { padding: 14px 9px !important; border-left: 0 !important; border-right: 0 !important; }
+  body.portal07 .questao { border-left-width: 3px !important; }
+  body.portal07 .opcao { min-height: 46px !important; padding: 12px 10px !important; }
+  body.portal07.signature-page h1 { font-size: 18px !important; }
+  body.portal07.signature-page .signature-mode { display: grid !important; grid-template-columns: 1fr !important; }
+  body.portal07.signature-page .signature-mode .btn { width: 100% !important; }
+}
+
+/* Tabelas não quebram a página no celular */
+@media (max-width: 760px) {
+  body.portal07 .table-responsive, body.portal07 .table-container, body.portal07 .requests-table-wrapper,
+  body.portal07 .mew-card:has(table), body.portal07 .section-content:has(table) { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  body.portal07 table { min-width: 620px; }
+}
+
+/* Impressão: não contaminar documentos/impressões com navegação */
+@media print {
+  body.portal07 { background: #fff !important; }
+  body.portal07 .topbar, body.portal07 .sidebar, body.portal07 .footer, body.portal07 .logout-btn { display: none !important; }
+  body.portal07 .main-container, body.portal07 .content-area { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; }
+}
+body.portal07.signature-page .signature-mode .active-mode{
+  background:var(--p07-orange)!important;border-color:var(--p07-orange)!important;color:#fff!important;
+}
+
+/* Prova final usa um contêiner legado sem a classe .prova-container. */
+body.portal07.prova-final-page .content-area > div:first-child{
+  width:min(100%,900px)!important;max-width:900px!important;margin:18px auto 30px!important;
+  padding:26px 30px!important;background:#fff!important;border:1px solid #bdc5ca!important;
+  border-top:5px solid #343a40!important;box-shadow:0 3px 12px rgba(30,35,40,.08)!important;
+}
+body.portal07.prova-final-page .content-area > div:first-child > div:first-child{
+  text-align:left!important;margin:0 0 18px!important;padding:15px 16px!important;background:#eceff1!important;
+  border:1px solid #c8ced2!important;border-left:4px solid #444b50!important;
+}
+body.portal07.prova-final-page .content-area > div:first-child > div:first-child h1{
+  margin:0 0 6px!important;color:#1b1f22!important;font-size:20px!important;
+}
+body.portal07.prova-final-page .content-area > div:first-child > div:first-child p{color:#3c444a!important;font-size:11px!important;}
+@media(max-width:820px){
+  body.portal07.prova-final-page .content-area > div:first-child{margin:9px auto 20px!important;padding:18px 14px!important;}
+}
+@media(max-width:560px){
+  body.portal07.prova-final-page .content-area > div:first-child{padding:14px 9px!important;border-left:0!important;border-right:0!important;}
+}
+
+/* Situação acadêmica: elimina grandes vazios do layout legado. */
+body.portal07.situacao-page .content-area{max-width:none!important;margin:0!important;}
+body.portal07.situacao-page .summary-section{
+  display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(260px,.8fr)!important;gap:18px!important;
+  align-items:center!important;margin-bottom:14px!important;padding:14px!important;background:#f7f8f9!important;
+  border:1px solid #d0d6da!important;border-left:4px solid #4a5157!important;
+}
+body.portal07.situacao-page .summary-section h1{margin:0 0 6px!important;color:#202428!important;font-size:19px!important;}
+body.portal07.situacao-page .summary-section p{color:#596168!important;font-size:11px!important;}
+body.portal07.situacao-page .progress-overall{padding:10px 12px!important;background:#fff!important;border:1px solid #d4d9dc!important;}
+body.portal07.situacao-page .chart-container [id^="chart-"]{height:185px!important;}
+body.portal07.situacao-page .chart-container [id^="chart-"] i{font-size:30px!important;color:#adb5ba!important;}
+body.portal07.situacao-page .toggle-btn{
+  padding:5px 8px!important;background:#fff!important;color:#343a40!important;border:1px solid #bfc6cb!important;border-radius:2px!important;
+}
+body.portal07.situacao-page .toggle-btn.active{background:#444b50!important;color:#fff!important;border-color:#444b50!important;}
+body.portal07.situacao-page .disciplina-card{margin-bottom:10px!important;}
+body.portal07.situacao-page .disciplina-header{padding:10px 12px!important;}
+body.portal07.situacao-page .disciplina-icon{width:34px!important;height:34px!important;border-radius:2px!important;}
+@media(max-width:820px){body.portal07.situacao-page .summary-section{grid-template-columns:1fr!important;gap:10px!important;}}
+
+/* PORTAL07 TOTAL: a paleta efetiva também foi incorporada HTML por HTML para preview local. */
+body.portal07{color:#202428!important;}

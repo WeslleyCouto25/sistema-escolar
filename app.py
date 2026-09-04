@@ -1,4 +1,4 @@
-from pydoc import html
+﻿from pydoc import html
 import re
 from werkzeug.utils import secure_filename
 import json
@@ -803,7 +803,7 @@ body {
     left: 8mm;
     right: 8mm;
     bottom: 8mm;
-    border: 0.5pt solid #1a237e;
+    border: 0.5pt solid #3f464b;
     pointer-events: none;
 }
 
@@ -814,7 +814,7 @@ body {
     left: 2mm;
     right: 2mm;
     bottom: 2mm;
-    border: 0.3pt dashed #1a237e;
+    border: 0.3pt dashed #3f464b;
     opacity: 0.5;
 }
 
@@ -823,7 +823,7 @@ body {
     position: absolute;
     width: 15mm;
     height: 15mm;
-    border: 2pt solid #1a237e;
+    border: 2pt solid #3f464b;
     z-index: 100;
 }
 
@@ -933,12 +933,12 @@ body {
     height: 4mm;
     background: repeating-linear-gradient(
         90deg,
-        #1a237e 0px,
-        #1a237e 5mm,
+        #3f464b 0px,
+        #3f464b 5mm,
         #ffffff 5mm,
         #ffffff 10mm,
-        #1a237e 10mm,
-        #1a237e 15mm
+        #3f464b 10mm,
+        #3f464b 15mm
     );
     z-index: 10;
 }
@@ -947,7 +947,7 @@ body {
 .cabecalho {
     position: relative;
     z-index: 5;
-    border-bottom: 1.5pt solid #1a237e;
+    border-bottom: 1.5pt solid #3f464b;
     padding-bottom: 4mm;
     margin-bottom: 10mm;
     display: flex;
@@ -974,7 +974,7 @@ body {
 .instituicao-nome {
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 14pt;
-    color: #1a237e;
+    color: #3f464b;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     line-height: 1.2;
@@ -993,7 +993,7 @@ body {
 .selo-autenticidade {
     width: 22mm;
     height: 22mm;
-    border: 1.5pt solid #1a237e;
+    border: 1.5pt solid #3f464b;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -1001,7 +1001,7 @@ body {
     justify-content: center;
     font-family: "Arial", sans-serif;
     font-size: 6pt;
-    color: #1a237e;
+    color: #3f464b;
     text-align: center;
     line-height: 1.1;
     position: relative;
@@ -1026,11 +1026,11 @@ body {
     position: absolute;
     top: 12mm;
     right: 12mm;
-    border: 0.5pt solid #1a237e;
+    border: 0.5pt solid #3f464b;
     padding: 2mm 4mm;
     font-family: "Courier New", monospace;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     background: rgba(26,35,126,0.03);
     z-index: 20;
 }
@@ -1051,7 +1051,7 @@ body {
 .titulo-principal {
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 18pt;
-    color: #1a237e;
+    color: #3f464b;
     text-transform: uppercase;
     letter-spacing: 4px;
     margin-bottom: 3mm;
@@ -1068,7 +1068,7 @@ body {
     top: 50%;
     width: 10mm;
     height: 1pt;
-    background: #1a237e;
+    background: #3f464b;
 }
 
 .titulo-principal::before {
@@ -1104,13 +1104,13 @@ body {
 
 .destaque {
     font-weight: bold;
-    color: #1a237e;
+    color: #3f464b;
     font-family: "Arial Black", "Arial", sans-serif;
 }
 
 /* BOX DE IDENTIFICAÇÃO - ESTILO FICHA CRIMINAL */
 .box-identificacao {
-    border: 1pt solid #1a237e;
+    border: 1pt solid #3f464b;
     margin: 8mm 0;
     position: relative;
     z-index: 5;
@@ -1118,7 +1118,7 @@ body {
 }
 
 .box-identificacao-header {
-    background: #1a237e;
+    background: #3f464b;
     color: #fff;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 8pt;
@@ -1148,7 +1148,7 @@ body {
     width: 25mm;
     font-family: "Arial", sans-serif;
     font-size: 8pt;
-    color: #1a237e;
+    color: #3f464b;
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1165,8 +1165,8 @@ body {
 
 /* BOX DE DISCIPLINA */
 .box-disciplina {
-    border: 1pt solid #1a237e;
-    border-left: 4pt solid #1a237e;
+    border: 1pt solid #3f464b;
+    border-left: 4pt solid #3f464b;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
@@ -1183,14 +1183,14 @@ body {
     padding: 0 3mm;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     letter-spacing: 1px;
 }
 
 .disciplina-nome {
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 12pt;
-    color: #1a237e;
+    color: #3f464b;
     text-align: center;
     margin: 3mm 0 5mm 0;
     text-transform: uppercase;
@@ -1233,7 +1233,7 @@ body {
 
 .dado-valor {
     font-weight: bold;
-    color: #1a237e;
+    color: #3f464b;
     font-size: 10pt;
 }
 
@@ -1340,7 +1340,7 @@ body {
 .assinatura-nome {
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 11pt;
-    color: #1a237e;
+    color: #3f464b;
     margin-bottom: 1mm;
 }
 
@@ -1404,7 +1404,7 @@ body {
 }
 
 .rodape-tecnico strong {
-    color: #1a237e;
+    color: #3f464b;
 }
 
 /* MICROTEXTOS DE SEGURANÇA */
@@ -1572,17 +1572,17 @@ body {
     <div id="qr-code-placeholder">
         <!-- Símbolo simples de código de barras usando SVG -->
         <svg width="60" height="40" viewBox="0 0 60 40" style="opacity: 0.6;">
-            <rect x="2" y="5" width="4" height="30" fill="#1a237e"/>
-            <rect x="8" y="5" width="2" height="30" fill="#1a237e"/>
-            <rect x="12" y="5" width="6" height="30" fill="#1a237e"/>
-            <rect x="20" y="5" width="3" height="30" fill="#1a237e"/>
-            <rect x="25" y="5" width="2" height="30" fill="#1a237e"/>
-            <rect x="30" y="5" width="5" height="30" fill="#1a237e"/>
-            <rect x="37" y="5" width="2" height="30" fill="#1a237e"/>
-            <rect x="42" y="5" width="4" height="30" fill="#1a237e"/>
-            <rect x="48" y="5" width="3" height="30" fill="#1a237e"/>
-            <rect x="53" y="5" width="2" height="30" fill="#1a237e"/>
-            <rect x="57" y="5" width="1" height="30" fill="#1a237e"/>
+            <rect x="2" y="5" width="4" height="30" fill="#3f464b"/>
+            <rect x="8" y="5" width="2" height="30" fill="#3f464b"/>
+            <rect x="12" y="5" width="6" height="30" fill="#3f464b"/>
+            <rect x="20" y="5" width="3" height="30" fill="#3f464b"/>
+            <rect x="25" y="5" width="2" height="30" fill="#3f464b"/>
+            <rect x="30" y="5" width="5" height="30" fill="#3f464b"/>
+            <rect x="37" y="5" width="2" height="30" fill="#3f464b"/>
+            <rect x="42" y="5" width="4" height="30" fill="#3f464b"/>
+            <rect x="48" y="5" width="3" height="30" fill="#3f464b"/>
+            <rect x="53" y="5" width="2" height="30" fill="#3f464b"/>
+            <rect x="57" y="5" width="1" height="30" fill="#3f464b"/>
         </svg>
     </div>
 </div>
@@ -6226,7 +6226,7 @@ def mew_visualizar_documento(codigo):
     doc = dict(documento)
     cod = doc.get("codigo") or doc.get("codigo_autenticacao") or codigo
     conteudo = doc.get("conteudo_html") or "<p>Conteúdo indisponível.</p>"
-    return f"""<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Documento {cod}</title><style>body{{margin:0;font-family:Arial}}.barra{{background:#0a2c4e;color:white;padding:12px;text-align:center}}.btn{{position:fixed;right:20px;bottom:20px;background:#0a2c4e;color:white;padding:10px 15px;border:0;border-radius:5px;z-index:999}}@media print{{.barra,.btn{{display:none}}}}</style></head><body><div class='barra'>Documento autenticado • Código: {cod}</div>{conteudo}<button class='btn' onclick='window.print()'>Imprimir / PDF</button></body></html>"""
+    return f"""<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Documento {cod}</title><style>body{{margin:0;font-family:Arial}}.barra{{background:#3f464b;color:white;padding:12px;text-align:center}}.btn{{position:fixed;right:20px;bottom:20px;background:#3f464b;color:white;padding:10px 15px;border:0;border-radius:5px;z-index:999}}@media print{{.barra,.btn{{display:none}}}}</style></head><body><div class='barra'>Documento autenticado • Código: {cod}</div>{conteudo}<button class='btn' onclick='window.print()'>Imprimir / PDF</button></body></html>"""
 
 
 def gerar_codigo_simples():
@@ -6649,7 +6649,7 @@ body {{
     left: 8mm;
     right: 8mm;
     bottom: 8mm;
-    border: 0.5pt solid #1a237e;
+    border: 0.5pt solid #3f464b;
     pointer-events: none;
 }}
 
@@ -6660,7 +6660,7 @@ body {{
     left: 2mm;
     right: 2mm;
     bottom: 2mm;
-    border: 0.3pt dashed #1a237e;
+    border: 0.3pt dashed #3f464b;
     opacity: 0.5;
 }}
 
@@ -6669,7 +6669,7 @@ body {{
     position: absolute;
     width: 15mm;
     height: 15mm;
-    border: 2pt solid #1a237e;
+    border: 2pt solid #3f464b;
     z-index: 100;
 }}
 
@@ -6779,12 +6779,12 @@ body {{
     height: 4mm;
     background: repeating-linear-gradient(
         90deg,
-        #1a237e 0px,
-        #1a237e 5mm,
+        #3f464b 0px,
+        #3f464b 5mm,
         #ffffff 5mm,
         #ffffff 10mm,
-        #1a237e 10mm,
-        #1a237e 15mm
+        #3f464b 10mm,
+        #3f464b 15mm
     );
     z-index: 10;
 }}
@@ -6793,7 +6793,7 @@ body {{
 .cabecalho {{
     position: relative;
     z-index: 5;
-    border-bottom: 1.5pt solid #1a237e;
+    border-bottom: 1.5pt solid #3f464b;
     padding-bottom: 4mm;
     margin-bottom: 10mm;
     display: flex;
@@ -6820,7 +6820,7 @@ body {{
 .instituicao-nome {{
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 14pt;
-    color: #1a237e;
+    color: #3f464b;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     line-height: 1.2;
@@ -6839,7 +6839,7 @@ body {{
 .selo-autenticidade {{
     width: 22mm;
     height: 22mm;
-    border: 1.5pt solid #1a237e;
+    border: 1.5pt solid #3f464b;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -6847,7 +6847,7 @@ body {{
     justify-content: center;
     font-family: "Arial", sans-serif;
     font-size: 6pt;
-    color: #1a237e;
+    color: #3f464b;
     text-align: center;
     line-height: 1.1;
     position: relative;
@@ -6872,11 +6872,11 @@ body {{
     position: absolute;
     top: 12mm;
     right: 12mm;
-    border: 0.5pt solid #1a237e;
+    border: 0.5pt solid #3f464b;
     padding: 2mm 4mm;
     font-family: "Courier New", monospace;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     background: rgba(26,35,126,0.03);
     z-index: 20;
 }}
@@ -6897,7 +6897,7 @@ body {{
 .titulo-principal {{
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 18pt;
-    color: #1a237e;
+    color: #3f464b;
     text-transform: uppercase;
     letter-spacing: 4px;
     margin-bottom: 3mm;
@@ -6914,7 +6914,7 @@ body {{
     top: 50%;
     width: 10mm;
     height: 1pt;
-    background: #1a237e;
+    background: #3f464b;
 }}
 
 .titulo-principal::before {{
@@ -6950,13 +6950,13 @@ body {{
 
 .destaque {{
     font-weight: bold;
-    color: #1a237e;
+    color: #3f464b;
     font-family: "Arial Black", "Arial", sans-serif;
 }}
 
 /* BOX DE IDENTIFICAÇÃO - ESTILO FICHA CRIMINAL */
 .box-identificacao {{
-    border: 1pt solid #1a237e;
+    border: 1pt solid #3f464b;
     margin: 8mm 0;
     position: relative;
     z-index: 5;
@@ -6964,7 +6964,7 @@ body {{
 }}
 
 .box-identificacao-header {{
-    background: #1a237e;
+    background: #3f464b;
     color: #fff;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 8pt;
@@ -6994,7 +6994,7 @@ body {{
     width: 25mm;
     font-family: "Arial", sans-serif;
     font-size: 8pt;
-    color: #1a237e;
+    color: #3f464b;
     font-weight: bold;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -7011,7 +7011,7 @@ body {{
 
 /* BOX DE DADOS PESSOAIS ESTENDIDOS */
 .box-dados-pessoais {{
-    border: 1pt solid #1a237e;
+    border: 1pt solid #3f464b;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
@@ -7028,7 +7028,7 @@ body {{
     padding: 0 3mm;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     letter-spacing: 1px;
 }}
 
@@ -7069,7 +7069,7 @@ body {{
 }}
 
 .tabela-disciplinas th {{
-    background: #1a237e;
+    background: #3f464b;
     color: white;
     font-weight: bold;
     padding: 4px;
@@ -7079,7 +7079,7 @@ body {{
 }}
 
 .tabela-disciplinas td {{
-    border: 1px solid #1a237e;
+    border: 1px solid #3f464b;
     padding: 4px;
     vertical-align: middle;
 }}
@@ -7090,8 +7090,8 @@ body {{
 
 /* BOX DE RESUMO */
 .box-resumo {{
-    border: 1pt solid #1a237e;
-    border-left: 4pt solid #1a237e;
+    border: 1pt solid #3f464b;
+    border-left: 4pt solid #3f464b;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
@@ -7108,7 +7108,7 @@ body {{
     padding: 0 3mm;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     letter-spacing: 1px;
 }}
 
@@ -7137,7 +7137,7 @@ body {{
 
 .resumo-valor {{
     font-weight: bold;
-    color: #1a237e;
+    color: #3f464b;
     font-size: 12pt;
 }}
 
@@ -7148,7 +7148,7 @@ body {{
 
 /* BOX DE SISTEMA DE AVALIAÇÃO */
 .box-avaliacao {{
-    border: 1pt solid #1a237e;
+    border: 1pt solid #3f464b;
     margin: 8mm 0;
     padding: 5mm;
     position: relative;
@@ -7165,7 +7165,7 @@ body {{
     padding: 0 3mm;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     letter-spacing: 1px;
 }}
 
@@ -7178,7 +7178,7 @@ body {{
     padding: 0 3mm;
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 7pt;
-    color: #1a237e;
+    color: #3f464b;
     letter-spacing: 1px;
 }}
 /* SELO GRANDE DE AUTENTICAÇÃO */
@@ -7262,7 +7262,7 @@ body {{
 .assinatura-nome {{
     font-family: "Arial Black", "Arial", sans-serif;
     font-size: 11pt;
-    color: #1a237e;
+    color: #3f464b;
     margin-bottom: 1mm;
 }}
 
@@ -7323,7 +7323,7 @@ body {{
 }}
 
 .rodape-tecnico strong {{
-    color: #1a237e;
+    color: #3f464b;
 }}
 
 /* MICROTEXTOS DE SEGURANÇA */
@@ -7612,7 +7612,7 @@ body {{
     </div>
     
     <!-- SEÇÃO DE AUTENTICAÇÃO -->
-    <div style="position: absolute; bottom: 17mm; left: 15mm; right: 15mm; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 8pt; text-align: center; border-top: 1px solid #1a237e;">
+    <div style="position: absolute; bottom: 17mm; left: 15mm; right: 15mm; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 8pt; text-align: center; border-top: 1px solid #3f464b;">
     </div>
     
     <!-- RODAPÉ TÉCNICO -->
@@ -8425,11 +8425,11 @@ def gerar_declaracao_conclusao_route():
             '</body>',
             f'''
     <!-- SEÇÃO DE AUTENTICAÇÃO -->
-    <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #1a237e; background: #f9f9f9;">
+    <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #3f464b; background: #f9f9f9;">
         
         <!-- CABEÇALHO DA SEÇÃO -->
         <div style="text-align: center; margin-bottom: 20px;">
-            <span style="background: #1a237e; color: white; padding: 5px 20px; border-radius: 20px; font-size: 11px; font-weight: bold;">
+            <span style="background: #3f464b; color: white; padding: 5px 20px; border-radius: 20px; font-size: 11px; font-weight: bold;">
                 🔐 DOCUMENTO AUTENTICADO DIGITALMENTE
             </span>
         </div>
@@ -8980,7 +8980,7 @@ def visualizar_documento(envio_id):
         <style>
             body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; }}
             .info-header {{
-                background: #1a237e;
+                background: #3f464b;
                 color: white;
                 padding: 15px;
                 text-align: center;
@@ -8988,7 +8988,7 @@ def visualizar_documento(envio_id):
             }}
             .info-header .badge {{
                 background: #ffd700;
-                color: #1a237e;
+                color: #3f464b;
                 padding: 5px 15px;
                 border-radius: 20px;
                 font-weight: bold;
@@ -9003,7 +9003,7 @@ def visualizar_documento(envio_id):
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                background: #1a237e;
+                background: #3f464b;
                 color: white;
                 padding: 10px 20px;
                 border-radius: 5px;
@@ -9013,7 +9013,7 @@ def visualizar_documento(envio_id):
                 box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             }}
             .back-btn:hover {{
-                background: #0d1b6b;
+                background: #262b2f;
             }}
             @media print {{
                 .info-header, .back-btn {{ display: none; }}
@@ -9503,7 +9503,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
         /* ESTILO PROFISSIONAL INSTITUCIONAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL */
-        /* PADRÃO DE CORES: AZUL MARINHO (#1a237e), CINZA, DETALHES DE SEGURANÇA */
+        /* PADRÃO DE CORES: AZUL MARINHO (#3f464b), CINZA, DETALHES DE SEGURANÇA */
         * {{
             margin: 0;
             padding: 0;
@@ -9531,9 +9531,9 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             border-radius: 0; /* Remove bordas arredondadas, igual declaração */
             padding: 15mm 20mm 25mm 20mm; /* Padding igual declaração */
             position: relative;
-            border: 0.5pt solid #1a237e; /* Borda fina azul marinho, igual cantoneiras */
-            border-top: 8px solid #1a237e; /* Linha superior mais grossa azul marinho */
-            border-bottom: 8px solid #1a237e; /* Linha inferior mais grossa azul marinho */
+            border: 0.5pt solid #3f464b; /* Borda fina azul marinho, igual cantoneiras */
+            border-top: 8px solid #3f464b; /* Linha superior mais grossa azul marinho */
+            border-bottom: 8px solid #3f464b; /* Linha inferior mais grossa azul marinho */
             margin-bottom: 30px;
             page-break-after: always;
         }}
@@ -9576,13 +9576,13 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             bottom: 6mm; /* Posição igual cantoneira */
             left: 6mm;
             font-size: 8pt;
-            color: #1a237e;
+            color: #3f464b;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 2px;
             background: rgba(255,255,255,0.9);
             padding: 2mm 4mm;
-            border: 0.5pt solid #1a237e;
+            border: 0.5pt solid #3f464b;
             z-index: 20;
         }}
 
@@ -9596,7 +9596,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            border-bottom: 1.5pt solid #1a237e; /* Linha azul marinho */
+            border-bottom: 1.5pt solid #3f464b; /* Linha azul marinho */
             padding-bottom: 4mm;
             margin-bottom: 10mm;
         }}
@@ -9617,7 +9617,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         .institution-name h1 {{
             font-family: "Arial Black", "Arial", sans-serif; /* Fonte igual declaração */
             font-size: 14pt;
-            color: #1a237e; /* Azul marinho */
+            color: #3f464b; /* Azul marinho */
             text-transform: uppercase;
             letter-spacing: 1.5px;
             line-height: 1.2;
@@ -9639,17 +9639,17 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             text-align: right;
             font-family: "Courier New", monospace; /* Fonte monoespaçada */
             font-size: 7pt;
-            color: #1a237e;
+            color: #3f464b;
             background: rgba(26,35,126,0.03); /* Fundo sutil azul */
             padding: 2mm 4mm;
-            border: 0.5pt solid #1a237e;
+            border: 0.5pt solid #3f464b;
             font-weight: 500;
         }}
 
         .meta-identifiers span {{
             display: block;
             margin-top: 2mm;
-            background: #1a237e; /* Fundo azul marinho */
+            background: #3f464b; /* Fundo azul marinho */
             color: #fefefe;
             padding: 1mm 2mm;
             border-radius: 0;
@@ -9668,7 +9668,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         .plano-title h3 {{
             font-family: "Arial Black", "Arial", sans-serif;
             font-size: 18pt;
-            color: #1a237e;
+            color: #3f464b;
             text-transform: uppercase;
             letter-spacing: 4px;
             margin-bottom: 3mm;
@@ -9687,7 +9687,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             top: 50%;
             width: 10mm;
             height: 1pt;
-            background: #1a237e;
+            background: #3f464b;
         }}
 
         .plano-title h3::before {{
@@ -9703,20 +9703,20 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             width: 100%;
             border-collapse: collapse;
             margin: 8mm 0;
-            border: 1pt solid #1a237e; /* Borda azul marinho */
+            border: 1pt solid #3f464b; /* Borda azul marinho */
             background: white;
             font-size: 10.5pt; /* Tamanho de fonte igual declaração */
         }}
 
         .info-table th {{
-            background: #1a237e; /* Fundo azul marinho */
+            background: #3f464b; /* Fundo azul marinho */
             color: white; /* Texto branco */
             font-weight: bold;
             text-align: left;
             vertical-align: top;
             width: 25%;
             padding: 4px 8px;
-            border: 1pt solid #1a237e;
+            border: 1pt solid #3f464b;
             font-size: 10pt;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -9725,7 +9725,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         .info-table td {{
             width: 75%;
             padding: 4px 8px;
-            border: 1pt solid #1a237e;
+            border: 1pt solid #3f464b;
             vertical-align: top;
             text-align: justify;
             background: white;
@@ -9735,7 +9735,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         }}
 
         .info-table th[colspan="2"] {{
-            background: #1a237e; /* Fundo azul marinho */
+            background: #3f464b; /* Fundo azul marinho */
             color: white;
             text-align: center;
             font-size: 11pt;
@@ -9759,8 +9759,8 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         
         .conteudo-programatico strong {{
             font-size: 11pt;
-            color: #1a237e; /* Azul marinho */
-            border-bottom: 0.5pt solid #1a237e; /* Linha azul */
+            color: #3f464b; /* Azul marinho */
+            border-bottom: 0.5pt solid #3f464b; /* Linha azul */
             padding-bottom: 1px;
             margin-bottom: 2px;
             display: inline-block;
@@ -9781,7 +9781,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             font-family: 'Courier New', monospace;
             background: #f5f5f5;  
             padding: 8pt 12pt;
-            border-left: 4px solid #1a237e; /* Borda azul marinho */
+            border-left: 4px solid #3f464b; /* Borda azul marinho */
             margin: 10pt 0;
             text-align: justify;
             border-radius: 0 6px 6px 0;
@@ -9797,7 +9797,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             align-items: flex-end;
             margin-top: 15mm;
             padding-top: 28px;
-            border-top: 2px solid #1a237e; /* Linha azul marinho */
+            border-top: 2px solid #3f464b; /* Linha azul marinho */
             position: relative;
         }}
 
@@ -9808,12 +9808,12 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 
         .digital-signature {{
             font-family: 'Courier New', monospace;
-            background: #1a237e; /* Fundo azul marinho */
+            background: #3f464b; /* Fundo azul marinho */
             padding: 16px 18px;
             border-radius: 0; /* Sem bordas arredondadas */
-            color: #dcf2e7;
+            color: #f1f3f4;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            border-left: 8px solid #0d1b6b; /* Tom mais escuro de azul */
+            border-left: 8px solid #262b2f; /* Tom mais escuro de azul */
             font-size: 13px;
             word-break: break-all;
         }}
@@ -9832,10 +9832,10 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             margin-top: 5px;
             word-break: break-all;
             color: #ffffff;
-            background: #0d1b6b; /* Tom mais escuro */
+            background: #262b2f; /* Tom mais escuro */
             padding: 8px 12px;
             border-radius: 0;
-            border: 0.5px solid #3f51b5;
+            border: 0.5px solid #7a8389;
             font-family: monospace;
             letter-spacing: 1px;
             line-height: 1.5;
@@ -9853,7 +9853,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             background: #f8f9fa; /* Fundo cinza claro */
             padding: 16px 24px;
             border-radius: 0;
-            border-bottom: 5px solid #1a237e; /* Linha inferior azul marinho */
+            border-bottom: 5px solid #3f464b; /* Linha inferior azul marinho */
             text-align: right;
             width: 100%;
             box-shadow: -2px 6px 12px rgba(0,0,0,0.05);
@@ -9863,7 +9863,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             font-family: "Arial Black", "Arial", sans-serif;
             font-size: 22px;
             font-weight: 700;
-            color: #1a237e; /* Azul marinho */
+            color: #3f464b; /* Azul marinho */
             font-style: italic;
             border-bottom: 1px solid #ccc;
             padding-bottom: 6px;
@@ -9889,17 +9889,17 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             font-family: 'Brush Script MT', cursive, 'Parisienne', 'Lucida Handwriting', sans-serif;
             font-size: 34px;
             font-weight: 400;
-            color: #1a237e; /* Azul marinho */
+            color: #3f464b; /* Azul marinho */
             margin-right: 5px;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-            border-bottom: 2px solid #1a237e; /* Linha azul */
+            border-bottom: 2px solid #3f464b; /* Linha azul */
             padding-bottom: 2px;
             line-height: 1.1;
         }}
 
         .date-today {{
             font-size: 16px;
-            background: #1a237e; /* Fundo azul marinho */
+            background: #3f464b; /* Fundo azul marinho */
             color: white;
             padding: 8px 20px;
             border-radius: 0; /* Sem arredondamento */
@@ -9937,7 +9937,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         }}
 
         .qr-code-info strong {{
-            color: #1a237e; /* Azul marinho */
+            color: #3f464b; /* Azul marinho */
         }}
 
         /* RODAPÉ DE VALIDAÇÃO - IGUAL DECLARAÇÃO */
@@ -9966,7 +9966,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             display: inline-block;
             padding: 12px 28px;
             margin: 0 8px;
-            background: #1a237e; /* Azul marinho */
+            background: #3f464b; /* Azul marinho */
             color: white;
             text-decoration: none;
             border-radius: 0; /* Botões retos */
@@ -9976,12 +9976,12 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             font-size: 14px;
             letter-spacing: 1px;
             text-transform: uppercase;
-            border: 1px solid #0d1b6b;
+            border: 1px solid #262b2f;
             transition: all 0.2s;
         }}
 
         .btn:hover {{
-            background: #0d1b6b; /* Tom mais escuro */
+            background: #262b2f; /* Tom mais escuro */
             transform: scale(1.02);
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }}
@@ -9992,7 +9992,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     left: 8mm;
     right: 8mm;
     bottom: 8mm;
-    border: 0.5pt solid #1a237e;
+    border: 0.5pt solid #3f464b;
     pointer-events: none;
     z-index: 2;
 }}
@@ -10004,7 +10004,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     left: 2mm;
     right: 2mm;
     bottom: 2mm;
-    border: 0.3pt dashed #1a237e;
+    border: 0.3pt dashed #3f464b;
     opacity: 0.5;
 }}
 
@@ -10013,7 +10013,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     position: absolute;
     width: 15mm;
     height: 15mm;
-    border: 2pt solid #1a237e;
+    border: 2pt solid #3f464b;
     z-index: 100;
 }}
 
@@ -10123,12 +10123,12 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     height: 4mm;
     background: repeating-linear-gradient(
         90deg,
-        #1a237e 0px,
-        #1a237e 5mm,
+        #3f464b 0px,
+        #3f464b 5mm,
         #ffffff 5mm,
         #ffffff 10mm,
-        #1a237e 10mm,
-        #1a237e 15mm
+        #3f464b 10mm,
+        #3f464b 15mm
     );
     z-index: 10;
 }}
@@ -10157,9 +10157,9 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             }}
             .page {{
                 box-shadow: none;
-                border: 0.5pt solid #1a237e; /* Borda fina */
-                border-top: 8px solid #1a237e;
-                border-bottom: 8px solid #1a237e;
+                border: 0.5pt solid #3f464b; /* Borda fina */
+                border-top: 8px solid #3f464b;
+                border-bottom: 8px solid #3f464b;
                 background: white;
                 padding: 15mm 20mm 25mm 20mm;
                 margin: 0 auto 0 auto;
@@ -10173,7 +10173,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 print-color-adjust: exact;
             }}
             .digital-signature {{
-                background: #1a237e !important;
+                background: #3f464b !important;
                 color: white !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
@@ -10182,13 +10182,13 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 display: none;
             }}
             .info-table th {{
-                background: #1a237e !important;
+                background: #3f464b !important;
                 color: white !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }}
             .info-table th[colspan="2"] {{
-                background: #1a237e !important;
+                background: #3f464b !important;
                 color: white !important;
             }}
         }}
@@ -10422,7 +10422,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                             {hash_completa}
                         </div>
                         <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:13px; background:#0a1e3a; padding:4px 14px; border-radius:18px;">⏻ integridade verificada</span>
+                            <span style="font-size:13px; background:#2b3034; padding:4px 14px; border-radius:18px;">⏻ integridade verificada</span>
                             <span style="font-size:16px;">🕒 {data_formatada}</span>
                         </div>
                     </div>
@@ -11541,12 +11541,12 @@ def mew_anexar_documento():
             <title>Anexar Documento - SiGEU Educacional</title>
             <style>
                 body { font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }
-                .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #1a237e; }
-                h1 { color: #1a237e; }
+                .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #3f464b; }
+                h1 { color: #3f464b; }
                 label { display: block; margin-top: 15px; font-weight: bold; color: #333; }
                 input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 5px; }
-                .btn { background: #1a237e; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px; }
-                .btn:hover { background: #0d1b6b; }
+                .btn { background: #3f464b; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px; }
+                .btn:hover { background: #262b2f; }
                 .info { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #16a34a; }
                 .preview { background: #f1f5f9; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
             </style>
@@ -11713,7 +11713,7 @@ def mew_anexar_documento():
                     left: 8mm;
                     right: 8mm;
                     bottom: 8mm;
-                    border: 0.5pt solid #1a237e;
+                    border: 0.5pt solid #3f464b;
                     pointer-events: none;
                 }}
                 .borda-seguranca::before {{
@@ -11723,14 +11723,14 @@ def mew_anexar_documento():
                     left: 2mm;
                     right: 2mm;
                     bottom: 2mm;
-                    border: 0.3pt dashed #1a237e;
+                    border: 0.3pt dashed #3f464b;
                     opacity: 0.5;
                 }}
                 .cantoneira {{
                     position: absolute;
                     width: 15mm;
                     height: 15mm;
-                    border: 2pt solid #1a237e;
+                    border: 2pt solid #3f464b;
                     z-index: 100;
                 }}
                 .cantoneira.top-left {{ top: 6mm; left: 6mm; border-right: none; border-bottom: none; }}
@@ -11784,13 +11784,13 @@ def mew_anexar_documento():
                     left: 0;
                     right: 0;
                     height: 4mm;
-                    background: repeating-linear-gradient(90deg, #1a237e 0px, #1a237e 5mm, #ffffff 5mm, #ffffff 10mm, #1a237e 10mm, #1a237e 15mm);
+                    background: repeating-linear-gradient(90deg, #3f464b 0px, #3f464b 5mm, #ffffff 5mm, #ffffff 10mm, #3f464b 10mm, #3f464b 15mm);
                     z-index: 10;
                 }}
                 .cabecalho {{
                     position: relative;
                     z-index: 5;
-                    border-bottom: 1.5pt solid #1a237e;
+                    border-bottom: 1.5pt solid #3f464b;
                     padding-bottom: 4mm;
                     margin-bottom: 10mm;
                     display: flex;
@@ -11810,7 +11810,7 @@ def mew_anexar_documento():
                 .instituicao-nome {{
                     font-family: "Arial Black", "Arial", sans-serif;
                     font-size: 14pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     text-transform: uppercase;
                     letter-spacing: 1.5px;
                     line-height: 1.2;
@@ -11826,7 +11826,7 @@ def mew_anexar_documento():
                 .selo-autenticidade {{
                     width: 22mm;
                     height: 22mm;
-                    border: 1.5pt solid #1a237e;
+                    border: 1.5pt solid #3f464b;
                     border-radius: 50%;
                     display: flex;
                     flex-direction: column;
@@ -11834,7 +11834,7 @@ def mew_anexar_documento():
                     justify-content: center;
                     font-family: "Arial", sans-serif;
                     font-size: 6pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     text-align: center;
                     line-height: 1.1;
                     position: relative;
@@ -11861,7 +11861,7 @@ def mew_anexar_documento():
                 .titulo-principal {{
                     font-family: "Arial Black", "Arial", sans-serif;
                     font-size: 18pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     text-transform: uppercase;
                     letter-spacing: 4px;
                     margin-bottom: 3mm;
@@ -11875,19 +11875,19 @@ def mew_anexar_documento():
                     top: 50%;
                     width: 10mm;
                     height: 1pt;
-                    background: #1a237e;
+                    background: #3f464b;
                 }}
                 .titulo-principal::before {{ left: 0; }}
                 .titulo-principal::after {{ right: 0; }}
                 .box-identificacao {{
-                    border: 1pt solid #1a237e;
+                    border: 1pt solid #3f464b;
                     margin: 8mm 0;
                     position: relative;
                     z-index: 5;
                     background: rgba(26,35,126,0.02);
                 }}
                 .box-identificacao-header {{
-                    background: #1a237e;
+                    background: #3f464b;
                     color: #fff;
                     font-family: "Arial Black", "Arial", sans-serif;
                     font-size: 8pt;
@@ -11910,7 +11910,7 @@ def mew_anexar_documento():
                     width: 25mm;
                     font-family: "Arial", sans-serif;
                     font-size: 8pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     font-weight: bold;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
@@ -11930,7 +11930,7 @@ def mew_anexar_documento():
                     background: #f9f9f9;
                     position: relative;
                     z-index: 5;
-                    border-left: 4pt solid #1a237e;
+                    border-left: 4pt solid #3f464b;
                 }}
                 .conteudo-arquivo::before {{
                     content: "📄 CONTEÚDO DO DOCUMENTO";
@@ -11941,11 +11941,11 @@ def mew_anexar_documento():
                     padding: 0 3mm;
                     font-family: "Arial Black", "Arial", sans-serif;
                     font-size: 7pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     letter-spacing: 1px;
                 }}
                 .conteudo-arquivo a {{
-                    color: #1a237e;
+                    color: #3f464b;
                     text-decoration: none;
                     font-weight: bold;
                 }}
@@ -11993,7 +11993,7 @@ def mew_anexar_documento():
                     padding-top: 3mm;
                 }}
                 .rodape-tecnico strong {{
-                    color: #1a237e;
+                    color: #3f464b;
                 }}
                 .data-local {{
                     text-align: right;
@@ -12022,7 +12022,7 @@ def mew_anexar_documento():
                 .assinatura-nome {{
                     font-family: "Arial Black", "Arial", sans-serif;
                     font-size: 11pt;
-                    color: #1a237e;
+                    color: #3f464b;
                     margin-bottom: 1mm;
                 }}
                 .assinatura-cargo {{
@@ -12176,10 +12176,10 @@ def mew_anexar_documento():
                 body {{ font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #16a34a; text-align: center; }}
                 .success {{ color: #16a34a; font-size: 48px; }}
-                h1 {{ color: #1a237e; }}
+                h1 {{ color: #3f464b; }}
                 .code {{ background: #f1f5f9; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 16px; word-break: break-all; margin: 20px 0; }}
-                .btn {{ display: inline-block; background: #1a237e; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 5px; }}
-                .btn:hover {{ background: #0d1b6b; }}
+                .btn {{ display: inline-block; background: #3f464b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 5px; }}
+                .btn:hover {{ background: #262b2f; }}
                 .info {{ background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #16a34a; text-align: left; }}
             </style>
         </head>
@@ -13154,10 +13154,10 @@ def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_document
         </tr>""")
     return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
     <style>
-    @page {{ size:A4; margin:16mm; }} body{{font-family:Arial,sans-serif;color:#18212b;font-size:10.5pt}}
-    .cab{{border-bottom:3px solid #0a2c4e;padding-bottom:12px;margin-bottom:18px}} h1{{font-size:20pt;color:#0a2c4e;margin:0}}
+    @page {{ size:A4; margin:16mm; }} body{{font-family:Arial,sans-serif;color:#222629;font-size:10.5pt}}
+    .cab{{border-bottom:3px solid #3f464b;padding-bottom:12px;margin-bottom:18px}} h1{{font-size:20pt;color:#3f464b;margin:0}}
     .sub{{color:#555;margin-top:5px}} .dados{{display:grid;grid-template-columns:1fr 1fr;gap:7px;background:#f5f7fa;padding:12px;margin:14px 0}}
-    table{{width:100%;border-collapse:collapse;font-size:8.8pt}} th,td{{border:1px solid #aab3bd;padding:6px}} th{{background:#0a2c4e;color:#fff}}
+    table{{width:100%;border-collapse:collapse;font-size:8.8pt}} th,td{{border:1px solid #aab3bd;padding:6px}} th{{background:#3f464b;color:#fff}}
     .resumo{{margin-top:18px;padding:12px;border:1px solid #c8d0d8}} .auth{{margin-top:18px;display:flex;gap:16px;align-items:center;border-top:1px solid #bbb;padding-top:12px}}
     .auth img{{width:90px;height:90px}} .hash{{font-family:monospace;font-size:7pt;word-break:break-all}}
     </style></head><body>
@@ -13177,7 +13177,7 @@ def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
     data_conclusao = d.get("data_realizacao") or datetime.now().strftime("%d/%m/%Y")
     data_conclusao = str(data_conclusao).split(" ")[0]
     return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
-    <style>@page{{size:A4;margin:20mm}}body{{font-family:Arial,sans-serif;color:#1b2430;line-height:1.65}}.box{{border:1px solid #9ba7b4;padding:24px;min-height:230mm;position:relative}}h1{{text-align:center;color:#0a2c4e;font-size:20pt;margin:15mm 0 20mm}}p{{text-align:justify;font-size:12pt}}.rod{{position:absolute;bottom:20mm;left:24px;right:24px;border-top:1px solid #bbb;padding-top:12px;display:flex;align-items:center;gap:15px}}.rod img{{width:86px}}.hash{{font-size:7pt;font-family:monospace;word-break:break-all}}</style></head><body>
+    <style>@page{{size:A4;margin:20mm}}body{{font-family:Arial,sans-serif;color:#222629;line-height:1.65}}.box{{border:1px solid #9ba7b4;padding:24px;min-height:230mm;position:relative}}h1{{text-align:center;color:#3f464b;font-size:20pt;margin:15mm 0 20mm}}p{{text-align:justify;font-size:12pt}}.rod{{position:absolute;bottom:20mm;left:24px;right:24px;border-top:1px solid #bbb;padding-top:12px;display:flex;align-items:center;gap:15px}}.rod img{{width:86px}}.hash{{font-size:7pt;font-family:monospace;word-break:break-all}}</style></head><body>
     <div class='box'><div><b>SIGEU EDUCACIONAL</b><br><small>Declaração acadêmica eletrônica</small></div><h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
     <p>Declaramos, para os devidos fins, que <b>{escape(aluno.get('nome',''))}</b>, CPF {escape(aluno.get('cpf_formatado',''))}, matrícula/RA <b>{escape(aluno.get('ra',''))}</b>, concluiu com aproveitamento a disciplina <b>{escape(d['nome'])}</b>, com carga horária de <b>{d['carga_horaria']} horas</b>, frequência acadêmica registrada de <b>{d['frequencia']:.0f}%</b> e média final <b>{nota_txt}</b>.</p>
     <p>A conclusão foi registrada em {escape(data_conclusao)}. Docente/Responsável acadêmico registrado: <b>{escape(d['docente'])}</b>.</p>
@@ -13369,7 +13369,7 @@ def solicitar_documentos_integrados_modal():
       <input type='hidden' id='docTipo' value='{escape(tipo)}'>
       <input type='hidden' id='docNome' value='{escape(nome)}'>
       <input type='hidden' id='docTiposIntegrados' value='{escape(tipos_json)}'>
-      <div style='background:#eef6ff;border-left:4px solid #0a2c4e;padding:12px;margin-bottom:14px'>
+      <div style='background:#eef6ff;border-left:4px solid #3f464b;padding:12px;margin-bottom:14px'>
         <b>Regra automática:</b> somente disciplinas com no mínimo 20 dias, todos os capítulos/avaliações concluídos e avaliação final ou Projeto Final concluído, corrigido e com nota podem ser solicitadas.
       </div>
       <div class='form-group'><label><b>Selecione uma, várias ou todas as disciplinas elegíveis</b></label>
@@ -13640,7 +13640,7 @@ def url_quote(texto):
 def _recibo_pagamento_html(aluno, valor, pagamento_id, data_pagamento, disciplinas):
     lista = "".join(f"<li>{escape(x)}</li>" for x in disciplinas) or "<li>Serviços educacionais contratados</li>"
     valor_txt = f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4;margin:18mm}}body{{font-family:Arial;color:#18212b}}h1{{color:#0a2c4e}}.alerta{{background:#fff7db;border-left:4px solid #b8860b;padding:10px}}table{{width:100%;border-collapse:collapse}}td{{border-bottom:1px solid #ddd;padding:8px}}</style></head><body>
+    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4;margin:18mm}}body{{font-family:Arial;color:#222629}}h1{{color:#3f464b}}.alerta{{background:#fff7db;border-left:4px solid #b8860b;padding:10px}}table{{width:100%;border-collapse:collapse}}td{{border-bottom:1px solid #ddd;padding:8px}}</style></head><body>
     <h1>RECIBO ELETRÔNICO / COMPROVANTE DE PAGAMENTO</h1>
     <p><b>SIGEU Educacional</b></p><div class='alerta'><b>Importante:</b> este recibo comprova o pagamento no sistema acadêmico e não substitui NFS-e ou outro documento fiscal oficial quando legalmente exigido.</div>
     <table><tr><td>Aluno</td><td>{escape(aluno.get('nome',''))}</td></tr><tr><td>Matrícula/RA</td><td>{escape(aluno.get('ra',''))}</td></tr><tr><td>Valor</td><td>{valor_txt}</td></tr><tr><td>Pagamento</td><td>{escape(str(pagamento_id or ''))}</td></tr><tr><td>Data</td><td>{escape(data_pagamento or '')}</td></tr></table>
@@ -13692,7 +13692,7 @@ def enviar_boas_vindas_titan(aluno_id, referencia, pagamento_id=None):
     msg["From"] = formataddr((from_name, usuario))
     msg["To"] = aluno["email"]
     msg.set_content(f"Bem-vindo ao SIGEU. Matrícula: {aluno['ra']}. Senha inicial: seu CPF, somente números. Acesse: {login_url}")
-    corpo = f"""<html><body style='font-family:Arial;color:#1f2937'><h2>Bem-vindo ao SIGEU Educacional</h2><p>Olá, <b>{escape(aluno['nome'])}</b>.</p><p>Seu pagamento foi confirmado e sua matrícula está ativa.</p><div style='background:#f2f6fb;padding:16px;border-left:4px solid #0a2c4e'><b>Matrícula/RA:</b> {escape(aluno['ra'])}<br><b>Senha inicial:</b> seu CPF, somente números</div><p>Ao primeiro acesso, o sistema apresentará o contrato educacional para assinatura eletrônica. Após a assinatura, as disciplinas já vinculadas à matrícula ficarão disponíveis.</p><p><a href='{login_url}'>Acessar a Plataforma Acadêmica</a></p><p>Segue em anexo o recibo eletrônico/comprovante do pagamento. Ele não substitui NFS-e quando esta for legalmente exigida.</p><p>Atenciosamente,<br><b>SIGEU Educacional</b></p></body></html>"""
+    corpo = f"""<html><body style='font-family:Arial;color:#1f2937'><h2>Bem-vindo ao SIGEU Educacional</h2><p>Olá, <b>{escape(aluno['nome'])}</b>.</p><p>Seu pagamento foi confirmado e sua matrícula está ativa.</p><div style='background:#f2f6fb;padding:16px;border-left:4px solid #3f464b'><b>Matrícula/RA:</b> {escape(aluno['ra'])}<br><b>Senha inicial:</b> seu CPF, somente números</div><p>Ao primeiro acesso, o sistema apresentará o contrato educacional para assinatura eletrônica. Após a assinatura, as disciplinas já vinculadas à matrícula ficarão disponíveis.</p><p><a href='{login_url}'>Acessar a Plataforma Acadêmica</a></p><p>Segue em anexo o recibo eletrônico/comprovante do pagamento. Ele não substitui NFS-e quando esta for legalmente exigida.</p><p>Atenciosamente,<br><b>SIGEU Educacional</b></p></body></html>"""
     msg.add_alternative(corpo, subtype="html")
     msg.add_attachment(recibo_pdf, maintype="application", subtype="pdf", filename=f"recibo_matricula_{aluno['ra']}.pdf")
 
@@ -13985,3 +13985,4 @@ if __name__ == "__main__":
     
     # Só roda localmente
     app.run(debug=True)
+

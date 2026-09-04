@@ -9,12 +9,12 @@
    1. TOKENS / PALETA
    ---------------------------------------------------------- */
 :root {
-    --sigeu-navy-950: #082b4a;
-    --sigeu-navy-900: #0d3c68;
-    --sigeu-navy-800: #154f7d;
-    --sigeu-navy-700: #1b5f93;
-    --sigeu-navy-100: #e9f0f7;
-    --sigeu-navy-050: #f4f8fb;
+    --sigeu-navy-950: #252a2e;
+    --sigeu-navy-900: #343a40;
+    --sigeu-navy-800: #444b50;
+    --sigeu-navy-700: #59636a;
+    --sigeu-navy-100: #eceff1;
+    --sigeu-navy-050: #f7f8f9;
 
     --sigeu-orange-600: #c96d22;
     --sigeu-orange-500: #d87924;
@@ -35,15 +35,15 @@
     --sigeu-border: #c7d1d9;
     --sigeu-border-soft: #dde4e9;
 
-    --sigeu-text: #263238;
+    --sigeu-text: #202428;
     --sigeu-muted: #687984;
     --sigeu-white: #ffffff;
 
     --sigeu-radius: 4px;
     --sigeu-radius-lg: 7px;
 
-    --sigeu-shadow: 0 2px 8px rgba(13, 60, 104, 0.08);
-    --sigeu-shadow-strong: 0 5px 18px rgba(13, 60, 104, 0.13);
+    --sigeu-shadow: 0 2px 8px rgba(52,58,64, 0.08);
+    --sigeu-shadow-strong: 0 5px 18px rgba(52,58,64, 0.13);
 
     --sigeu-sidebar: 230px;
     --sigeu-topbar: 66px;
@@ -213,7 +213,7 @@ hr {
 .user-profile {
     background: linear-gradient(
         180deg,
-        #143f67 0%,
+        #3d4348 0%,
         var(--sigeu-navy-900) 100%
     );
     color: var(--sigeu-white);
@@ -879,8 +879,8 @@ body.login-page,
 .login-page {
     min-height: 100vh;
     background:
-        linear-gradient(rgba(13,60,104,.93), rgba(8,43,74,.97)),
-        #0d3c68;
+        linear-gradient(rgba(52,58,64,.93), rgba(8,43,74,.97)),
+        #343a40;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1568,7 +1568,7 @@ body {
     min-height: 100vh;
     background: #e8ecef;
     background-image:
-        linear-gradient(rgba(13,60,104,.86), rgba(8,43,74,.92)),
+        linear-gradient(rgba(52,58,64,.86), rgba(8,43,74,.92)),
         linear-gradient(120deg, #1a557f, #0a2f50);
     display: flex;
     align-items: center;
@@ -1756,18 +1756,18 @@ body.login-page{
     box-shadow:0 8px 24px rgba(20,45,65,.16) !important;
     border-radius:4px !important;
 }
-.login-academic-header{background:#0d3c68 !important;}
+.login-academic-header{background:#343a40 !important;}
 
 /* Disciplinas: preservar azul do aluno, mas com geometria de portal acadêmico */
 .discipline-header,.course-hero,.disciplina-header{
-    background:#0d3c68 !important;
+    background:#343a40 !important;
     background-image:none !important;
     border-bottom:4px solid #d87924 !important;
     border-radius:0 !important;
 }
 .chapter-card,.capitulo-card,.chapter-content,.content-card{
     border-radius:4px !important;
-    box-shadow:0 2px 7px rgba(13,60,104,.08) !important;
+    box-shadow:0 2px 7px rgba(52,58,64,.08) !important;
 }
 
 /* Situação acadêmica: mais densa e institucional */
@@ -1781,27 +1781,27 @@ body.instrucoes-page .content-area{background:#eef2f5 !important;}
 body.prova-page .prova-container,
 body.instrucoes-page .prova-container{
     max-width:900px !important;margin:18px auto !important;background:#fff !important;
-    border:1px solid #c8d2da !important;border-top:5px solid #0d3c68 !important;
-    border-radius:3px !important;box-shadow:0 3px 12px rgba(13,60,104,.08) !important;
+    border:1px solid #c8d2da !important;border-top:5px solid #343a40 !important;
+    border-radius:3px !important;box-shadow:0 3px 12px rgba(52,58,64,.08) !important;
     padding:28px 34px !important;
 }
 body.prova-page .prova-header,
 body.instrucoes-page .disciplina-info{
-    background:#eef3f7 !important;border:1px solid #c8d5df !important;
-    border-left:4px solid #0d3c68 !important;border-radius:2px !important;
+    background:#f1f3f4 !important;border:1px solid #c9d0d5 !important;
+    border-left:4px solid #343a40 !important;border-radius:2px !important;
     text-align:left !important;padding:16px 18px !important;
 }
 body.prova-page .questao{
     background:#fff !important;border:1px solid #cbd5dd !important;
-    border-left:4px solid #0d3c68 !important;border-radius:2px !important;
+    border-left:4px solid #343a40 !important;border-radius:2px !important;
     padding:18px 20px !important;margin-bottom:16px !important;
 }
-body.prova-page .questao h3{color:#0d3c68 !important;font-size:13px !important;text-transform:uppercase;letter-spacing:.04em;}
+body.prova-page .questao h3{color:#343a40 !important;font-size:13px !important;text-transform:uppercase;letter-spacing:.04em;}
 body.prova-page .opcao{
     border:1px solid #cbd5dd !important;background:#f9fafb !important;border-radius:2px !important;
     padding:12px 14px !important;margin:7px 0 !important;
 }
-body.prova-page .opcao:hover{background:#eef4f8 !important;border-color:#7897ad !important;}
+body.prova-page .opcao:hover{background:#f3f4f5 !important;border-color:#8b949b !important;}
 body.prova-page .opcao.selected{background:#e7f2ea !important;border-color:#4b8a61 !important;box-shadow:inset 4px 0 #2f7549;}
 body.prova-page .timer-container{
     background:#fff !important;color:#9b2f2f !important;border:1px solid #d5b0b0 !important;
@@ -1823,3 +1823,16 @@ body.instrucoes-page .checkbox-container{padding:12px;border:1px solid #cbd5dd;b
     body.prova-page .questao{padding:14px 12px !important;}
     body.prova-page .opcao{padding:13px 11px !important;min-height:46px;}
 }
+
+
+/* ===== PORTAL 07 TOTAL — BASE GLOBAL SEM AZUL ===== */
+:root{--sigeu-navy-950:#202428;--sigeu-navy-900:#343a40;--sigeu-navy-800:#444b50;--sigeu-navy-700:#59636a;--sigeu-navy-100:#eceff1;--sigeu-navy-050:#f7f8f9;--sigeu-text:#202428;--sigeu-muted:#586169;}
+.topbar{background:#343a40!important;background-image:none!important;border-bottom-color:#c86d20!important;}
+.sidebar{background:#f1f3f4!important;background-image:none!important;color:#202428!important;}
+.user-profile{background:#3d4348!important;background-image:none!important;border-bottom:3px solid #c86d20!important;}
+.main-menu,.section-menu{background:#f1f3f4!important;color:#202428!important;}
+.menu-item,.section-menu-item{background:#f7f8f9!important;color:#202428!important;}
+.menu-item i,.section-menu-item i{color:#4a5157!important;}
+.menu-item.active,.section-menu-item.active{background:#fff!important;color:#a85616!important;border-left:4px solid #c86d20!important;}
+.content-area{background:#fff!important;color:#202428!important;}
+.page-title,.section-title,.card-header{background:#eceff1!important;background-image:none!important;color:#202428!important;}

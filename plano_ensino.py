@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Sistema de Geração de Planos de Ensino - SiGEU Educação
 VERSÃO REFORMULADA - SÓ GERA O HTML, NÃO FAZ AUTENTICAÇÃO
@@ -32,27 +32,27 @@ METODOLOGIA_FIXA = """
 SISTEMA_AVALIACAO_FIXO = """
 <div style="font-family: 'Inter', 'Times New Roman', serif; text-align: justify; line-height: 1.6;">
     <p style="margin-bottom: 12pt; text-align: justify;">
-        <span style="font-weight: 700; color: #1a365d;">CONCLUSÃO:</span> Aprovação com média final igual ou superior a 6,0 (seis) e frequência 
+        <span style="font-weight: 700; color: #343a40;">CONCLUSÃO:</span> Aprovação com média final igual ou superior a 6,0 (seis) e frequência 
         mínima de 75% (setenta e cinco por cento) das atividades programadas.
     </p>
     
     <p style="margin-bottom: 6pt; text-align: justify;">
-        <span style="font-weight: 700; color: #1a365d;">SISTEMA DE AVALIAÇÃO:</span> Quatro avaliações parciais 
+        <span style="font-weight: 700; color: #343a40;">SISTEMA DE AVALIAÇÃO:</span> Quatro avaliações parciais 
         (AV1, AV2, AV3, AV4) com valor de 4,0 e uma Prova Final (PF) com valor 6,0.
     </p>
     
-    <p style="margin-bottom: 6pt; text-align: justify; background: #ebf8ff; padding: 8pt 12pt; border-left: 4px solid #3182ce; border-radius: 0 6px 6px 0;">
+    <p style="margin-bottom: 6pt; text-align: justify; background: #f1f3f4; padding: 8pt 12pt; border-left: 4px solid #6c757d; border-radius: 0 6px 6px 0;">
         <span style="font-weight: 700;">MÉDIA PARCIAL (MP):</span> MP = (AV1 + AV2 + AV3 + AV4) ÷ 4
     </p>
     
-    <p style="margin-bottom: 6pt; text-align: justify; background: #ebf8ff; padding: 8pt 12pt; border-left: 4px solid #3182ce; border-radius: 0 6px 6px 0;">
+    <p style="margin-bottom: 6pt; text-align: justify; background: #f1f3f4; padding: 8pt 12pt; border-left: 4px solid #6c757d; border-radius: 0 6px 6px 0;">
         <span style="font-weight: 700;">MÉDIA FINAL (MF):</span> MF = (MP × 4 + PFE × 6) ÷ 10
     </p>
     
     <p style="margin-bottom: 6pt; text-align: justify; margin-top: 10pt;">
-        <span style="font-weight: 700; color: #1a365d;">CONCEITOS:</span>
+        <span style="font-weight: 700; color: #343a40;">CONCEITOS:</span>
     </p>
-    <ul style="margin-left:10pt; margin-bottom:2pt; text-align:justify; list-style-type:square; color:#2c5282;">
+    <ul style="margin-left:10pt; margin-bottom:2pt; text-align:justify; list-style-type:square; color:#4d555b;">
         <li style="display:inline-block; width:48%;">&lt; 5,0 pontos → <span style="font-weight:700;">INSUFICIENTE</span></li>
         <li style="display:inline-block; width:48%;">5,0 a 6,9 pontos → <span style="font-weight:700;">REGULAR</span></li><br>
         <li style="display:inline-block; width:48%;">7,0 a 8,9 pontos → <span style="font-weight:700;">BOM</span></li>
@@ -132,7 +132,7 @@ def gerar_html_plano(dados):
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ 
-            background: #f7fafc; 
+            background: #f8f9fa; 
             font-family: 'Inter', sans-serif; 
             display: flex; 
             flex-direction: column; 
@@ -148,7 +148,7 @@ def gerar_html_plano(dados):
             padding: 48px 56px;
             position: relative;
             border: 1px solid #e2e8f0;
-            border-top: 3px solid #2b6cb0;
+            border-top: 3px solid #5b6368;
             margin-bottom: 30px;
             break-after: page;
             page-break-after: always;
@@ -165,7 +165,7 @@ def gerar_html_plano(dados):
         .watermark-text {{
             position: absolute;
             font-size: 11px;
-            color: #2d3748;
+            color: #2d3337;
             bottom: 25px; right: 40px;
             padding: 4px 12px;
             border-radius: 0;
@@ -179,7 +179,7 @@ def gerar_html_plano(dados):
             color: #4a5568;
             font-weight: 500;
             letter-spacing: 1px;
-            background: #f7fafc;
+            background: #f8f9fa;
             padding: 4px 10px;
             border-radius: 0;
             border: 0.5px solid #e2e8f0;
@@ -190,7 +190,7 @@ def gerar_html_plano(dados):
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            border-bottom: 2px solid #2b6cb0;
+            border-bottom: 2px solid #5b6368;
             padding-bottom: 20px;
             margin-bottom: 32px;
         }}
@@ -199,7 +199,7 @@ def gerar_html_plano(dados):
         .institution-name h1 {{
             font-size: 28px;
             font-weight: 700;
-            color: #1a365d;
+            color: #343a40;
             text-transform: uppercase;
             letter-spacing: 1px;
         }}
@@ -208,17 +208,17 @@ def gerar_html_plano(dados):
             font-weight: 500;
             color: #4a5568;
             margin-top: 6px;
-            border-left: 3px solid #3182ce;
+            border-left: 3px solid #6c757d;
             padding-left: 12px;
-            background: #ebf8ff;
+            background: #f1f3f4;
             padding: 6px 0 6px 12px;
             border-radius: 0;
         }}
         .meta-identifiers {{
             text-align: right;
             font-size: 11px;
-            color: #2d3748;
-            background: #f7fafc;
+            color: #2d3337;
+            background: #f8f9fa;
             padding: 12px 16px;
             border-radius: 0;
             border: 0.5px solid #e2e8f0;
@@ -226,7 +226,7 @@ def gerar_html_plano(dados):
         .meta-identifiers span {{
             display: block;
             margin-top: 6px;
-            background: #2b6cb0;
+            background: #5b6368;
             color: #ffffff;
             padding: 4px 8px;
             border-radius: 0;
@@ -241,10 +241,10 @@ def gerar_html_plano(dados):
         .plano-title h3 {{
             font-size: 32px;
             font-weight: 700;
-            color: #1a365d;
+            color: #343a40;
             letter-spacing: 4px;
             text-transform: uppercase;
-            border-bottom: 2px solid #2b6cb0;
+            border-bottom: 2px solid #5b6368;
             display: inline-block;
             padding-bottom: 10px;
         }}
@@ -257,9 +257,9 @@ def gerar_html_plano(dados):
             background: white;
         }}
         .info-table th {{
-            background: #edf2f7;
+            background: #eceff1;
             font-weight: 600;
-            color: #1a365d;
+            color: #343a40;
             text-align: left;
             width: 25%;
             padding: 10pt;
@@ -274,24 +274,24 @@ def gerar_html_plano(dados):
             vertical-align: top;
             text-align: justify;
             background: white;
-            color: #2d3748;
+            color: #2d3337;
             font-size: 11pt;
             line-height: 1.5;
         }}
         .info-table th[colspan="2"] {{
-            background: #2b6cb0;
+            background: #5b6368;
             color: white;
             text-align: center;
             font-size: 12pt;
             font-weight: 600;
         }}
         
-        .ementa-topicos {{ text-align: justify; line-height: 1.7; color: #2d3748; }}
-        .conteudo-programatico {{ white-space: pre-line; color: #2d3748; }}
+        .ementa-topicos {{ text-align: justify; line-height: 1.7; color: #2d3337; }}
+        .conteudo-programatico {{ white-space: pre-line; color: #2d3337; }}
         .conteudo-programatico strong {{ 
             font-size: 12pt; 
-            color: #1a365d; 
-            border-bottom: 1px solid #3182ce; 
+            color: #343a40; 
+            border-bottom: 1px solid #6c757d; 
             padding-bottom: 2px;
             display: inline-block;
             margin-top: 10px;
@@ -302,13 +302,13 @@ def gerar_html_plano(dados):
             margin-bottom: 6px; 
             text-align: justify;
             line-height: 1.5;
-            color: #2d3748;
+            color: #2d3337;
         }}
         .bibliografia-item {{ 
             margin-bottom: 8px; 
             line-height: 1.4;
             text-align: justify;
-            color: #2d3748;
+            color: #2d3337;
         }}
         
         .footer-area {{
@@ -338,7 +338,7 @@ def gerar_html_plano(dados):
             display: inline-block;
             padding: 12px 28px;
             margin: 0 8px;
-            background: #2b6cb0;
+            background: #5b6368;
             color: white;
             text-decoration: none;
             border-radius: 0;
@@ -347,16 +347,16 @@ def gerar_html_plano(dados):
             font-size: 13px;
             letter-spacing: 1px;
             text-transform: uppercase;
-            border: 1px solid #2b6cb0;
+            border: 1px solid #5b6368;
         }}
-        .btn:hover {{ background: #1a365d; }}
+        .btn:hover {{ background: #343a40; }}
         
         @media print {{
             body {{ background: white; padding: 0; }}
             .page {{ box-shadow: none; border: 1px solid #cbd5e0; margin: 0; }}
             .btn {{ display: none; }}
-            .info-table th {{ background: #edf2f7 !important; -webkit-print-color-adjust: exact; }}
-            .info-table th[colspan="2"] {{ background: #2b6cb0 !important; color: white !important; }}
+            .info-table th {{ background: #eceff1 !important; -webkit-print-color-adjust: exact; }}
+            .info-table th[colspan="2"] {{ background: #5b6368 !important; color: white !important; }}
         }}
     </style>
 </head>
