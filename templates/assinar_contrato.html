@@ -28,9 +28,36 @@
         .assinatura-acoes{display:flex;gap:10px;flex-wrap:wrap}
         .status-ok{color:#86efac;font-weight:700}.status-pendente{color:#fde68a;font-weight:700}
         @media(max-width:700px){iframe{height:560px}.container{padding:18px 12px}h1{font-size:23px}}
+    
+        /* Portal acadêmico tradicional */
+        body{background:#e7ebee;color:#263238;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
+        .container{max-width:980px;background:#fff;margin:18px auto;padding:22px;border:1px solid #c5d0d8;border-top:5px solid #0d3c68;box-shadow:0 4px 16px rgba(13,60,104,.10)}
+        h1{font-size:22px;color:#0d3c68;border-bottom:1px solid #cbd5dd;padding-bottom:12px}
+        h2{font-size:16px;color:#0d3c68;border-left:4px solid #d87924;padding:8px 10px;background:#eef3f7}
+        .aviso,.juridico,.privacidade{border-radius:3px;box-shadow:none}
+        .aviso{background:#eef3f7;color:#263238;border:1px solid #cbd5dd;border-left:4px solid #0d3c68}
+        .juridico{background:#fafbfc;border-left:4px solid #0d3c68}
+        .privacidade{background:#fff8ed;border-left:4px solid #d87924}
+        iframe{height:640px;border:1px solid #c4ced6;border-radius:2px}
+        .btn{border-radius:3px;padding:11px 16px}.principal{background:#0d3c68}.camera{background:#1b5f93}.secundario{background:#5d6f7b}
+        .check{border-radius:3px;background:#fff;border-left:4px solid #d87924}
+        .camera-box{background:#f5f7f9;border:1px solid #cbd5dd;border-radius:3px;color:#263238}
+        .fallback{background:#e8eef3;border-radius:2px;color:#263238}
+        .fallback input{color:#263238!important}
+        canvas{border:1px solid #8ca1b1;border-left:4px solid #0d3c68;border-radius:2px;height:190px}
+        .status-ok{color:#237047}.status-pendente{color:#8a6416}
+        .signature-mode{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 12px}.signature-mode button{margin:0}
+        .typed-signature{display:none;border:1px solid #cbd5dd;background:#f8fafb;padding:14px;margin-bottom:10px}
+        .typed-signature label{display:block;font-weight:700;color:#0d3c68;margin-bottom:6px}
+        .typed-signature input{width:100%;padding:11px;border:1px solid #aebcc6;border-radius:2px;font-size:16px}
+        .typed-preview{min-height:62px;margin-top:10px;padding:10px 14px;background:#fff;border-bottom:1px solid #555;font-family:"Segoe Script","Brush Script MT",cursive;font-size:31px;color:#111}
+        .sigeu-toast{position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:99999;width:min(92vw,560px);background:#fff;border:1px solid #c4ced6;border-left:5px solid #d87924;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:14px 42px 14px 15px;color:#263238;opacity:0;pointer-events:none;transition:.18s ease}
+        .sigeu-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}.sigeu-toast strong{display:block;color:#0d3c68;margin-bottom:3px}.sigeu-toast button{position:absolute;right:10px;top:8px;border:0;background:transparent;font-size:20px;cursor:pointer}
+        @media(max-width:700px){.container{margin:0;padding:13px 10px;border-left:0;border-right:0}iframe{height:62vh}h1{font-size:18px}.check{font-size:12px}.btn{width:100%;margin-top:7px}.signature-mode .btn{width:auto;flex:1 1 130px}.assinatura-acoes{flex-direction:column}video,#fotoPreview{max-height:52vh}canvas{height:170px}}
     </style>
 </head>
 <body>
+<div id="sigeuToast" class="sigeu-toast"><button type="button" onclick="fecharAviso()">×</button><strong id="sigeuToastTitulo">Atenção</strong><span id="sigeuToastTexto"></span></div>
 <div class="container">
     <h1>Assinatura do Contrato Educacional</h1>
     <div class="aviso">
@@ -75,7 +102,16 @@
         </div>
 
         <h2>3. Assinatura grafada</h2>
-        <p>Assine no quadro abaixo usando o mouse, caneta ou dedo.</p>
+        <p>Você pode assinar desenhando com o mouse/dedo ou digitando seu nome para gerar a representação grafada da assinatura.</p>
+        <div class="signature-mode">
+            <button type="button" class="btn principal" onclick="modoAssinatura('desenhar')">DESENHAR ASSINATURA</button>
+            <button type="button" class="btn secundario" onclick="modoAssinatura('digitar')">DIGITAR MEU NOME</button>
+        </div>
+        <div class="typed-signature" id="typedSignature">
+            <label for="nomeAssinatura">Nome para assinatura</label>
+            <input id="nomeAssinatura" type="text" value="{{ contrato.nome }}" autocomplete="name" oninput="atualizarAssinaturaDigitada()">
+            <div class="typed-preview" id="typedPreview">{{ contrato.nome }}</div>
+        </div>
         <canvas id="assinaturaCanvas"></canvas>
 
         <form method="POST" id="formAssinatura" onsubmit="return prepararEnvio()">
@@ -98,6 +134,36 @@
     let assinou = false;
     let streamCamera = null;
     let fotoCapturada = '';
+    let modoAtualAssinatura = 'desenhar';
+
+    function avisoBonito(texto, titulo='Atenção'){
+        document.getElementById('sigeuToastTitulo').textContent=titulo;
+        document.getElementById('sigeuToastTexto').textContent=texto;
+        document.getElementById('sigeuToast').classList.add('show');
+        clearTimeout(window.__toastTimer);
+        window.__toastTimer=setTimeout(fecharAviso,4200);
+    }
+    function fecharAviso(){document.getElementById('sigeuToast').classList.remove('show')}
+    function modoAssinatura(modo){
+        modoAtualAssinatura=modo;
+        const typed=document.getElementById('typedSignature');
+        const canvas=document.getElementById('assinaturaCanvas');
+        if(modo==='digitar'){
+            typed.style.display='block';canvas.style.display='none';atualizarAssinaturaDigitada();
+        }else{typed.style.display='none';canvas.style.display='block';setTimeout(ajustarAssinatura,50)}
+    }
+    function atualizarAssinaturaDigitada(){
+        const nome=document.getElementById('nomeAssinatura').value.trim();
+        document.getElementById('typedPreview').textContent=nome || 'Sua assinatura';
+        assinou=nome.length>=3;
+    }
+    function gerarAssinaturaDigitada(){
+        const nome=document.getElementById('nomeAssinatura').value.trim();
+        const c=document.createElement('canvas'); c.width=1200;c.height=260;
+        const x=c.getContext('2d'); x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+        x.fillStyle='#111';x.font='italic 76px cursive';x.textBaseline='middle';x.fillText(nome,45,130);
+        return c.toDataURL('image/png');
+    }
 
     function mostrarAssinatura(){
         document.getElementById('assinaturaArea').style.display='block';
@@ -142,11 +208,11 @@
 
     async function abrirCamera(){
         if(!document.getElementById('aceiteFoto').checked){
-            alert('Marque primeiro a autorização do registro fotográfico.');
+            avisoBonito('Marque primeiro a autorização do registro fotográfico.');
             return;
         }
         if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-            alert('Este navegador não disponibilizou acesso direto à câmera. Use o campo de foto alternativo.');
+            avisoBonito('Este navegador não disponibilizou acesso direto à câmera. Use o campo de foto alternativo.','Câmera indisponível');
             return;
         }
         try{
@@ -168,7 +234,7 @@
     function capturarFoto(){
         const video=document.getElementById('video');
         if(!streamCamera || !video.videoWidth){
-            alert('Abra a câmera primeiro.');
+            avisoBonito('Abra a câmera primeiro.');
             return;
         }
         const canvas=document.getElementById('fotoCanvas');
@@ -200,7 +266,7 @@
     function usarFotoArquivo(input){
         const file=input.files && input.files[0];
         if(!file)return;
-        if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return}
+        if(!file.type.startsWith('image/')){avisoBonito('Selecione uma imagem válida.');return}
         const reader=new FileReader();
         reader.onload=function(ev){
             const img=new Image();
@@ -227,12 +293,12 @@
     function prepararEnvio(){
         const ac=document.getElementById('aceiteContrato').checked;
         const af=document.getElementById('aceiteFoto').checked;
-        if(!ac){alert('Você precisa marcar a declaração de leitura e aceite do contrato.');return false}
-        if(!af){alert('Você precisa marcar a autorização específica do registro fotográfico.');return false}
-        if(!fotoCapturada){alert('Capture ou selecione a fotografia antes de assinar.');return false}
-        if(!assinou){alert('Faça sua assinatura no quadro antes de finalizar.');return false}
+        if(!ac){avisoBonito('Você precisa marcar a declaração de leitura e aceite do contrato.');return false}
+        if(!af){avisoBonito('Você precisa marcar a autorização específica do registro fotográfico.');return false}
+        if(!fotoCapturada){avisoBonito('Capture ou selecione a fotografia antes de assinar.');return false}
+        if(!assinou){avisoBonito('Faça sua assinatura ou digite seu nome antes de finalizar.');return false}
 
-        document.getElementById('assinatura').value=assinaturaCanvas.toDataURL('image/png');
+        document.getElementById('assinatura').value=(modoAtualAssinatura==='digitar' ? gerarAssinaturaDigitada() : assinaturaCanvas.toDataURL('image/png'));
         document.getElementById('fotoAssinatura').value=fotoCapturada;
         document.getElementById('aceiteContratoHidden').value='1';
         document.getElementById('aceiteFotoHidden').value='1';

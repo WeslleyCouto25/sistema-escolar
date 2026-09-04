@@ -1,0 +1,17 @@
+SIGEU — AJUSTE VISUAL FINAL
+
+Escopo desta revisão: SOMENTE apresentação/UX solicitada. Nenhuma regra acadêmica, financeira, Mercado Pago, documentos integrados, contrato jurídico ou banco foi removida.
+
+Alterados:
+- static/css/style.css — refinamento global Portal Acadêmico Tradicional e responsividade.
+- templates/index.html — home mais compacta, fundo cinza animado, tipografia/figuras menores, partículas reduzidas.
+- templates/contrato_padrao.html — visualização responsiva do contrato em desktop/tablet/celular; regras de impressão preservadas.
+- templates/assinar_contrato.html — visual acadêmico claro, avisos estilizados, responsivo e opção de assinatura desenhada OU nome digitado convertido em imagem de assinatura para o mesmo backend existente.
+- templates/instrucoes_prova.html — aparência de folha de avaliação acadêmica e responsividade.
+- templates/miniprova.html — aparência de prova, alternativas e timer mais institucionais/responsivos.
+- templates/disciplina_alternativa.html — removida dependência de Google Font; usa tema global já existente.
+- templates/situacao_academica.html — removida dependência de Google Font; usa tema global refinado.
+
+Observações:
+- “Registro fotográfico indisponível” em contrato já assinado anteriormente é compatível com registro legado sem foto armazenada; não foi fabricada foto retroativa.
+- O erro de Solicitação Integrada visto no print não foi alterado nesta revisão porque o pedido atual foi focar no design. Ele exige o traceback/log do Render para diagnóstico seguro.

@@ -2,39 +2,39 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>MEW - Login do Gestor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEW - Acesso Administrativo</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="login-page">
     <div class="login-container">
-        <h1><i class="fas fa-user-cog"></i> MEW - Painel do Gestor</h1>
-        
-        <form method="POST">
-            <div class="form-group">
-                <label>Email do Gestor:</label>
-                <input type="email" name="email" required placeholder="admin@mew.com">
+        <div class="login-academic-header">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="SIGEU" class="login-logo">
+            <div>
+                <div class="login-kicker">ACESSO RESTRITO</div>
+                <div class="login-title">MEW · Gestão Acadêmica</div>
+                <div class="login-subtitle">Painel administrativo SIGEU</div>
             </div>
-            
-            <div class="form-group">
-                <label>Senha:</label>
-                <input type="password" name="senha" required placeholder="Digite a senha">
-            </div>
-            
-            <button type="submit">
-                <i class="fas fa-sign-in-alt"></i> Entrar como Gestor
-            </button>
-        </form>
-        
-        <div style="margin-top: 20px; text-align: center; color: var(--medium-gray); font-size: 14px;">
-            <p>Credenciais padrão:</p>
-            <p>Email: <strong>admin@mew.com</strong></p>
-            <p>Senha: <strong>1234</strong></p>
-            <p style="margin-top: 15px;">
-                <a href="/" style="color: var(--primary-color);">↩️ Voltar para o site principal</a>
-            </p>
         </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'error' if category == 'error' else category }}" style="margin:16px 20px 0;">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        <form method="POST" autocomplete="on">
+            <div class="form-group">
+                <label for="email"><i class="fas fa-envelope"></i> E-mail administrativo</label>
+                <input id="email" type="email" name="email" autocomplete="username" required placeholder="Seu e-mail de acesso">
+            </div>
+            <div class="form-group">
+                <label for="senha"><i class="fas fa-lock"></i> Senha</label>
+                <input id="senha" type="password" name="senha" autocomplete="current-password" required placeholder="Sua senha administrativa">
+            </div>
+            <button type="submit" class="btn btn-primary login-submit"><i class="fas fa-sign-in-alt"></i> Entrar no MEW</button>
+        </form>
+        <div class="login-help"><p>As credenciais administrativas são definidas pelas variáveis seguras do ambiente de produção.</p></div>
+        <div class="login-footer"><a href="/">← Voltar ao site principal</a></div>
     </div>
 </body>
 </html>

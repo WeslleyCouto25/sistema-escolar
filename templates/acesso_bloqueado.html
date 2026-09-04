@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acesso à Disciplina - SIGEU</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="login-container" style="margin-top:70px;">
+        <h1>Disciplina indisponível</h1>
+        <div style="padding:20px;">
+            <div class="alert alert-warning">
+                <strong>Acesso temporariamente bloqueado.</strong><br>
+                {{ mensagem or 'Esta disciplina ainda não está configurada para acesso.' }}
+            </div>
+            <a href="/dashboard" class="btn btn-primary" style="width:100%;">Voltar ao Portal do Aluno</a>
+        </div>
+    </div>
+</body>
+</html>

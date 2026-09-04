@@ -2,12 +2,12 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Instruções da Prova</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        .container {
+        .prova-container {
             max-width: 800px;
             margin: 50px auto;
             background: white;
@@ -118,8 +118,10 @@
             color: var(--primary-dark);
         }
     </style>
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
 </head>
-<body>
+<body class="instrucoes-page">
     <!-- Top Bar -->
     <header class="topbar">
         <div class="navbar-header">
@@ -167,7 +169,7 @@
                 <i class="fas fa-arrow-left"></i> Voltar para a disciplina
             </a>
             
-            <div class="container">
+            <div class="prova-container">
                 <div class="disciplina-info">
                     <h2>📝 Avaliação Parcial</h2>
                     <p><strong>Disciplina:</strong> {{ disciplina_nome }}</p>

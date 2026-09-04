@@ -1029,6 +1029,32 @@
             }
         }
     </style>
+
+<style id="sigeu-home-refino">
+/* Home: mantém movimento, troca o visual tecnológico por institucional neutro */
+.top-header{background:#273746!important;padding:6px 0!important;font-size:.74rem!important;}
+.top-header-left,.top-header-right{gap:14px!important;}
+.social-icon{width:27px!important;height:27px!important;border-radius:3px!important;}
+.auth-badge{padding:5px 10px!important;border-radius:3px!important;}
+.header-content{padding:8px 0!important;min-height:82px!important;}
+.logo-container{gap:12px!important;margin-right:14px!important;}
+.logo{height:52px!important;}
+.logo-main{font-size:23px!important;}
+.logo-subtitle{font-size:10px!important;}
+.partnership-badge{border-radius:3px!important;font-size:9px!important;padding:3px 8px!important;background:#c96d22!important;}
+.main-nav{gap:12px!important;}
+.nav-menu{gap:20px!important;}
+.nav-link{font-size:.88rem!important;}
+.header-actions{gap:8px!important;}
+.btn-whatsapp-header{padding:8px 13px!important;border-radius:4px!important;font-size:.82rem!important;}
+.hero{padding:95px 0 72px!important;background:linear-gradient(135deg,#59636b 0%,#737d84 48%,#505b63 100%)!important;min-height:480px!important;}
+.hero-title{font-size:3rem!important;line-height:1.06!important;max-width:850px!important;color:#fff!important;background:none!important;-webkit-text-fill-color:#fff!important;text-shadow:0 2px 3px rgba(0,0,0,.24)!important;}
+.hero-subtitle{font-size:1.12rem!important;line-height:1.55!important;max-width:760px!important;margin-bottom:24px!important;}
+.hero-badge{border-radius:3px!important;background:rgba(255,255,255,.12)!important;border:1px solid rgba(255,255,255,.22)!important;}
+@media(max-width:1100px){.nav-menu{gap:12px!important}.nav-link{font-size:.8rem!important}.logo{height:46px!important}.logo-main{font-size:20px!important}}
+@media(max-width:900px){.top-header{display:none!important}.header-content{min-height:66px!important}.logo{height:42px!important}.logo-main{font-size:18px!important}.hero{padding:70px 0 55px!important;min-height:410px!important}.hero-title{font-size:2.35rem!important}.hero-subtitle{font-size:1rem!important}.mobile-menu-btn{display:block!important}}
+@media(max-width:560px){.container{padding-left:14px!important;padding-right:14px!important}.logo{height:36px!important}.logo-main{font-size:16px!important}.logo-subtitle{display:none!important}.partnership-badge{font-size:8px!important}.hero{padding:54px 0 42px!important;min-height:360px!important}.hero-title{font-size:1.9rem!important;margin-bottom:16px!important}.hero-subtitle{font-size:.94rem!important}.hero-badges{gap:7px!important}.hero-badge{font-size:.76rem!important;padding:7px 9px!important}.whatsapp-fixed{width:48px!important;height:48px!important;font-size:21px!important;right:14px!important;bottom:14px!important}}
+</style>
 </head>
 
 <body>
@@ -2073,7 +2099,7 @@
 
         function initParticles() {
             particles = [];
-            const particleCount = Math.floor((canvas.width * canvas.height) / 10000);
+            const particleCount = Math.min(55, Math.floor((canvas.width * canvas.height) / 28000));
             for (let i = 0; i < particleCount; i++) {
                 particles.push(new Particle());
             }

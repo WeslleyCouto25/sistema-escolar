@@ -471,6 +471,27 @@
             font-style: italic;
         }
     </style>
+
+<style id="contrato-screen-responsive">
+@media screen {
+  html,body{width:100%;max-width:100%;}
+  body{background:#e7ebee!important;padding:18px 10px!important;display:block!important;}
+  .page{width:min(100%,900px)!important;max-width:900px!important;min-height:auto!important;margin:0 auto 18px!important;padding:42px 48px!important;box-shadow:0 3px 12px rgba(18,45,65,.12)!important;overflow:hidden;}
+  .botoes{width:min(100%,900px)!important;margin:12px auto!important;display:flex!important;gap:8px!important;flex-wrap:wrap!important;justify-content:center!important;}
+}
+@media screen and (max-width:700px){
+  body{padding:7px 4px!important;}
+  .page{padding:24px 16px!important;margin-bottom:8px!important;border-radius:0!important;}
+  .titulo-principal{font-size:17px!important;letter-spacing:.5px!important;}
+  .subtitulo{font-size:13px!important;}
+  .clausula-titulo{font-size:13px!important;}
+  .clausula-texto,.preambulo td{font-size:11px!important;line-height:1.5!important;}
+  .preambulo th{font-size:11px!important;padding:8px!important;}
+  .watermark{font-size:42px!important;}
+  .botoes .btn{flex:1 1 145px!important;text-align:center!important;}
+  .contrato-content [style*="display:flex"]{flex-wrap:wrap!important;}
+}
+</style>
 </head>
 <body>
    <!-- PÁGINA 1 - PREÂMBULO E IDENTIFICAÇÃO -->

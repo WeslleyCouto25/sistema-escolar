@@ -94,6 +94,8 @@
             border: 1px solid #f5c6cb;
         }
     </style>
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
 </head>
 <body>
     <div class="container">
@@ -162,21 +164,9 @@
                 Este docente está associado às seguintes disciplinas:
             </p>
             <ul style="color: #666;">
-                {% set conn = get_db_connection() %}
-                {% set cursor = conn.cursor() %}
-                {% set cursor.execute("""
-                    SELECT d.nome, dd.ano_semestre
-                    FROM disciplinas d
-                    JOIN disciplina_docente dd ON d.id = dd.disciplina_id
-                    WHERE dd.docente_id = ?
-                    ORDER BY dd.ano_semestre DESC
-                """, (docente.id,)) %}
-                {% set disciplinas = cursor.fetchall() %}
-                {% set conn.close() %}
-                
-                {% if disciplinas %}
-                    {% for disc in disciplinas %}
-                    <li>{{ disc.nome }} ({{ disc.ano_semestre }})</li>
+                {% if disciplinas_docente %}
+                    {% for disc in disciplinas_docente %}
+                    <li>{{ disc.nome }}{% if disc.ano_semestre %} ({{ disc.ano_semestre }}){% endif %}</li>
                     {% endfor %}
                 {% else %}
                     <li><em>Nenhuma disciplina associada</em></li>

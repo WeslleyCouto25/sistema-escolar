@@ -2,12 +2,12 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Avaliação Parcial - Capítulo {{ capitulo }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
-        .container {
+        .prova-container {
             max-width: 800px;
             margin: auto;
             background: white;
@@ -102,8 +102,10 @@
             border-bottom: 2px solid var(--light-gray);
         }
     </style>
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
 </head>
-<body>
+<body class="prova-page">
     <!-- Top Bar -->
     <header class="topbar">
         <div class="navbar-header">
@@ -154,7 +156,7 @@
                 <i class="fas fa-arrow-left"></i> Voltar para o dashboard
             </a>
             
-            <div class="container">
+            <div class="prova-container">
                 <div class="prova-header">
                     <h1>📝 Avaliação Parcial </h1> <h2>Capítulo {{ capitulo }}</h2>
                     <p>Número total de questões da avaliação: • {{ questoes|length }} questões</p>

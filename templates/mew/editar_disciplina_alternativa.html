@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEW - Editar Disciplina Alternativa</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
+</head>
+<body>
+<div class="content-area" style="max-width:1200px;margin:auto;">
+    <div class="breadcrumb"><a href="/mew/dashboard">MEW</a><span class="separator">›</span><a href="/mew/disciplinas-alternativas">Disciplinas Alternativas</a><span class="separator">›</span><span class="current">Editar</span></div>
+    <h1 class="page-title">{{ disciplina.nome if disciplina else 'Disciplina Alternativa' }}</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}<div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>{% endfor %}
+    {% endwith %}
+
+    {% if disciplina %}
+    <div class="mew-card">
+        <h2 class="mew-title">Configuração</h2>
+        <form method="post" style="padding:15px;">
+            <div class="form-group"><label>Nome</label><input name="nome" class="form-control" value="{{ disciplina.nome }}" required></div>
+            <div class="form-group"><label>Mural</label><textarea name="mural" class="form-control" rows="7">{{ disciplina.mural or '' }}</textarea></div>
+            <div class="form-group"><label><input type="checkbox" name="ativa" value="1" {% if disciplina.ativa %}checked{% endif %}> Disciplina ativa</label></div>
+            <button class="btn btn-primary" type="submit">Salvar alterações</button>
+        </form>
+    </div>
+
+    <div class="mew-card">
+        <h2 class="mew-title">Matrículas</h2>
+        <div style="padding:15px;">
+            <form id="formMatricula" class="form-row" onsubmit="return matricularAluno(event)">
+                <input type="hidden" name="disciplina_id" value="{{ disciplina.id }}">
+                <div class="form-group"><label>Adicionar aluno</label><select name="aluno_id" class="form-control" required><option value="">Selecione...</option>{% for a in todos_alunos %}<option value="{{ a.id }}">{{ a.nome }} — RA {{ a.ra }}</option>{% endfor %}</select></div>
+                <div class="form-group" style="align-self:end;"><button class="btn btn-primary" type="submit">Matricular</button></div>
+            </form>
+            <div class="table-responsive"><table class="table"><thead><tr><th>Aluno</th><th>RA</th><th>Data</th><th>Ação</th></tr></thead><tbody>{% for a in alunos_matriculados %}<tr><td>{{ a.nome }}</td><td>{{ a.ra }}</td><td>{{ a.data_matricula }}</td><td><button class="btn btn-danger btn-sm" onclick="removerMatricula({{ a.id }})">Remover</button></td></tr>{% else %}<tr><td colspan="4">Nenhum aluno matriculado.</td></tr>{% endfor %}</tbody></table></div>
+        </div>
+    </div>
+
+    <div class="mew-card">
+        <h2 class="mew-title">Anexos enviados</h2>
+        <div style="padding:15px;" class="table-responsive"><table class="table"><thead><tr><th>Aluno</th><th>Arquivo</th><th>Status</th><th>Nota</th><th>Envio</th></tr></thead><tbody>{% for x in anexos %}<tr><td>{{ x.aluno_nome }}<br><small>RA {{ x.aluno_ra }}</small></td><td>{% if x.url_arquivo %}<a target="_blank" href="{{ x.url_arquivo }}">{{ x.nome_arquivo or 'Abrir arquivo' }}</a>{% else %}-{% endif %}</td><td>{{ x.status or 'pendente' }}</td><td>{{ x.nota if x.nota is not none else '-' }}</td><td>{{ x.data_envio or '-' }}</td></tr>{% else %}<tr><td colspan="5">Nenhum anexo enviado.</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    {% else %}<div class="alert alert-error">Disciplina não encontrada.</div>{% endif %}
+    <a class="btn btn-secondary" href="/mew/disciplinas-alternativas">Voltar</a>
+</div>
+<script>
+async function matricularAluno(ev){ev.preventDefault();const fd=new FormData(ev.target);const r=await fetch('/mew/matricular-aluno-alternativa',{method:'POST',body:fd});const d=await r.json();alert(d.message||'Operação concluída');if(d.success)location.reload();return false;}
+async function removerMatricula(alunoId){if(!confirm('Remover esta matrícula?'))return;const fd=new FormData();fd.append('disciplina_id','{{ disciplina.id if disciplina else "" }}');fd.append('aluno_id',alunoId);const r=await fetch('/mew/remover-matricula-alternativa',{method:'POST',body:fd});const d=await r.json();alert(d.message||'Operação concluída');if(d.success)location.reload();}
+</script>
+</body>
+</html>

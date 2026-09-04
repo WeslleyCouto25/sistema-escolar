@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEW - Nova Disciplina Alternativa</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
+</head>
+<body>
+<div class="content-area" style="max-width:900px;margin:auto;">
+    <div class="breadcrumb"><a href="/mew/dashboard">MEW</a><span class="separator">›</span><a href="/mew/disciplinas-alternativas">Disciplinas Alternativas</a><span class="separator">›</span><span class="current">Nova</span></div>
+    <h1 class="page-title">Nova Disciplina Alternativa</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}<div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>{% endfor %}
+    {% endwith %}
+    <div class="mew-card">
+        <h2 class="mew-title">Dados da disciplina</h2>
+        <form method="post" style="padding:15px;">
+            <div class="form-group"><label for="nome">Nome da disciplina *</label><input id="nome" name="nome" class="form-control" required></div>
+            <div class="form-group"><label for="mural">Mural / orientações ao aluno</label><textarea id="mural" name="mural" class="form-control" rows="8" placeholder="Descreva orientações, atividade, conteúdo ou avisos da disciplina."></textarea></div>
+            <div class="action-buttons"><button class="btn btn-primary" type="submit">Criar disciplina</button><a class="btn btn-secondary" href="/mew/disciplinas-alternativas">Cancelar</a></div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

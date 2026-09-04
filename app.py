@@ -1653,14 +1653,31 @@ def login():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM alunos WHERE ra = %s AND senha = %s",
-            (ra, senha)
-        )
+        cursor.execute("SELECT * FROM alunos WHERE ra = %s", (ra,))
         aluno = cursor.fetchone()
+
+        senha_valida = False
+        if aluno:
+            senha_armazenada = str(aluno.get("senha") or "")
+            # Novas senhas ficam protegidas com o hash do Werkzeug.
+            if senha_armazenada.startswith(("scrypt:", "pbkdf2:")):
+                try:
+                    senha_valida = check_password_hash(senha_armazenada, senha or "")
+                except Exception:
+                    senha_valida = False
+            else:
+                # Compatibilidade com cadastros antigos em texto simples.
+                senha_valida = secrets.compare_digest(senha_armazenada, str(senha or ""))
+                if senha_valida and senha_armazenada:
+                    cursor.execute(
+                        "UPDATE alunos SET senha = %s WHERE id = %s",
+                        (generate_password_hash(str(senha)), aluno["id"])
+                    )
+                    conn.commit()
+
         conn.close()
 
-        if aluno:
+        if aluno and senha_valida:
             session["aluno_id"] = aluno["id"]
             session["aluno_nome"] = aluno["nome"]
             session["aluno_ra"] = aluno["ra"]
@@ -3124,11 +3141,12 @@ def mew_alunos():
                     break
 
         try:
+            senha_para_banco = generate_password_hash(str(senha or ""))
             cursor.execute("""
                 INSERT INTO alunos (nome, email, ra, senha)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (nome, email, ra, senha))
+            """, (nome, email, ra, senha_para_banco))
             aluno_id = cursor.fetchone()["id"]
 
             cursor.execute("""
@@ -3428,7 +3446,7 @@ def webhook_mercadopago():
         conn.close()
 
         # E-mail transacional: não bloqueia o webhook caso o Titan ainda não esteja configurado.
-        if status_mp == "approved" and not ja_pago:
+        if status_mp == "approved":
             try:
                 enviar_boas_vindas_titan(
                     aluno_id_email,
@@ -3754,7 +3772,7 @@ def mew_editar_aluno(aluno_id):
                     UPDATE alunos 
                     SET nome = %s, email = %s, senha = %s
                     WHERE id = %s
-                """, (nome, email, senha, aluno_id))
+                """, (nome, email, generate_password_hash(str(senha)), aluno_id))
             else:
                 cursor.execute("""
                     UPDATE alunos 
@@ -5991,9 +6009,9 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
             d.carga_horaria,
             addd.data_inicio,
             addd.data_fim_previsto,
-            doc.nome as docente_nome,
-            doc.titulacao as docente_titulacao,
-            dd.ano_semestre,
+            docente_info.docente_nome,
+            docente_info.docente_titulacao,
+            docente_info.ano_semestre,
             n1.nota as nota1,
             n2.nota as nota2,
             n3.nota as nota3,
@@ -6006,15 +6024,23 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         LEFT JOIN aluno_disciplina_datas addd ON ad.aluno_id = addd.aluno_id 
             AND ad.disciplina_id = addd.disciplina_id
-        LEFT JOIN disciplina_docente dd ON d.id = dd.disciplina_id
-        LEFT JOIN docentes doc ON dd.docente_id = doc.id
+        LEFT JOIN LATERAL (
+            SELECT doc.nome AS docente_nome,
+                   doc.titulacao AS docente_titulacao,
+                   dd.ano_semestre
+            FROM disciplina_docente dd
+            JOIN docentes doc ON dd.docente_id = doc.id
+            WHERE dd.disciplina_id = d.id
+              AND COALESCE(doc.ativo, 1) = 1
+            ORDER BY dd.id DESC
+            LIMIT 1
+        ) docente_info ON TRUE
         LEFT JOIN notas n1 ON ad.aluno_id = n1.aluno_id AND d.id = n1.disciplina_id AND n1.capitulo = 1
         LEFT JOIN notas n2 ON ad.aluno_id = n2.aluno_id AND d.id = n2.disciplina_id AND n2.capitulo = 2
         LEFT JOIN notas n3 ON ad.aluno_id = n3.aluno_id AND d.id = n3.disciplina_id AND n3.capitulo = 3
         LEFT JOIN notas n4 ON ad.aluno_id = n4.aluno_id AND d.id = n4.disciplina_id AND n4.capitulo = 4
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         WHERE ad.aluno_id = %s
-        GROUP BY d.id
         ORDER BY d.nome
     """, (aluno_id,))
     
@@ -7800,10 +7826,23 @@ def mew_editar_docente(docente_id):
     if not docente:
         conn.close()
         return redirect("/mew/docentes?erro=Docente+não+encontrado")
+
+    cursor.execute("""
+        SELECT d.nome, dd.ano_semestre
+        FROM disciplinas d
+        JOIN disciplina_docente dd ON d.id = dd.disciplina_id
+        WHERE dd.docente_id = %s
+        ORDER BY dd.ano_semestre DESC NULLS LAST, d.nome
+    """, (docente_id,))
+    disciplinas_docente = cursor.fetchall()
     
     conn.close()
     
-    return render_template("mew/editar_docente.html", docente=docente)
+    return render_template(
+        "mew/editar_docente.html",
+        docente=docente,
+        disciplinas_docente=disciplinas_docente
+    )
 
 @app.route("/mew/deletar-docente/<int:docente_id>")
 def mew_deletar_docente(docente_id):

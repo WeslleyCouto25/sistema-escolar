@@ -1508,3 +1508,318 @@ body.login-page,
 .menu-card p[style] {
     color: var(--sigeu-muted) !important;
 }
+
+/* ==========================================================
+   29. COMPATIBILIDADE COM TELAS LEGADAS + LOGIN DEFINITIVO
+   ========================================================== */
+:root {
+    --primary-color: var(--sigeu-navy-900);
+    --primary-light: var(--sigeu-navy-800);
+    --primary-dark: var(--sigeu-navy-950);
+    --secondary-color: var(--sigeu-orange-500);
+    --secondary-light: #e98a3c;
+    --secondary-dark: var(--sigeu-orange-600);
+    --accent-color: var(--sigeu-green-700);
+    --accent-light: #3d8a5e;
+    --light-color: var(--sigeu-bg);
+    --light-gray: var(--sigeu-border-soft);
+    --medium-gray: var(--sigeu-muted);
+    --dark-gray: var(--sigeu-text);
+    --white: var(--sigeu-white);
+    --shadow: var(--sigeu-shadow);
+    --border-radius: var(--sigeu-radius);
+    --transition: all var(--sigeu-transition);
+}
+
+body {
+    padding: 0;
+}
+
+.container,
+.mew-container {
+    width: min(100%, 1440px);
+    margin-left: auto;
+    margin-right: auto;
+    padding: 18px 20px 30px;
+}
+
+.header-mew,
+.mew-container > .header,
+.content-area > .header,
+.container > .header {
+    background: linear-gradient(180deg, var(--sigeu-navy-800), var(--sigeu-navy-900)) !important;
+    color: #fff !important;
+    border-radius: var(--sigeu-radius) !important;
+    border-bottom: 4px solid var(--sigeu-orange-500) !important;
+    box-shadow: var(--sigeu-shadow) !important;
+    padding: 14px 18px !important;
+}
+
+.header-mew h1,
+.mew-container > .header h1,
+.content-area > .header h1,
+.container > .header h1 {
+    font-size: 18px !important;
+    color: #fff !important;
+}
+
+/* Login acadêmico real, sem estética de aplicativo genérico. */
+.login-page {
+    min-height: 100vh;
+    background: #e8ecef;
+    background-image:
+        linear-gradient(rgba(13,60,104,.86), rgba(8,43,74,.92)),
+        linear-gradient(120deg, #1a557f, #0a2f50);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.login-page .login-container {
+    width: min(100%, 440px);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #aebbc5;
+    border-top: 5px solid var(--sigeu-orange-500);
+    border-radius: 5px;
+    box-shadow: 0 18px 45px rgba(0,0,0,.24);
+}
+
+.login-academic-header {
+    min-height: 104px;
+    padding: 18px 20px;
+    background: var(--sigeu-navy-900);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-bottom: 1px solid var(--sigeu-navy-950);
+}
+
+.login-logo {
+    width: 68px;
+    max-height: 68px;
+    object-fit: contain;
+    background: rgba(255,255,255,.96);
+    padding: 4px;
+    border-radius: 3px;
+}
+
+.login-kicker {
+    margin-bottom: 3px;
+    color: #f2bd87;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .15em;
+}
+
+.login-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.login-subtitle {
+    margin-top: 5px;
+    color: rgba(255,255,255,.75);
+    font-size: 11px;
+}
+
+.login-page .login-container form {
+    padding: 20px 20px 12px;
+    gap: 0;
+}
+
+.login-page .login-container .form-group {
+    margin-bottom: 14px;
+}
+
+.login-page .login-container label {
+    color: var(--sigeu-navy-900);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.login-page .login-container input,
+.login-page .login-container select {
+    min-height: 42px;
+    padding: 9px 10px;
+    border: 1px solid #aebcc6;
+    border-radius: 3px;
+    background: #fff;
+    color: var(--sigeu-text);
+}
+
+.login-submit {
+    width: 100%;
+    min-height: 42px;
+    margin-top: 3px;
+}
+
+.login-help {
+    margin: 0 20px 16px;
+    padding: 12px 13px;
+    background: #f3f6f8;
+    border: 1px solid var(--sigeu-border-soft);
+    border-left: 4px solid var(--sigeu-orange-500);
+    color: #566771;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.login-help strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--sigeu-navy-900);
+    font-size: 11px;
+}
+
+.login-help p {
+    margin: 3px 0;
+}
+
+.login-footer {
+    padding: 10px 20px;
+    background: #eef2f5;
+    border-top: 1px solid var(--sigeu-border-soft);
+    color: var(--sigeu-muted);
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: .05em;
+}
+
+@media (max-width: 820px) {
+    .container,
+    .mew-container {
+        padding: 12px 10px 24px;
+    }
+    .header-mew,
+    .mew-container > .header,
+    .content-area > .header,
+    .container > .header {
+        padding: 12px !important;
+        margin-bottom: 14px !important;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
+
+@media (max-width: 560px) {
+    .login-page {
+        padding: 12px;
+        align-items: flex-start;
+    }
+    .login-page .login-container {
+        margin-top: 4vh;
+    }
+    .login-academic-header {
+        min-height: 88px;
+        padding: 14px 15px;
+    }
+    .login-logo {
+        width: 54px;
+        max-height: 54px;
+    }
+    .login-title {
+        font-size: 19px;
+    }
+    .login-page .login-container form {
+        padding: 16px 15px 10px;
+    }
+    .login-help {
+        margin: 0 15px 14px;
+    }
+    .login-page .login-container input,
+    .login-page .login-container select {
+        font-size: 16px;
+    }
+}
+
+
+/* ==========================================================
+   SIGEU — REFINAMENTO VISUAL FINAL 2026
+   Portal acadêmico tradicional | desktop + tablet + celular
+   Somente apresentação: não altera regras acadêmicas.
+   ========================================================== */
+
+/* Login: fundo neutro, sem gradiente de IA */
+.login-page,
+body.login-page{
+    background:#e7ebee !important;
+    background-image:none !important;
+}
+.login-page .login-container{
+    box-shadow:0 8px 24px rgba(20,45,65,.16) !important;
+    border-radius:4px !important;
+}
+.login-academic-header{background:#0d3c68 !important;}
+
+/* Disciplinas: preservar azul do aluno, mas com geometria de portal acadêmico */
+.discipline-header,.course-hero,.disciplina-header{
+    background:#0d3c68 !important;
+    background-image:none !important;
+    border-bottom:4px solid #d87924 !important;
+    border-radius:0 !important;
+}
+.chapter-card,.capitulo-card,.chapter-content,.content-card{
+    border-radius:4px !important;
+    box-shadow:0 2px 7px rgba(13,60,104,.08) !important;
+}
+
+/* Situação acadêmica: mais densa e institucional */
+.stats-container{gap:10px !important;margin-bottom:18px !important;}
+.stat-card{border:1px solid #ccd6de !important;border-radius:4px !important;box-shadow:none !important;padding:16px !important;}
+.stat-card:hover{transform:none !important;}
+
+/* Prova e instruções: folha de avaliação acadêmica */
+body.prova-page .content-area,
+body.instrucoes-page .content-area{background:#eef2f5 !important;}
+body.prova-page .prova-container,
+body.instrucoes-page .prova-container{
+    max-width:900px !important;margin:18px auto !important;background:#fff !important;
+    border:1px solid #c8d2da !important;border-top:5px solid #0d3c68 !important;
+    border-radius:3px !important;box-shadow:0 3px 12px rgba(13,60,104,.08) !important;
+    padding:28px 34px !important;
+}
+body.prova-page .prova-header,
+body.instrucoes-page .disciplina-info{
+    background:#eef3f7 !important;border:1px solid #c8d5df !important;
+    border-left:4px solid #0d3c68 !important;border-radius:2px !important;
+    text-align:left !important;padding:16px 18px !important;
+}
+body.prova-page .questao{
+    background:#fff !important;border:1px solid #cbd5dd !important;
+    border-left:4px solid #0d3c68 !important;border-radius:2px !important;
+    padding:18px 20px !important;margin-bottom:16px !important;
+}
+body.prova-page .questao h3{color:#0d3c68 !important;font-size:13px !important;text-transform:uppercase;letter-spacing:.04em;}
+body.prova-page .opcao{
+    border:1px solid #cbd5dd !important;background:#f9fafb !important;border-radius:2px !important;
+    padding:12px 14px !important;margin:7px 0 !important;
+}
+body.prova-page .opcao:hover{background:#eef4f8 !important;border-color:#7897ad !important;}
+body.prova-page .opcao.selected{background:#e7f2ea !important;border-color:#4b8a61 !important;box-shadow:inset 4px 0 #2f7549;}
+body.prova-page .timer-container{
+    background:#fff !important;color:#9b2f2f !important;border:1px solid #d5b0b0 !important;
+    border-radius:3px !important;box-shadow:0 2px 6px rgba(0,0,0,.08) !important;
+}
+body.instrucoes-page .aviso-box{border-radius:2px !important;border-left:4px solid #c99719 !important;}
+body.instrucoes-page .termo-box{border-radius:2px !important;background:#f8fafb !important;}
+body.instrucoes-page .checkbox-container{padding:12px;border:1px solid #cbd5dd;background:#fff;border-left:4px solid #d87924;}
+
+/* Acessibilidade / toque */
+@media(max-width:820px){
+    .topbar{position:sticky;top:0;}
+    .content-area{overflow-x:hidden !important;}
+    body.prova-page .prova-container,body.instrucoes-page .prova-container{margin:10px auto !important;padding:18px 14px !important;}
+    body.prova-page .timer-container{top:62px !important;right:8px !important;padding:7px 9px !important;font-size:12px !important;}
+}
+@media(max-width:560px){
+    .logo-text{max-width:220px !important;white-space:normal !important;line-height:1.1;}
+    body.prova-page .questao{padding:14px 12px !important;}
+    body.prova-page .opcao{padding:13px 11px !important;min-height:46px;}
+}

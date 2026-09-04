@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEW - Disciplinas Alternativas</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+    <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
+</head>
+<body>
+<div class="content-area" style="max-width:1200px;margin:auto;">
+    <div class="breadcrumb"><a href="/mew/dashboard">MEW</a><span class="separator">›</span><span class="current">Disciplinas Alternativas</span></div>
+    <h1 class="page-title">Disciplinas Alternativas</h1>
+    <div class="action-buttons" style="margin-bottom:15px;">
+        <a class="btn btn-primary" href="/mew/criar-disciplina-alternativa">Nova disciplina alternativa</a>
+        <a class="btn btn-secondary" href="/mew/dashboard">Voltar ao Dashboard</a>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+    {% if request.args.get('sucesso') %}<div class="alert alert-success">{{ request.args.get('sucesso') }}</div>{% endif %}
+    <div class="table-responsive">
+        <table class="table">
+            <thead><tr><th>Disciplina</th><th>Status</th><th>Alunos</th><th>Anexos</th><th>Criada em</th><th>Ações</th></tr></thead>
+            <tbody>
+            {% for d in disciplinas %}
+                <tr>
+                    <td><strong>{{ d.nome }}</strong></td>
+                    <td>{% if d.ativa %}<span class="badge badge-success">Ativa</span>{% else %}<span class="badge badge-secondary">Inativa</span>{% endif %}</td>
+                    <td>{{ d.total_alunos or 0 }}</td>
+                    <td>{{ d.total_anexos or 0 }}</td>
+                    <td>{{ d.data_criacao or '-' }}</td>
+                    <td>
+                        <a class="btn btn-info btn-sm" href="/mew/editar-disciplina-alternativa/{{ d.id }}">Abrir</a>
+                        <a class="btn btn-danger btn-sm" href="/mew/excluir-disciplina-alternativa/{{ d.id }}" onclick="return confirm('Excluir esta disciplina alternativa e todos os dados relacionados?')">Excluir</a>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="6">Nenhuma disciplina alternativa cadastrada.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
