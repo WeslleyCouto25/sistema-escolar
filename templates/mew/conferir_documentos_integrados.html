@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MEW - Conferir Documentos</title>
+<style>body{margin:0;font-family:Arial;background:#eef1f4;color:#1f2937}.top{background:#0a2c4e;color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center}.top a{color:#fff}.wrap{padding:18px;max-width:1500px;margin:auto}.info{background:#fff;padding:15px;border-radius:8px;margin-bottom:14px;display:flex;gap:25px;flex-wrap:wrap}.erro{background:#f8d7da;color:#721c24;padding:18px;border-radius:8px}.acoes{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.btn{padding:11px 16px;border:0;border-radius:6px;cursor:pointer;text-decoration:none;font-weight:bold}.ok{background:#176b3a;color:#fff}.sec{background:#6b7280;color:#fff}.warn{background:#b8860b;color:#fff}iframe{width:100%;height:78vh;border:1px solid #aaa;background:#fff;border-radius:8px}</style></head>
+<body><div class="top"><b>📑 Conferência MEW — Solicitação #{{ solicitacao.id }}</b><a href="/mew/documentos-integrados">← Voltar</a></div><div class="wrap">
+<div class="info"><div><b>Aluno:</b> {{ solicitacao.aluno_nome }}</div><div><b>RA:</b> {{ solicitacao.aluno_ra }}</div><div><b>Status:</b> {{ solicitacao.status|replace('_',' ')|upper }}</div><div><b>Solicitado:</b> {{ solicitacao.data_solicitacao }}</div></div>
+{% if request.args.get('sucesso') %}<div style="background:#d4edda;color:#155724;padding:12px;border-radius:6px">{{ request.args.get('sucesso') }}</div>{% endif %}
+{% if request.args.get('erro') %}<div class="erro">{{ request.args.get('erro') }}</div>{% endif %}
+{% if solicitacao.status == 'erro' %}
+<div class="erro"><b>Não foi possível montar a prévia:</b><br>{{ solicitacao.mensagem_status }}<br><br>Se o problema for Plano de Ensino ausente, gere/vincule o plano à disciplina em <a href="/mew/gerar-plano-ensino">Planos de Ensino</a>.</div>
+<div class="acoes"><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/regerar"><button class="btn warn">Tentar gerar novamente</button></form></div>
+{% elif solicitacao.pdf_previa %}
+<div class="acoes"><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/aprovar" onsubmit="return confirm('Confirma que você conferiu o PDF e deseja liberá-lo ao aluno?')"><button class="btn ok">✓ APROVAR E ENVIAR AO ALUNO</button></form><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/regerar"><button class="btn warn">↻ Regenerar prévia</button></form><a class="btn sec" target="_blank" href="/mew/documentos-integrados/{{ solicitacao.id }}/pdf-previa">Abrir em nova aba</a></div>
+<iframe src="/mew/documentos-integrados/{{ solicitacao.id }}/pdf-previa"></iframe>
+{% else %}<div class="erro">Prévia ainda não disponível.</div>{% endif %}
+</div></body></html>

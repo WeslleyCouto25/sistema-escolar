@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
-    <title>Dashboard do Aluno | FACOP SiGEU</title>
+    <title>Dashboard do Aluno | SIGEU Educacional</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -928,7 +928,7 @@
     <!-- Top Bar -->
     <header class="topbar">
         <div class="navbar-header">
-            <div class="logo-text">FACOP • SiGEU</div>
+            <div class="logo-text">SIGEU Educacional</div>
         </div>
         <div class="spacer"></div>
         <div class="user-menu">
@@ -982,6 +982,10 @@
                     {% if nao_visualizados and nao_visualizados > 0 %}
                     <span class="badge-menu">{{ nao_visualizados }}</span>
                     {% endif %}
+                </li>
+                <li class="section-menu-item" onclick="window.open('/contrato/{{ session.get('aluno_id') }}', '_blank')">
+                    <i class="fas fa-file-signature"></i>
+                    <span>Meu Contrato</span>
                 </li>
                 
                 <li class="section-menu-item" data-section="dados-pessoais">
@@ -1469,6 +1473,24 @@
 
     <!-- BOTÕES DE SOLICITAÇÃO -->
     <div class="cards-container" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+        <!-- Solicitação Integrada -->
+        <div class="card">
+            <div class="card-header" style="background: linear-gradient(135deg, #0a2c4e 0%, #b8860b 100%);">
+                <h3><i class="fas fa-layer-group"></i> Solicitação Integrada</h3>
+                <div class="status-badge">PDF Único</div>
+            </div>
+            <div class="card-content">
+                <p style="color: var(--gray-600); margin-bottom: 20px; min-height: 60px;">
+                    Histórico + Declaração de Conclusão + Plano(s) de Ensino autenticado(s), reunidos em um único PDF após conferência do MEW.
+                </p>
+                <button class="btn btn-primary w-100 btn-solicitar-doc"
+                        data-tipo="integrado" data-nome="Solicitação Integrada"
+                        onclick="abrirModalDocumentos('integrado', 'Solicitação Integrada')">
+                    <i class="fas fa-file-pdf"></i> Solicitar Tudo Junto
+                </button>
+            </div>
+        </div>
+
         <!-- Histórico Escolar -->
         <div class="card">
             <div class="card-header" style="background: linear-gradient(135deg, var(--primary) 0%, #1e4b7c 100%);">
@@ -1675,76 +1697,58 @@
         localStorage.setItem('activeSection', sectionId);
     }
 
-    // Carregar documentos
+    // Documentos recebidos: mantém o fluxo antigo e soma os novos PDFs integrados.
     function carregarMeusDocumentos() {
-        fetch('/meus-documentos-api')
-            .then(response => response.json())
-            .then(data => {
-                const container = document.getElementById('documentos-recebidos');
-                if (data.success && data.documentos.length > 0) {
-                    let html = '<div class="documentos-grid">';
-                    data.documentos.forEach(doc => {
-                        const statusClass = doc.status === 'enviado' ? 'novo' : 'visualizado';
-                        const statusText = doc.status === 'enviado' ? '📬 Novo' : '👁️ Visualizado';
-                        
-                        let icone = 'fa-file-alt';
-                        if (doc.tipo === 'historico') icone = 'fa-history';
-                        else if (doc.tipo === 'declaracao_conclusao') icone = 'fa-certificate';
-                        else if (doc.tipo === 'plano_ensino') icone = 'fa-book';
-                        
-                        html += `
-                            <div class="documento-card ${statusClass}">
-                                <div class="documento-header">
-                                    <i class="fas ${icone}"></i>
-                                    <span class="status">${statusText}</span>
-                                </div>
-                                <h4>${doc.titulo}</h4>
-                                ${doc.disciplina_nome ? `<p><small>${doc.disciplina_nome}</small></p>` : ''}
-                                <p class="data">Enviado em: ${doc.data_envio}</p>
-                                ${doc.mensagem ? `<p class="mensagem">💬 ${doc.mensagem}</p>` : ''}
-                                <a href="/visualizar-documento/${doc.id}" class="btn-view" target="_blank">
-                                    Visualizar Documento
-                                </a>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-folder-open"></i>
-                            <h3>Nenhum documento disponível</h3>
-                            <p>Você ainda não recebeu nenhum documento oficial.</p>
-                        </div>
-                    `;
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                document.getElementById('documentos-recebidos').innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i>
-                        <h3>Erro ao carregar documentos</h3>
-                        <p>Tente novamente mais tarde.</p>
-                    </div>
-                `;
-            });
+        Promise.all([
+            fetch('/meus-documentos-api').then(r => r.json()).catch(() => ({success:false, documentos:[]})),
+            fetch('/meus-documentos-integrados-api').then(r => r.json()).catch(() => ({success:false, documentos:[]}))
+        ]).then(([antigos, integrados]) => {
+            const container = document.getElementById('documentos-recebidos');
+            const docsAntigos = antigos.success ? antigos.documentos.map(d => ({...d, url: `/visualizar-documento/${d.id}`})) : [];
+            const docsNovos = integrados.success ? integrados.documentos : [];
+            const documentos = [...docsNovos, ...docsAntigos];
+
+            if (documentos.length > 0) {
+                let html = '<div class="documentos-grid">';
+                documentos.forEach(doc => {
+                    const statusClass = doc.status === 'enviado' ? 'novo' : 'visualizado';
+                    const statusText = doc.status === 'enviado' ? '📬 Novo' : '👁️ Visualizado';
+                    let icone = 'fa-file-alt';
+                    if (doc.tipo === 'historico') icone = 'fa-history';
+                    else if (doc.tipo === 'declaracao_conclusao') icone = 'fa-certificate';
+                    else if (doc.tipo === 'plano_ensino') icone = 'fa-book';
+                    else if (doc.tipo === 'pacote_integrado') icone = 'fa-file-pdf';
+                    html += `
+                        <div class="documento-card ${statusClass}">
+                            <div class="documento-header"><i class="fas ${icone}"></i><span class="status">${statusText}</span></div>
+                            <h4>${doc.titulo}</h4>
+                            ${doc.disciplina_nome ? `<p><small>${doc.disciplina_nome}</small></p>` : ''}
+                            <p class="data">Liberado em: ${doc.data_envio || ''}</p>
+                            ${doc.mensagem ? `<p class="mensagem">💬 ${doc.mensagem}</p>` : ''}
+                            <a href="${doc.url}" class="btn-view" target="_blank">Abrir / Imprimir PDF</a>
+                        </div>`;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><h3>Nenhum documento disponível</h3><p>Você ainda não recebeu nenhum documento oficial.</p></div>';
+            }
+        }).catch(() => {
+            document.getElementById('documentos-recebidos').innerHTML = '<div class="empty-state"><h3>Erro ao carregar documentos</h3><p>Tente novamente mais tarde.</p></div>';
+        });
     }
 
-    // Funções para solicitação de documentos
     function abrirModalDocumentos(tipo, nome) {
-        fetch(`/solicitar-documentos-modal?tipo=${tipo}&nome=${encodeURIComponent(nome)}`)
+        const academicos = ['integrado', 'historico', 'conclusao', 'plano_ensino'];
+        const rota = academicos.includes(tipo) ? '/solicitar-documentos-integrados-modal' : '/solicitar-documentos-modal';
+        fetch(`${rota}?tipo=${tipo}&nome=${encodeURIComponent(nome)}`)
             .then(response => response.text())
             .then(html => {
                 document.getElementById('modalTitulo').textContent = `Solicitar ${nome}`;
                 document.getElementById('modalConteudo').innerHTML = html;
                 document.getElementById('modalDisciplinas').style.display = 'flex';
             })
-            .catch(error => {
-                console.error('Erro:', error);
-                alert('Erro ao carregar modal');
-            });
+            .catch(() => alert('Erro ao carregar a solicitação.'));
     }
 
     function fecharModal() {
@@ -1755,90 +1759,54 @@
     function enviarSolicitacao() {
         const tipo = document.getElementById('docTipo').value;
         const nome = document.getElementById('docNome').value;
-        const detalhes = document.getElementById('docDetalhes').value;
-        const vias = document.getElementById('docVias').value;
-
+        const detalhesEl = document.getElementById('docDetalhes');
+        const viasEl = document.getElementById('docVias');
+        const detalhes = detalhesEl ? detalhesEl.value : '';
+        const vias = viasEl ? viasEl.value : '1';
         const checkboxes = document.querySelectorAll('.disciplina-checkbox:checked');
         const disciplinasIds = Array.from(checkboxes).map(cb => cb.value);
+        if (disciplinasIds.length === 0) { alert('Selecione pelo menos uma disciplina elegível.'); return; }
 
-        if (disciplinasIds.length === 0) {
-            alert('Selecione pelo menos uma disciplina!');
-            return;
-        }
-
-        fetch('/solicitar-documento', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                tipo: tipo,
-                nome: nome,
-                disciplinas_ids: disciplinasIds,
-                detalhes: detalhes,
-                vias: vias
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                fecharModal();
-                carregarHistoricoDocumentos();
-            } else {
-                alert('Erro: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao enviar solicitação');
-        });
+        const academicos = ['integrado', 'historico', 'conclusao', 'plano_ensino'];
+        const rota = academicos.includes(tipo) ? '/solicitar-documentos-integrados' : '/solicitar-documento';
+        fetch(rota, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo, nome, disciplinas_ids: disciplinasIds, detalhes, vias})
+        }).then(r => r.json()).then(data => {
+            if (data.success) { alert(data.message); fecharModal(); carregarHistoricoDocumentos(); }
+            else alert('Erro: ' + data.message);
+        }).catch(() => alert('Erro ao enviar solicitação.'));
     }
 
     function carregarHistoricoDocumentos() {
-        fetch('/historico-documentos')
-            .then(response => response.json())
-            .then(data => {
-                const container = document.getElementById('historicoSolicitacoes');
-                if (data.success && data.solicitacoes.length > 0) {
-                    let html = '<table class="requests-table"><thead><tr><th>Tipo</th><th>Disciplinas</th><th>Data</th><th>Status</th><th>Ação</th></tr></thead><tbody>';
-                    
-                    data.solicitacoes.forEach(s => {
-                        const statusText = s.status === 'pendente' ? 'Pendente' : s.status === 'processando' ? 'Processando' : 'Concluído';
-                        const statusClass = s.status === 'pendente' ? 'warning' : s.status === 'processando' ? 'info' : 'success';
-                        
-                        html += `
-                            <tr>
-                                <td>${getNomeDocumento(s.tipo_documento)}</td>
-                                <td>${s.disciplinas_nomes || 'N/A'}</td>
-                                <td>${s.data_solicitacao}</td>
-                                <td><span class="badge-${statusClass}">${statusText}</span></td>
-                                <td>
-                                    ${s.arquivo_url ? 
-                                        `<a href="${s.arquivo_url}" target="_blank" class="btn btn-primary" style="padding: 5px 10px;">Baixar</a>` : 
-                                        '<span>Aguardando</span>'}
-                                </td>
-                            </tr>
-                        `;
-                    });
-                    
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                } else {
-                    container.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>Nenhuma solicitação</h3><p>Você ainda não fez nenhuma solicitação.</p></div>';
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                document.getElementById('historicoSolicitacoes').innerHTML = '<div class="error-box"><p>Erro ao carregar histórico.</p></div>';
+        Promise.all([
+            fetch('/historico-documentos').then(r=>r.json()).catch(()=>({success:false,solicitacoes:[]})),
+            fetch('/historico-documentos-integrados').then(r=>r.json()).catch(()=>({success:false,solicitacoes:[]}))
+        ]).then(([antigos, novos]) => {
+            const container = document.getElementById('historicoSolicitacoes');
+            const lista = [];
+            if (novos.success) novos.solicitacoes.forEach(s => lista.push({...s, tipo_documento:s.tipo_solicitacao, novo_fluxo:true}));
+            if (antigos.success) antigos.solicitacoes.forEach(s => lista.push({...s, novo_fluxo:false}));
+            if (!lista.length) {
+                container.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>Nenhuma solicitação</h3><p>Você ainda não fez nenhuma solicitação.</p></div>';
+                return;
+            }
+            let html = '<table class="requests-table"><thead><tr><th>Tipo</th><th>Disciplinas</th><th>Data</th><th>Status</th><th>Ação</th></tr></thead><tbody>';
+            lista.forEach(s => {
+                const mapa = {pendente:'Pendente', erro:'Necessita ajuste', aguardando_aprovacao:'Aguardando conferência', aprovado:'Liberado', processando:'Processando', concluido:'Concluído'};
+                const statusText = mapa[s.status] || s.status;
+                const statusClass = s.status === 'aprovado' || s.status === 'concluido' ? 'success' : (s.status === 'aguardando_aprovacao' || s.status === 'processando' ? 'info' : 'warning');
+                html += `<tr><td>${getNomeDocumento(s.tipo_documento)}</td><td>${s.disciplinas_nomes || 'N/A'}</td><td>${s.data_solicitacao || ''}</td><td><span class="badge-${statusClass}">${statusText}</span>${s.mensagem_status ? `<div style="font-size:11px;margin-top:4px">${s.mensagem_status}</div>` : ''}</td><td>${s.arquivo_url ? `<a href="${s.arquivo_url}" target="_blank" class="btn btn-primary" style="padding:5px 10px">Abrir PDF</a>` : '<span>Aguardando</span>'}</td></tr>`;
             });
+            html += '</tbody></table>'; container.innerHTML = html;
+        }).catch(() => { document.getElementById('historicoSolicitacoes').innerHTML = '<p>Erro ao carregar histórico.</p>'; });
     }
 
     function getNomeDocumento(tipo) {
         const nomes = {
-            'conclusao': 'Declaração de Conclusão',
-            'plano_ensino': 'Plano de Ensino',
-            'historico': 'Histórico Escolar',
-            'sugestao': 'Feedback',
-            'outros': 'Outros'
+            'integrado':'Histórico + Declaração + Plano (PDF único)',
+            'conclusao':'Declaração de Conclusão', 'plano_ensino':'Plano de Ensino',
+            'historico':'Histórico Escolar', 'sugestao':'Feedback', 'outros':'Outros'
         };
         return nomes[tipo] || tipo;
     }

@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, print-scale=1">
+    <title>Contrato Educacional - SIGEU Educacional | {{ codigo_contrato }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================
+           ESTILO DO CONTRATO PADRÃO - SIGEU EDUCACIONAL
+           MODELO PADRÃO DE CONTRATO EDUCACIONAL
+           ============================================ */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #2c3e50;
+            font-family: 'Inter', 'Arial', 'Helvetica', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            margin: 0;
+        }
+
+        .page {
+            max-width: 900px;
+            width: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 48px 56px;
+            position: relative;
+            border: 1px solid #cccccc;
+            margin-bottom: 30px;
+            page-break-after: always;
+            min-height: 1123px; /* A4 */
+        }
+
+        .page:last-child {
+            margin-bottom: 0;
+            page-break-after: auto;
+        }
+
+        /* MARCA D'ÁGUA DE SEGURANÇA */
+        .watermark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.03;
+            font-size: 80px;
+            font-weight: 900;
+            color: #1a4d3e;
+            text-transform: uppercase;
+            transform: rotate(-45deg);
+            font-family: 'Arial Black', sans-serif;
+        }
+
+        .watermark-text {
+            position: absolute;
+            font-size: 10px;
+            font-weight: 400;
+            color: #666666;
+            bottom: 20px;
+            right: 30px;
+            font-family: 'Courier New', monospace;
+            background: rgba(255,255,255,0.8);
+            padding: 4px 12px;
+            border: 0.5px solid #999999;
+        }
+
+        .page-number {
+            position: absolute;
+            bottom: 20px;
+            left: 30px;
+            font-size: 10px;
+            color: #666666;
+            font-weight: 500;
+            font-family: 'Courier New', monospace;
+        }
+
+        .contrato-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        /* TÍTULO PRINCIPAL */
+        .titulo-principal {
+            text-align: center;
+            margin: 0 0 25px 0;
+            font-size: 24px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #000000;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 15px;
+            letter-spacing: 2px;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .subtitulo {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            color: #333333;
+            font-style: italic;
+        }
+
+        /* PREÂMBULO */
+        .preambulo {
+            margin-bottom: 30px;
+            border: 1px solid #000000;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .preambulo th {
+            background: #e6e6e6;
+            font-weight: 700;
+            padding: 12px 10px;
+            text-align: left;
+            border: 1px solid #000000;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .preambulo td {
+            padding: 12px 10px;
+            border: 1px solid #000000;
+            vertical-align: top;
+            font-size: 13px;
+            background: #ffffff;
+        }
+
+        .preambulo table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .dados-contratante {
+            background: #f9f9f9;
+        }
+
+        .observacao-idade {
+            font-size: 11px;
+            color: #000000;
+            font-weight: 600;
+            margin-top: 5px;
+            font-style: normal;
+        }
+
+        /* CLÁUSULAS */
+        .clausula {
+            margin-bottom: 25px;
+        }
+
+        .clausula-titulo {
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            margin-top: 20px;
+            border-bottom: 1px solid #333333;
+            padding-bottom: 5px;
+            color: #000000;
+        }
+
+        .clausula-numero {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            margin-top: 15px;
+        }
+
+        .clausula-texto {
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: justify;
+            margin-bottom: 10px;
+            padding-left: 5px;
+            color: #000000;
+        }
+
+        .clausula-subitem {
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: justify;
+            margin-bottom: 8px;
+            margin-left: 25px;
+            padding-left: 10px;
+            position: relative;
+        }
+
+        .clausula-subitem:before {
+            content: "•";
+            position: absolute;
+            left: -5px;
+            color: #000000;
+        }
+
+        .clausula-subsubitem {
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: justify;
+            margin-bottom: 5px;
+            margin-left: 50px;
+        }
+
+        /* TABELA DE DISCIPLINAS */
+        .tabela-disciplina {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 1px solid #000000;
+        }
+
+        .tabela-disciplina th {
+            background: #e6e6e6;
+            font-weight: 700;
+            padding: 10px;
+            border: 1px solid #000000;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .tabela-disciplina td {
+            padding: 10px;
+            border: 1px solid #000000;
+            vertical-align: top;
+            font-size: 13px;
+        }
+
+        /* DESTAQUE PARA PARCEIRO */
+        .parceiro-destaque {
+            background: #f2f2f2;
+            font-weight: 700;
+            padding: 5px 10px;
+            border-left: 4px solid #000000;
+            margin: 15px 0;
+        }
+
+        /* ÁREA DE ASSINATURAS */
+        .area-assinaturas {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 2px solid #000000;
+            position: relative;
+        }
+
+        .assinatura-bloco {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .assinatura-esquerda, .assinatura-direita {
+            width: 45%;
+        }
+
+        .linha-assinatura {
+            margin-top: 40px;
+            position: relative;
+        }
+
+        .linha {
+            border-bottom: 1px solid #000000;
+            width: 100%;
+            margin-bottom: 5px;
+            height: 30px;
+        }
+
+        .assinatura-nome {
+            font-weight: 700;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .assinatura-cargo {
+            font-size: 12px;
+            color: #333333;
+        }
+
+        .assinatura-data {
+            font-size: 12px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        /* ASSINATURA DIGITAL */
+        .assinatura-digital {
+            background: #f4f4f4;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 0;
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+            border-left: 10px solid #000000;
+        }
+
+        .hash-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #cccccc;
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
+
+        .hash-value {
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 10px;
+            word-break: break-all;
+            background: #2b2b2b;
+            padding: 12px;
+            border: 0.5px solid #999999;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+            line-height: 1.5;
+            color: #ffffff;
+        }
+
+        /* RODAPÉ DE AUTENTICAÇÃO */
+        .rodape-autenticacao {
+            margin-top: 40px;
+            font-size: 10px;
+            color: #666666;
+            display: flex;
+            justify-content: space-between;
+            border-top: 0.5px dashed #999999;
+            padding-top: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* CARACTERES ESPECIAIS - IGUAL AO PDF */
+        .caracteres-especiais {
+            font-family: 'Arial', sans-serif;
+            letter-spacing: 2px;
+            color: #333333;
+            margin: 10px 0;
+            word-break: break-all;
+            font-size: 12px;
+        }
+
+        /* BOTÕES */
+        .botoes {
+            text-align: center;
+            margin: 30px 0;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            margin: 0 8px;
+            background: #1e4a3b;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border: 1px solid #2a7a4f;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: #0d3b2c;
+            transform: scale(1.02);
+        }
+
+        .btn-secundario {
+            background: #4a6c5f;
+        }
+
+        /* IMPRESSÃO */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .page {
+                box-shadow: none;
+                border: 1px solid #cccccc;
+                background: white;
+                padding: 0.5in;
+                margin: 0 auto;
+                page-break-after: always;
+            }
+            .botoes {
+                display: none;
+            }
+            .watermark {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.06;
+
+    background-image: 
+        repeating-linear-gradient(
+            -45deg,
+            rgba(26,77,62,0.05) 0px,
+            rgba(26,77,62,0.05) 40px,
+            transparent 40px,
+            transparent 80px
+        );
+}
+
+.watermark::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 90px;
+    font-weight: 900;
+    color: rgba(26,77,62,0.08);
+    white-space: nowrap;
+}
+            }
+            .assinatura-digital {
+                background: #000000D9 !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .preambulo th {
+                background: #e6e6e6 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+
+        /* CARACTERES CORROMPIDOS DA PÁGINA 2 E 5 - IGUAL AO PDF */
+        .corrupted-chars {
+            font-family: 'Arial', 'Helvetica', sans-serif;
+            color: #000000;
+            font-size: 12px;
+            line-height: 1.2;
+            margin: 15px 0;
+            word-break: break-all;
+            letter-spacing: 0.5px;
+        }
+        
+        .corrupted-chars span {
+            font-size: 14px;
+            color: #333333;
+        }
+
+        /* REGISTRO ELETRÔNICO SIGEU */
+        .icp-footer {
+            font-size: 9px;
+            color: #444444;
+            text-align: center;
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+   <!-- PÁGINA 1 - PREÂMBULO E IDENTIFICAÇÃO -->
+<div class="page">
+    <div class="page-number">Página 1/8</div>    
+    <div class="contrato-content">
+
+        <!-- CABEÇALHO COM LOGO À ESQUERDA -->
+        <div style="display:flex; align-items:center; gap:25px; margin-bottom:30px; border-bottom:2px solid #000; padding-bottom:20px;">
+            
+            <!-- LOGO -->
+            <div>
+                <img src="{{ url_for('static', filename='img/logo.png') }}" 
+                     style="max-height:150px;">
+            </div>
+
+            <!-- TÍTULO -->
+            <div style="flex:1;">
+                <h1 style="font-size:20px; font-weight:700; text-transform:uppercase; margin:0; letter-spacing:1px; text-align: center;">
+                    Contrato de Prestação de Serviços Educacionais •<br>
+                    Grupo Educacional Unificado [UNIGEU] • SIGEU Educacional
+                </h1>
+                <div style="font-size:15px; font-weight:600; margin-top:8px; color:#333;">
+                Licenciaturas, Bacharelados, Tecnólogos, Extensão, Capacitação e Curso Livre
+                [UNIDADES CURRICULARES ISOLADAS]
+                </div>
+                <div>INSTITUIÇÃO PRESTADORA, OFERTANTE E EXECUTORA: Grupo Educacional Unificado [UNIGEU] — responsável pela oferta, organização, execução e acompanhamento dos cursos, disciplinas e unidades curriculares contratadas.</div>
+                <div style="font-size:13px; font-weight:600; margin-top:6px; color:#333;">
+                    INSTITUIÇÃO CERTIFICADORA: FACOP CERTIFICADORA • CNPJ 04.344.730/0001-60 • Instituição de Ensino Superior devidamente credenciada e submetida à regulação e supervisão do Ministério da Educação (MEC) • atuação via parceria/convênio educacional
+                </div>
+                <div>Ambiente acadêmico e operacional • SIGEU Educacional</div> 
+            </div>
+            </div>
+
+        </div>
+
+        <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 20px; text-align: center; text-transform: uppercase;">Preâmbulo</h2>
+        
+        <!-- TABELA CONTRATANTE -->
+        <table class="preambulo" style="margin-bottom: 15px;">
+            <tr>
+                <th style="width: 100%;">CONTRATANTE(*):</th>
+            </tr>
+            <tr>
+                <td style="background: #ffffff;">
+                    <strong>{{ nome_contratante }}</strong><br>
+                    <strong>Matrícula / RA:</strong> {{ ra }}<br>
+                    <strong>CPF:</strong> {{ cpf_formatado }}<br>
+                    <strong>Endereço:</strong> {{ endereco }}<br>
+                    <strong>Bairro:</strong> {{ bairro }}<br>
+                    <strong>Cidade:</strong> {{ cidade }} <strong>UF:</strong> {{ uf }} <strong>CEP:</strong> {{ cep_formatado }}<br>
+                    <strong>Telefone(s):</strong> {{ telefone }} <strong>E-mail:</strong> {{ email }}<br>
+                    <span class="observacao-idade">***O(A) acadêmico(a) somente poderá figurar como contratante se for maior de 18 anos ou emancipado***</span>
+                </td>
+            </tr>
+        </table>
+
+            
+            <!-- TABELA ACADÊMICO -->
+            <table class="preambulo" style="margin-bottom: 15px;">
+                <tr>
+                    <th style="width: 100%;">ACADÊMICO(*):</th>
+                </tr>
+                <tr>
+                    <td style="background: #ffffff;">
+                        <strong>{{ nome_academico }}</strong><br>
+                        <strong>Matrícula / RA:</strong> {{ ra }}<br>
+                        <strong>CPF:</strong> {{ cpf_formatado }}<br>
+                        <strong>Endereço:</strong> {{ endereco }}<br>
+                        <strong>Bairro:</strong> {{ bairro }}<br>
+                        <strong>Cidade:</strong> {{ cidade }} <strong>UF:</strong> {{ uf }} <strong>CEP:</strong> {{ cep_formatado }}<br>
+                        <strong>Telefone(s):</strong> {{ telefone }} <strong>E-mail:</strong> {{ email }}<br>
+                        <span class="observacao-idade">***O(A) acadêmico(a) somente poderá figurar como contratante se for maior de 18 anos ou emancipado***</span>
+                    </td>
+                </tr>
+            </table>
+            
+            <!-- TABELA DISCIPLINA -->
+            <table class="tabela-disciplina">
+                <tr>
+                    <th style="width: 30%;">DISCIPLINA(S):</th>
+                    <td style="width: 70%;">
+                        {% for d in disciplinas %}
+                        • <strong>{{ d }}</strong><br>
+                        {% endfor %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>CARGA HORÁRIA TOTAL:</th>
+                    <td>{{ carga_horaria }}</td>
+                </tr>
+                <tr>
+                    <th>VALOR CONTRATADO:</th>
+                    <td>R$ {{ valor_total }}</td>
+                </tr>
+                <tr>
+                    <th>VALOR MENSALIDADE INSCRIÇÃO:</th>
+                    <td>ISENTA</td>
+                </tr>
+                <tr>
+                    <th>INSTITUIÇÃO PRESTADORA, OFERTANTE E EXECUTORA:</th>
+                    <td>Grupo Educacional Unificado [UNIGEU] • SIGEU Educacional</td>
+                </tr>
+                <tr>
+                    <th>VALOR MENSALIDADE PARCELADA:</th>
+                    <td>R$ {{ valor_parcelado }}</td>
+                </tr>
+                <tr>
+                    <th>FORMA DE PAGAMENTO:</th>
+                    <td>{{ forma_pagamento }}</td>
+                </tr>
+                <tr>
+                    <th>TEMPO MÍNIMO:</th>
+                    <td>{{ tempo_minimo }}</td>
+                </tr>
+                <tr>
+                    <th>TEMPO MÁXIMO:</th>
+                    <td>{{ tempo_maximo }}</td>
+                </tr>
+                <tr>
+                    <th>MODALIDADE:</th>
+                    <td>{{ modalidade }}</td>
+                </tr>
+                <tr>
+                    <th>ANO E SEMESTRE DE CONTRATAÇÃO:</th>
+                    <td>{{ ano_semestre }}</td>
+                </tr>
+            </table>
+            
+            <p style="margin-top: 30px; font-size: 11px; line-height: 1.5; text-align: justify;">
+                O presente Contrato foi gerado por meio eletrônico, em ambiente virtual, cujas disposições refletem as autorizações e aceites em campos específicos de escolha no curso do procedimento de oferta, análise prévia de conteúdo, requisitos, restrições, inscrição e opção por celebração deste CONTRATO DE PRESTAÇÃO DE SERVIÇOS EDUCACIONAIS. Este instrumento é regido pelas normas legais aplicáveis, notadamente os artigos 206, incisos II e III, e 209 da Constituição Federal e nas disposições das Leis nº 8.078, de 11 de setembro de 1990, nº 9.394, de 20 de dezembro de 1996, nº 9.870, de 23 de novembro de 1999 e nº 10.406, de 10 de janeiro de 2002, e, ainda, pelas cláusulas e condições a seguir convencionadas, estando às partes vinculadas ao instrumento após a identificação do contratante no Sítio por login e senha próprios.
+            </p>
+        </div>
+    </div>
+    
+<!-- PÁGINA 2 - CLÁUSULAS 1-4 -->
+<div class="page">
+    <div class="page-number">Página 2/8</div>
+    <div class="contrato-content">
+
+        <!-- CLÁUSULA 1 -->
+        <div class="clausula">
+            <div class="clausula-titulo">1 - DAS PARTES</div>
+
+            <div class="clausula-texto">
+                1.1. O <strong>GRUPO EDUCACIONAL UNIFICADO [UNIGEU]</strong>, por meio do <strong>SIGEU EDUCACIONAL</strong>, atua como <strong>INSTITUIÇÃO PRESTADORA, OFERTANTE E EXECUTORA</strong>, sendo responsável pela organização, oferta, execução, acompanhamento acadêmico e operacional dos cursos, disciplinas e unidades curriculares objeto deste contrato, bem como pela manutenção do ambiente educacional utilizado pelo(a) ACADÊMICO(A).
+            </div>
+
+            <div class="clausula-texto">
+                1.2. A contratação, o cadastro e a matrícula administrativa do(a) ACADÊMICO(A) nos serviços objeto deste instrumento são realizados junto ao <strong>GRUPO EDUCACIONAL UNIFICADO [UNIGEU]</strong>, instituição privada de prestação de serviços educacionais. O Grupo não se apresenta, por este instrumento, como instituição de ensino superior credenciada diretamente pelo Ministério da Educação para emissão própria de diplomas ou certificados cuja validade dependa de instituição credenciada, atuando nos limites da natureza dos serviços educacionais por ele prestados e das parcerias formalmente celebradas.
+            </div>
+
+            <div class="clausula-texto">
+                1.3. A <strong>FACULDADE DO CENTRO OESTE PAULISTA LTDA. (FACOP)</strong>, inscrita no CNPJ sob o nº <strong>04.344.730/0001-60</strong>, é <strong>Instituição de Ensino Superior devidamente credenciada e submetida à regulação e supervisão do Ministério da Educação (MEC)</strong> e atua, nos termos da parceria/convênio educacional celebrado com o Grupo Educacional Unificado [UNIGEU], como <strong>INSTITUIÇÃO CERTIFICADORA</strong>, realizando a certificação e/ou emissão dos documentos acadêmicos que lhe couberem, quando aplicável, conforme a modalidade contratada e observados os requisitos acadêmicos, documentais e legais pertinentes. Neste instrumento, poderá ser referida como <strong>FACOP CERTIFICADORA</strong> ou <strong>INSTITUIÇÃO CERTIFICADORA</strong>.
+            </div>
+
+            <div class="clausula-texto">
+                1.4. A oferta, execução e prestação dos serviços educacionais cabem ao <strong>GRUPO EDUCACIONAL UNIFICADO [UNIGEU] / SIGEU EDUCACIONAL</strong>, enquanto a certificação, quando aplicável e prevista na parceria institucional, caberá à <strong>INSTITUIÇÃO CERTIFICADORA</strong>, não se confundindo as atribuições de cada parte.
+            </div>
+        </div>
+
+        <!-- CLÁUSULA 2 -->
+        <div class="clausula">
+            <div class="clausula-titulo">2 - DO OBJETO</div>
+
+            <div class="clausula-texto">
+                2.1. O presente Contrato tem por objeto a prestação de serviços educacionais pelo <strong>GRUPO EDUCACIONAL UNIFICADO [UNIGEU] / SIGEU EDUCACIONAL</strong>, abrangendo o(s) curso(s), disciplina(s), Unidade(s) Curricular(es) Isolada(s), atividade(s) de extensão, capacitação e/ou demais serviços educacionais expressamente individualizados no preâmbulo e nos registros acadêmicos vinculados à matrícula do(a) ACADÊMICO(A), incluindo, quando previsto, materiais didáticos, acesso ao Ambiente Virtual de Aprendizagem (AVA), acompanhamento acadêmico, atividades e avaliações, em conformidade com a legislação aplicável, com este Contrato, com a Central de Ajuda ao Aluno e com o Regulamento Interno da INSTITUIÇÃO OFERTANTE.
+            </div>
+
+            <div class="clausula-texto">
+                2.2. A Unidade Curricular (UC) objeto deste contrato é realizada por ações desenvolvidas no ambiente virtual, composto por conteúdos e atividades em formato de apostilas digitais; acompanhamento por tutores; avaliações, além das atividades colocadas à disposição do(a) ACADÊMICO(A) no Ambiente Virtual de Aprendizagem (AVA), consoante Ementa previamente estabelecida no ato da inscrição e disponibilizada no site oficial da INSTITUIÇÃO OFERTANTE.
+            </div>
+
+            <div class="clausula-subitem">
+                2.2.1. O conteúdo acadêmico será disponibilizado ao(a) ACADÊMICO(A) proporcionalmente ao cumprimento das obrigações acadêmicas e contratuais pelo(a) ACADÊMICO(A).
+            </div>
+
+            <div class="clausula-texto">
+                2.3. Por força da autonomia acadêmica definida em lei, a INSTITUIÇÃO OFERTANTE poderá a qualquer tempo alterar as atividades mencionadas neste Contrato, procedendo com a prévia comunicação ao(a) ACADÊMICO(A), por meio de qualquer canal de divulgação, sem que tais fatos deem ensejo a qualquer tipo de indenização, descontos, benefícios e/ou qualquer tipo de ressarcimento de danos, independentemente de sua natureza.
+            </div>
+        </div>
+
+        <!-- CLÁUSULA 3 -->
+        <div class="clausula">
+            <div class="clausula-titulo">3 - DA PRESTAÇÃO DOS SERVIÇOS E DA CERTIFICAÇÃO</div>
+
+            <div class="clausula-texto">
+                3.1. A oferta, organização, execução, acompanhamento acadêmico e prestação dos serviços educacionais relativos aos cursos, disciplinas, Unidades Curriculares Isoladas (UC), extensão, capacitação e demais atividades contratadas serão realizadas pelo <strong>Grupo Educacional Unificado [UNIGEU] / SIGEU Educacional</strong>, na qualidade de INSTITUIÇÃO PRESTADORA, OFERTANTE E EXECUTORA, nos termos deste Contrato. A certificação e/ou emissão dos documentos acadêmicos que dependam da INSTITUIÇÃO CERTIFICADORA observarão a parceria/convênio educacional, a modalidade contratada e os requisitos acadêmicos, documentais e legais aplicáveis.
+            </div>
+        </div>
+
+        <!-- CLÁUSULA 4 -->
+        <div class="clausula">
+            <div class="clausula-titulo">4 - DAS DECLARAÇÕES DO ACADÊMICO(A)</div>
+
+            <div class="clausula-texto">
+                4.1. O(A) ACADÊMICO(A) declara ter conhecimento prévio a esta contratação, que é requisito essencial à participação na Unidade Curricular (UC) possuir e manter correio eletrônico (e-mail) e telefones para contatos atualizados, além de possuir acesso à rede mundial de computadores e equipamentos tecnológicos adequados às suas próprias expensas.
+            </div>
+
+            <div class="clausula-texto">
+                4.2. O(A) ACADÊMICO(A) declara, desde já, ter acessado, lido e concordado com o Regulamento Interno e com as informações disponibilizadas na Central de Ajuda ao Aluno, para a celebração do presente contrato e participação na Unidade Curricular (UC), os quais integram a este instrumento, como se estivessem aqui transcritos, para todos os fins obrigacionais e cumprimento das disposições ora convencionadas.
+            </div>
+
+            <div class="clausula-texto">
+                4.3. O(A) ACADÊMICO(A) declara que todas as documentações que foram enviadas para a INSTITUIÇÃO OFERTANTE são de sua inteira responsabilidade, apresentam-se aptas para validação comercial, judicial, bem como educacional sob pena de responsabilidade civil, administrativa e penal da inconformidade de informações enviadas para a instituição. Declara estar responsável por todas e quaisquer obrigações financeiras, ou por seu responsável contratual.
+            </div>
+
+            <div class="clausula-texto">
+                4.5. O(A) ACADÊMICO(A) declara, por fim, para todos os fins de direito, que tem plena ciência e inequívoco conhecimento de que a oferta, organização e execução da Unidade Curricular Isolada (UC) objeto do presente ajuste são realizadas pela INSTITUIÇÃO OFERTANTE, em estrita observância à legislação educacional vigente, às normas regulamentares aplicáveis e às diretrizes acadêmico-pedagógicas institucionais, reconhecendo a legitimidade, regularidade e autenticidade dos atos praticados no âmbito da prestação dos serviços educacionais.
+            </div>
+        </div>
+
+    </div>
+</div>
+    <!-- PÁGINA 3 - CLÁUSULAS 4-6 -->
+    <div class="page">
+        <div class="page-number">Página 3/8</div>
+            <!-- CLÁUSULA 5 -->
+            <div class="clausula">
+                <div class="clausula-titulo">5 - DAS OBRIGAÇÕES DA INSTITUIÇÃO OFERTANTE</div>
+                <div class="clausula-texto">
+                    5.1. A INSTITUIÇÃO OFERTANTE é responsável pelo projeto pedagógico e matriz curricular da Unidade Curricular (UC), coordenação pedagógica e acadêmica, devendo zelar por sua qualidade e pelo cumprimento das metodologias de educação presencial e remota, quando aplicadas ao EDUCANDO.
+                </div>
+                <div class="clausula-texto">
+                    5.2. A Unidade Curricular (UC) será ministrada presencialmente e com atividades incluídas no Ambiente Virtual de Aprendizagem (AVA) da INSTITUIÇÃO OFERTANTE.
+                </div>
+                <div class="clausula-texto">
+                    5.3. A INSTITUIÇÃO OFERTANTE disponibilizará o acesso do(a) ACADÊMICO(A) ao Ambiente Virtual de Aprendizagem (AVA), por meio de login e senha, após assinatura do presente Contrato.
+                </div>
+                <div class="clausula-texto">
+                    5.4. Será disponibilizado no Ambiente Virtual de Aprendizagem (AVA) o conteúdo acadêmico que é devido conforme plano da Unidade Curricular (UC).
+                </div>
+                <div class="clausula-texto">
+                    5.5. Para a integralização da carga horária da Unidade Curricular (UC) serão consideradas atividades acadêmicas todas aquelas permitidas pelo Ministério da Educação (MEC) e pela legislação vigente.
+                </div>
+                <div class="clausula-texto">
+                    5.6. A INSTITUIÇÃO OFERTANTE, de acordo com as diretrizes curriculares e conseguinte carga horária, poderá, a seu critério, atribuir que o(a) ACADÊMICO(A) cumpra parte da carga horária da Unidade Curricular (UC) sob a modalidade de atividades complementares ou atividades estruturadas.
+                </div>
+                <div class="clausula-texto">
+                    5.7. A matriz curricular da Unidade Curricular (UC) é composta pela aferição de frequência, consubstanciada, no caso do ensino, na realização das atividades, quais sejam, participar de fóruns quando houver, e a realização de avaliações para verificação de aprendizagem e atribuição de nota, com vistas à obtenção de aprovação na Unidade Curricular (UC) e competente Histórico de Conclusão ao final. O descumprimento de quaisquer exigências acadêmicas estabelecidas pela INSTITUIÇÃO OFERTANTE implicará em reprovação por parte do(a) ACADÊMICO(A).
+                </div>
+                <div class="clausula-texto">
+                    5.8. A INSTITUIÇÃO OFERTANTE providenciará, ao final do cronograma de atividades, o Histórico de Conclusão da Unidade Curricular (UC) em favor do(a) ACADÊMICO(A), uma vez promovidas todas as atividades acadêmicas obrigatórias, bem como entregue toda a documentação necessária exigida pela INSTITUIÇÃO OFERTANTE. O não cumprimento de todas as obrigações acadêmicas e/ou a não entrega da documentação solicitada implica na impossibilidade de expedição dos documentos citados. A documentação inclui: histórico de conclusão da Unidade Curricular (UC), certificado de conclusão e plano regular do curso ou plano de ensino, observando-se, quanto à certificação, o disposto na Cláusula 3. A emissão do Histórico de Conclusão da Unidade Curricular (UC) será feita mediante o regular cumprimento das obrigações acadêmicas e contratuais pelo(a) ACADÊMICO(A).
+                </div>
+            </div>
+            
+            <!-- CLÁUSULA 6 -->
+            <div class="clausula">
+                <div class="clausula-titulo">6 - DAS OBRIGAÇÕES DO ACADÊMICO(A)</div>
+                <div class="clausula-texto">
+                    6.1. Fornecer prontamente as informações necessárias para a fiel consecução do objeto do Contrato mantendo-as atualizadas, bem como apresentar tempestivamente todos os documentos solicitados pela INSTITUIÇÃO OFERTANTE, necessários à efetivação de sua matrícula, emissão de Histórico e demais atividades relacionadas à prestação dos serviços pactuados.
+                </div>
+                <div class="clausula-texto">
+                    6.2. O(A) ACADÊMICO(A) deverá observar todos os procedimentos previstos no Regulamento Interno e na Central de Ajuda ao Aluno disponibilizados pela INSTITUIÇÃO OFERTANTE, em conformidade com as normativas propostas pelo Ministério da Educação (MEC).
+                </div>
+                <div class="clausula-texto">
+                    6.3. Comunicar a INSTITUIÇÃO OFERTANTE sobre todas e quaisquer irregularidades na prestação de serviços por meio dos formulários e canais próprios disponibilizados por esta.
+                </div>
+                <div class="clausula-texto">
+                    6.4. Efetuar o pagamento do serviço contratado, pelo preço convencionado, nos prazos e formas contratados, podendo o pagamento ser desdobrado em mensalidades, caso o(a) ACADÊMICO(A) opte pelo pagamento de forma parcelada.
+                </div>
+                <div class="clausula-texto">
+                    6.5. Responder, no prazo estabelecido pela Coordenação da INSTITUIÇÃO OFERTANTE, a todas as mensagens recebidas.
+                </div>
+                <div class="clausula-texto">
+                    6.6. Manter seus dados cadastrais atualizados e com informações verídicas, bem como zelar pela confidencialidade de seu login e senha, de forma a não permitir compartilhamento com qualquer pessoa.
+                </div>
+                <div class="clausula-texto">
+                    6.7. Não reproduzir, ou permitir que terceiros o façam, sob qualquer forma, o material da Unidade Curricular (UC) sob pena de responder cível e criminalmente perante a INSTITUIÇÃO OFERTANTE, nos termos da Lei nº 9.610/1998, por violação da propriedade intelectual, devendo o uso do material ser realizado exclusivamente em âmbito privado pelo(a) ACADÊMICO(A).
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PÁGINA 4 - CLÁUSULAS 7-8 -->
+    <div class="page">
+        <div class="page-number">Página 4/8</div>
+        <div class="contrato-content">
+            <!-- CLÁUSULA 7 -->
+            <div class="clausula">
+                <div class="clausula-titulo">7 - DO PREÇO DO SERVIÇO CONTRATADO</div>
+                <div class="clausula-texto">
+                    7.1. Em contraprestação aos serviços objeto deste contrato e à venda dos materiais didáticos, o(a) ACADÊMICO(A) aceitou e optou por pagar pelos serviços, pela aquisição de materiais didáticos (quando necessário), pelo preço e forma estabelecida em Ficha de Inscrição que segue anexa ao presente instrumento, proposto para a Unidade Curricular (UC) na oportunidade desta contratação, observadas as campanhas promocionais, eventuais descontos e planos de pagamento.
+                </div>
+                <div class="clausula-subitem">
+                    7.1.1. Do valor total do contrato, parte destina-se à aquisição de material didático e a outra parte à prestação de serviço.
+                </div>
+                <div class="clausula-texto">
+                    7.2. AO(A) ACADÊMICO(A) que optar pelo pagamento da Unidade Curricular (UC) por meio de cartão de crédito ou em parcela única (boleto, débito ou Pix) será imediatamente disponibilizado todo o material acadêmico.
+                </div>
+                <div class="clausula-texto">
+                    7.3. Em caso de inadimplemento, poderá a INSTITUIÇÃO OFERTANTE cobrar multa de 2% sobre a parcela devida, juros de mora de 1% ao mês ou fração de mês e atualização monetária com base no IGP-ME/FGV, bem como poderá adotar todas as providências legais de cobrança cabíveis, inclusive inscrever o nome do(a) ACADÊMICO(A) em cadastro ou serviços legalmente constituídos e destinados à proteção da cobrança do crédito advindo deste Contrato.
+                </div>
+                <div class="clausula-texto">
+                    7.4. O presente Contrato constitui título executivo extrajudicial, nos termos da legislação processual civil vigente, reconhecendo, o(a) ACADÊMICO(A), desde já, este título, como líquido, certo e exigível, ou, ainda, qualquer tipo de cobrança prevista na legislação brasileira, independentemente de prévia notificação, podendo tais providências serem tomadas isolada, gradativa ou cumulativamente. Todas as despesas da INSTITUIÇÃO OFERTANTE decorrentes da(s) cobrança(s) prevista(s) neste item poderão ser cobradas do(a) ACADÊMICO(A) a título de reembolso.
+                </div>
+                <div class="clausula-texto">
+                    7.5. O(A) ACADÊMICO(A) compreende que o preço pago em contraprestação aos serviços contratados e aos materiais adquiridos, independe de sua respectiva utilização, de modo que, sua obrigação de pagar se mantém válida e eficaz, independentemente de ter optado por não fazer ou tenha sido impossibilitado de realizar as atividades acadêmicas e exercer outros direitos inerentes à Unidade Curricular (UC).
+                </div>
+                <div class="clausula-texto">
+                    7.6. As obrigações da INSTITUIÇÃO OFERTANTE perante o(a) ACADÊMICO(A) são de meio e não de resultado, motivo pelo qual, manter-se-á obrigado a pagar integralmente o preço convencionado nas hipóteses de não cumprimento das atividades acadêmicas ou de reprovação por não atingir o grau de desempenho exigido pela INSTITUIÇÃO OFERTANTE.
+                </div>
+                <div class="clausula-texto">
+                    7.7. Caberá, exclusivamente, à INSTITUIÇÃO OFERTANTE, definir a sua política comercial e os seus critérios para concessão de descontos e modalidades de pagamento.
+                </div>
+                <div class="clausula-texto">
+                    7.8. O(A) ACADÊMICO(A) declara ter plena ciência que, dependendo do período em que seja firmada a contratação da Unidade Curricular (UC) e de acordo com o plano e meio de pagamento escolhido, os valores praticados poderão ter sido diferenciados de outras oportunidades.
+                </div>
+                <div class="clausula-texto">
+                    7.9. Qualquer alteração acadêmica de matrícula poderá ensejar, a critério da INSTITUIÇÃO OFERTANTE, cobrança de taxa administrativa.
+                </div>
+                <div class="clausula-texto">
+                    7.10. O valor fixado para os serviços educacionais não sofrerá reajustes durante o período letivo e obedecerá à variação de custos educacionais incorridos, conforme previsão constante da Lei nº 9.870/99 e do Decreto nº 3.274/99.
+                </div>
+            </div>
+            
+            <!-- CLÁUSULA 8 -->
+            <div class="clausula">
+                <div class="clausula-titulo">8 - DO PAGAMENTO DE OUTROS SERVIÇOS</div>
+                <div class="clausula-texto">
+                    8.1. No valor estabelecido para o objeto deste Contrato, não estão incluídos os materiais de uso facultativo do(a) ACADÊMICO(A), assim como os serviços a seguir discriminados, os quais somente serão prestados com a expressa concordância do(a) ACADÊMICO(A), mediante pagamento de taxa administrativa estabelecida na tabela de preços da INSTITUIÇÃO OFERTANTE, disponibilizada na Central de Ajuda ao Aluno.
+                </div>
+                <div class="clausula-subitem">
+                    (i) Trancamento;
+                </div>
+                <div class="clausula-subitem">
+                    (ii) Transferência;
+                </div>
+                <div class="clausula-subitem">
+                    (iii) Cumprimento de Unidade Curricular (UC), por razão de falta ou em decorrência de insuficiência de nota;
+                </div>
+                <div class="clausula-subitem">
+                    (iv) Emissão de via impressa de Histórico;
+                </div>
+                <div class="clausula-subitem">
+                    (v) Emissão de segunda via de Declaração de Matrícula; de Declaração de Conclusão de Curso; de Declaração de Unidades Curriculares (UCs) Cursadas e de Histórico Escolar;
+                </div>
+                <div class="clausula-subitem">
+                    (vi) Declarações personalizadas;
+                </div>
+                <div class="clausula-subitem">
+                    (vii) Demais serviços.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PÁGINA 5 - CLÁUSULAS 9-10 E CARACTERES ESPECIAIS -->
+    <div class="page">
+        <div class="page-number">Página 5/8</div>
+        <div class="contrato-content">
+            <!-- CLÁUSULA 9 -->
+            <div class="clausula">
+                <div class="clausula-titulo">9 - DA VIGÊNCIA</div>
+                <div class="clausula-texto">
+                    9.1. O presente Contrato é válido e eficaz a partir da presente data e sua vigência perdurará durante toda a execução do serviço educacional contratado. A matrícula administrativa do(a) ACADÊMICO(A), identificada pelo número de Matrícula/RA constante deste instrumento, é vinculada ao GRUPO EDUCACIONAL UNIFICADO [UNIGEU] / SIGEU EDUCACIONAL. A formalização eletrônica do contrato ocorre mediante identificação do(a) ACADÊMICO(A) no ambiente virtual e registro de sua assinatura eletrônica no SIGEU Educacional, acompanhada de data, hora, código individual e hash SHA-256 para verificação interna de integridade.
+                </div>
+                <div class="clausula-texto">
+                    9.2. O presente Contrato será extinto pelo término da prestação do serviço educacional, com a quitação de todos os pagamentos devidos pelo(a) ACADÊMICO(A) e a entrega, pela INSTITUIÇÃO OFERTANTE, do respectivo Histórico de Conclusão da Unidade Curricular (UC), uma vez satisfeitas, pelo(a) ACADÊMICO(A), as exigências previstas no Regulamento Interno e necessárias à sua aprovação, assim como pelo cancelamento da Unidade Curricular (UC) devidamente formalizado pelo(a) ACADÊMICO(A), observadas as condições de solicitação de cancelamento previstas neste Contrato e no Portal do Aluno.
+                </div>
+            </div>
+            
+            <!-- CLÁUSULA 10 -->
+            <div class="clausula">
+                <div class="clausula-titulo">10 - DO CANCELAMENTO DE MATRÍCULA</div>
+                <div class="clausula-texto">
+                    10.1. O(A) ACADÊMICO(A) poderá, a qualquer tempo, solicitar o cancelamento de sua matrícula, bastando, para tanto, fazer o requerimento por escrito mediante formulário específico disponível no Portal do Aluno. Para solicitar o cancelamento de matrícula o(a) ACADÊMICO(A) não poderá possuir qualquer pendência financeira com a INSTITUIÇÃO OFERTANTE.
+                </div>
+                <div class="clausula-texto">
+                    10.2. A matrícula cancelada por solicitação do(a) ACADÊMICO(A) após a disponibilização das atividades acadêmicas pela INSTITUIÇÃO OFERTANTE por meio do Ambiente Virtual de Aprendizagem (AVA), implicará na aplicação de multa no percentual de 10% (dez por cento) sobre o valor total da Unidade Curricular (UC), para os fins de ressarcimento das despesas administrativas. Caso o(a) ACADÊMICO(A) já tenha recebido os materiais didáticos, o valor correspondente a estes será descontado do crédito a que porventura tenha direito em razão do cancelamento da matrícula.
+                </div>
+                <div class="clausula-subitem">
+                    10.2.1. A multa não se aplica ao(a) ACADÊMICO(A) que optou pelo pagamento da Unidade Curricular (UC) por meio de cartão de crédito ou em parcela única (boleto, débito ou Pix), uma vez que a ele(a) foi integralmente disponibilizado o material acadêmico, sendo-lhe permitido o cancelamento de matrícula somente nas hipóteses previstas nas cláusulas 12.3 e 12.4.
+                </div>
+                <div class="clausula-texto">
+                    10.3. O cancelamento da matrícula pelo(a) ACADÊMICO(A) antes de serem disponibilizadas as atividades acadêmicas, implicará na devolução integral dos valores eventualmente pagos pelo(a) ACADÊMICO(A), assim como também no caso de Direito de Desistência, assegurado pelo Código de Defesa do Consumidor.
+                </div>
+                <div class="clausula-texto">
+                    10.4. É garantido ao(a) ACADÊMICO(A) o Direito de Desistência previsto pelo Código de Defesa do Consumidor, que deverá ser exercido em até 07 (sete) dias, contados a partir da data da assinatura do presente Contrato ou da efetiva disponibilização dos serviços, isto é, aquele que ocorrer primeiro.
+                </div>
+            </div>
+
+            <!-- CLÁUSULA 11 -->
+            <div class="clausula">
+                <div class="clausula-titulo">11 - DO HISTÓRICO</div>
+                <div class="clausula-texto">
+                    11.1. A emissão do Histórico de Conclusão fica condicionada à entrega, pelo(a) ACADÊMICO(A), de toda a documentação exigida pela INSTITUIÇÃO OFERTANTE, pelo atendimento de todos os pilares acadêmicos previstos no Portal do Aluno e no Ambiente Virtual de Aprendizagem (AVA), bem como pelo cumprimento de todas as disposições constantes deste Contrato.
+                </div>
+                <div class="clausula-subitem">
+                    11.1.1. Ao ACADÊMICO(A) será concedido Histórico digital sem qualquer custo, mediante requerimento, podendo o documento ser emitido pela INSTITUIÇÃO OFERTANTE em até 05 (cinco) dias úteis, em estrita observância às normas aplicáveis aos Documentos Eletrônicos.
+                </div>
+                <div class="clausula-texto">
+                    11.2. Caso queira, o ACADÊMICO(A) poderá solicitar a emissão de Histórico físico, que será emitido pela INSTITUIÇÃO OFERTANTE em até 90 (noventa) dias, contados a partir da data de seu requerimento por meio de formulário próprio disponibilizado no Portal do Aluno, observadas as disposições previstas na Central de Ajuda ao Aluno.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PÁGINA 6 - CLÁUSULAS 11-12 -->
+    <div class="page">
+        <div class="page-number">Página 6/8</div>
+        <div class="contrato-content">
+            <!-- CLÁUSULA 12 - DISPOSIÇÕES GERAIS (PARTE 1) -->
+            <div class="clausula">
+                <div class="clausula-titulo">12 - DISPOSIÇÕES GERAIS</div>
+                <div class="clausula-texto">
+                    12.1. Por este instrumento, o(a) ACADÊMICO(A) concede o uso de sua imagem, voz, nome, dados bibliográficos e trabalhos acadêmicos à INSTITUIÇÃO OFERTANTE, especificamente para o uso de cunho informativo e promocional, por quaisquer meios de comunicação, folders ou outro material de comunicação audiovisual que tenha vínculo com a INSTITUIÇÃO OFERTANTE, seja para veiculação em redes sociais, materiais impressos, digitais ou audiovisuais, em todo território nacional, pelo prazo de 05 (cinco) anos, a título gratuito, não havendo qualquer remuneração ou contrapartida financeira ao(à) ACADÊMICO(A) pela referida utilização.
+                </div>
+                <div class="clausula-texto">
+                    12.2. O presente contrato é personalíssimo, sendo vedada a cessão de direitos derivados deste instrumento ou cessão de posição contratual.
+                </div>
+                <div class="clausula-texto">
+                    12.3. Todas as credenciais de acesso (usuários e/ou senhas) fornecidas ao(a) ACADÊMICO(A) são pessoais e intransferíveis, sendo este o responsável exclusivo por toda e qualquer utilização indevida de tais credenciais de acesso, inclusive por terceiros, de forma indevida, sem qualquer responsabilidade da INSTITUIÇÃO OFERTANTE.
+                </div>
+                <div class="clausula-texto">
+                    12.4. Todas as comunicações entre as Partes ocorrerão por meio eletrônico, por meio do Portal do Aluno, no Ambiente Virtual de Aprendizagem (AVA) e pelo e-mail informado pelo(a) ACADÊMICO(A).
+                </div>
+                <div class="clausula-texto">
+                    12.5. O(A) ACADÊMICO(A) deverá manter atualizados seus dados cadastrais, especialmente seu correio eletrônico (e-mail), telefone e endereço, devendo comunicar com antecedência mínima de 05 (cinco) dias da data de possível alteração, sob pena de serem considerados válidos os atos de comunicação procedidos para os dados anteriormente cadastrados.
+                </div>
+                <div class="clausula-texto">
+                    12.6. O(A) ACADÊMICO(A) declara, neste ato, ter ciência e concordar que todos os materiais acadêmicos indicados e/ou solicitados pelos docentes para estudos curriculares, incluindo cópias reprográficas, são de sua inteira responsabilidade e por este devem ser adquiridos.
+                </div>
+                <div class="clausula-texto">
+                    12.7. O(A) ACADÊMICO(A) assume total responsabilidade quanto às declarações prestadas para a celebração do presente Contrato Eletrônico, especialmente com relação à sua identificação; dados cadastrais; assunção das obrigações ora convencionadas; aptidão legal para cumprimento da Unidade Curricular (UC), concordando, desde já, que a não entrega dos documentos legais comprobatórios das declarações prestadas, poderá acarretar a extinção deste contrato, isentando a INSTITUIÇÃO OFERTANTE de qualquer responsabilidade pelos eventuais danos resultantes do cancelamento.
+                <div class="clausula-texto">
+                    12.8. É facultado à INSTITUIÇÃO OFERTANTE proceder a adequações em sua plataforma de sistemas, visando o acompanhamento das evoluções tecnológicas relacionadas ao serviço prestado e a garantia da sua qualidade, sendo que nessa hipótese o(a) ACADÊMICO(A) será comunicado das referidas atualizações.
+                </div>
+                <div class="clausula-texto">
+                    12.9. A INSTITUIÇÃO OFERTANTE não se responsabiliza por qualquer tipo de dano, prejuízo ou qualquer outro problema decorrentes do uso, inabilidade de uso ou defeitos dos programas de computador ou sistemas de tecnologia do(a) ACADÊMICO(A).
+                </div>
+                <div class="clausula-texto">
+                    12.10. A INSTITUIÇÃO OFERTANTE não se responsabiliza por perdas e danos causados, de qualquer tipo ou natureza, pela utilização irregular dos serviços por ela prestados, ou em função de problemas de software, sistemas e aplicativos de terceiros, ou hardware, de responsabilidade exclusiva de seus fabricantes, bem como por perdas de dados, vírus, e quaisquer outros eventos que fujam do seu controle e diligência.
+                </div>
+                <div class="clausula-texto">
+                    12.11. A INSTITUIÇÃO OFERTANTE não garante, sob nenhuma hipótese, que os sistemas de conexão com os serviços (via telefônica, via cabo, ou qualquer outro) estejam livres de possíveis falhas ou interrupções, não se responsabilizando pela qualidade da rede utilizada para acesso ao serviço, vez que esta é mantida por terceiros, e, portanto, foge do seu controle, diligência, e responsabilidade.
+                </div>
+                <div class="clausula-texto">
+                    12.12. O(A) ACADÊMICO(A) declara estar ciente que pequenos defeitos e falhas de programação são comuns a sistemas de tecnologia, isentando, assim, a INSTITUIÇÃO OFERTANTE, de qualquer responsabilidade por danos decorrentes de tais defeitos e falhas, eventualmente existentes para participação na Unidade Curricular (UC), limitando-se a responsabilidade da INSTITUIÇÃO OFERTANTE à correção das intercorrências eventualmente encontradas durante o cumprimento deste Contrato. As partes elegem o Foro de São Paulo/SP, com renúncia expressa a qualquer outro, por mais privilegiado que seja ou venha a ser, para dirimir qualquer dúvida ou controvérsia decorrente da interpretação ou execução do presente contrato, que será regido e interpretado de acordo com as Leis vigentes na República Federativa do Brasil.
+                </div>
+            </div>
+        
+                <div style="text-align: center; margin-top: 30px;">
+                    <div style="font-weight: 700; font-size: 14px;">Local e Data:</div>
+                    <div style="font-size: 13px; margin-top: 10px;">São Paulo/SP, {{ data_extenso }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PÁGINA 7 - ASSINATURA DIGITAL E AUTENTICAÇÃO -->
+    <div class="page">
+        <div class="page-number">Página 7/8</div>
+        <div class="contrato-content">
+            <h3 style="text-align: center; margin-bottom: 30px; font-size: 18px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 15px;">
+                PROTOCOLO DE AUTENTICAÇÃO DIGITAL
+            </h3>
+            
+            <div style="margin-bottom: 30px;">
+                <p style="font-size: 13px; line-height: 1.6; text-align: justify; margin-bottom: 20px;">
+                    O presente Contrato Eletrônico contém registro eletrônico de integridade associado à INSTITUIÇÃO OFERTANTE, com código individual, data e hora de geração e hash SHA-256, permitindo a verificação interna de que o conteúdo registrado não foi alterado após sua emissão.
+                </p>
+            </div>
+            
+            <div style="margin: 25px 0 30px 0; padding: 22px; border: 1px solid #777; text-align: center; background: #fafafa;">
+                {% if assinado %}
+                <strong>CONTRATO ASSINADO ELETRONICAMENTE</strong><br>
+                <span style="font-size:12px;">As evidências da celebração eletrônica, inclusive assinatura grafada e registro fotográfico, constam da Página 8.</span>
+                {% else %}
+                <strong>CONTRATO PENDENTE DE ASSINATURA DO(A) ACADÊMICO(A)</strong><br>
+                <span style="font-size:12px;">Matrícula / RA: {{ ra }}</span>
+                {% endif %}
+            </div>
+
+            <!-- REGISTRO ELETRÔNICO -->
+            <div class="assinatura-digital">
+                <span class="hash-label">🔐 REGISTRO ELETRÔNICO • SIGEU • SHA-256</span>
+                <div class="hash-value">
+                    {{ hash_contrato }}
+                </div>
+                <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; background: #e6e6e6; color:#000; padding: 6px 18px; border-radius: 20px;">
+                        {% if assinado %}✓ CONTRATO ASSINADO{% else %}⏳ AGUARDANDO ASSINATURA{% endif %}
+                    </span>
+                    <span style="font-size: 14px; font-weight: 600;">
+                        {{ data_assinatura }}
+                    </span>
+                </div>
+                <div style="margin-top: 15px; font-size: 12px; border-top: 1px solid #444444; padding-top: 15px;">
+                    <span style="display: block;">📌 TIMESTAMP: {{ timestamp_iso }}</span>
+                    <span style="display: block; margin-top: 5px;">🔑 SISTEMA DE REGISTRO: SIGEU EDUCACIONAL</span>
+                </div>
+            </div>
+            
+            <!-- DADOS DE AUTENTICAÇÃO -->
+<div style="margin-top: 30px; background: #f4f4f4; padding: 20px; border-left: 10px solid #000000; font-family: 'Courier New', monospace; font-size: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+                    <div style="font-weight: 700;">CÓDIGO DO CONTRATO:</div>
+                    <div>{{ codigo_contrato }}</div>
+                    
+                    <div style="font-weight: 700;">Nº PROCESSO:</div>
+                    <div>{{ numero_processo }}</div>
+                    
+                    <div style="font-weight: 700;">MATRÍCULA / RA:</div>
+                    <div>{{ ra }}</div>
+
+                    <div style="font-weight: 700;">CPF CONTRATANTE:</div>
+                    <div>{{ cpf_formatado }}</div>
+                    
+                    <div style="font-weight: 700;">UNIDADES CURRICULARES (UC):</div>
+                    <div>
+                        {% for d in disciplinas %}
+                         • {{ d }}<br>
+                        {% endfor %}
+                    </div>
+                    
+                    <div style="font-weight: 700;">DATA DA ASSINATURA:</div>
+                    <div>{{ data_assinatura }}</div>
+                    
+                    <div style="font-weight: 700;">HASH SHA-256:</div>
+                    <div style="word-break: break-all;">{{ hash_contrato_curto }}...{{ hash_contrato[-16:] }}</div>
+                </div>
+            </div>
+            
+            <!-- RODAPÉ ICP -->
+            <div class="icp-footer">
+                SIGEU EDUCACIONAL • REGISTRO ELETRÔNICO • VERIFICAÇÃO DE INTEGRIDADE POR HASH SHA-256
+            </div>
+            
+            <div class="rodape-autenticacao">
+                <span>Contrato gerado em: {{ data_geracao }}</span>
+                <span>Versão: {{ versao_contrato }}</span>
+                <span>Protocolo: {{ codigo_contrato }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PÁGINA 8 - EVIDÊNCIAS DA CELEBRAÇÃO ELETRÔNICA -->
+    <div class="page">
+        <div class="page-number">Página 8/8</div>
+        <div class="contrato-content">
+            <h3 style="text-align:center; margin-bottom:24px; font-size:18px; text-transform:uppercase; border-bottom:2px solid #000; padding-bottom:15px;">
+                REGISTRO DA CELEBRAÇÃO ELETRÔNICA
+            </h3>
+
+            {% if assinado %}
+            <div style="border:1px solid #111; padding:18px; margin-bottom:18px; background:#fafafa;">
+                <div style="font-size:13px; line-height:1.55;">
+                    <strong>Acadêmico(a):</strong> {{ nome_academico }}<br>
+                    <strong>Matrícula / RA:</strong> {{ ra }}<br>
+                    <strong>CPF:</strong> {{ cpf_formatado }}<br>
+                    <strong>Data e hora:</strong> {{ data_assinatura }}<br>
+                    <strong>Código do contrato:</strong> {{ codigo_contrato }}<br>
+                    <strong>Versão contratual:</strong> {{ versao_contrato }}
+                </div>
+            </div>
+
+            <div style="display:flex; gap:18px; align-items:stretch; margin-bottom:20px;">
+                <div style="flex:1; border:1px solid #222; padding:14px; text-align:center; min-height:220px;">
+                    <div style="font-size:11px; font-weight:700; margin-bottom:10px; letter-spacing:1px;">REGISTRO FOTOGRÁFICO DO ATO</div>
+                    {% if foto_assinatura_base64 %}
+                    <img src="{{ foto_assinatura_base64 }}" alt="Registro fotográfico do acadêmico no ato da assinatura" style="max-width:100%; max-height:170px; object-fit:contain;">
+                    {% else %}
+                    <div style="padding:55px 10px; color:#777;">Registro fotográfico indisponível.</div>
+                    {% endif %}
+                </div>
+                <div style="flex:1; border:1px solid #222; padding:14px; text-align:center; min-height:220px;">
+                    <div style="font-size:11px; font-weight:700; margin-bottom:10px; letter-spacing:1px;">ASSINATURA ELETRÔNICA GRAFADA</div>
+                    {% if assinatura_base64 %}
+                    <img src="{{ assinatura_base64 }}" alt="Assinatura eletrônica do acadêmico" style="max-width:100%; max-height:145px; object-fit:contain; margin-top:20px;">
+                    {% endif %}
+                    <div style="margin-top:10px; font-size:12px; font-weight:700;">{{ nome_academico }}</div>
+                </div>
+            </div>
+
+            <div style="border:1px solid #222; padding:16px; margin-bottom:16px;">
+                <div style="font-size:11px; font-weight:700; margin-bottom:8px;">DECLARAÇÃO DE LEITURA, CIÊNCIA, ACEITE E ASSINATURA ELETRÔNICA</div>
+                <div style="font-size:10.5px; line-height:1.5; text-align:justify; white-space:pre-line;">{{ texto_aceite }}</div>
+            </div>
+
+            <div style="background:#f4f4f4; border-left:8px solid #111; padding:14px; font-family:'Courier New', monospace; font-size:9.5px; line-height:1.45;">
+                <strong>HASH FINAL SHA-256:</strong><br>
+                <span style="word-break:break-all;">{{ hash_assinado or hash_contrato }}</span><br><br>
+                <strong>IP REGISTRADO:</strong> {{ ip_assinatura or 'N/I' }}<br>
+                <strong>AGENTE DO DISPOSITIVO/NAVEGADOR:</strong><br>
+                <span style="word-break:break-all;">{{ user_agent_assinatura or 'N/I' }}</span>
+            </div>
+
+            <p style="font-size:9.5px; line-height:1.45; margin-top:14px; text-align:justify; color:#444;">
+                O registro fotográfico integra as evidências documentais da celebração eletrônica deste contrato. Neste procedimento, a imagem não é submetida a reconhecimento facial ou identificação biométrica automatizada.
+            </p>
+            {% else %}
+            <div style="padding:35px; border:1px dashed #777; text-align:center; background:#fafafa;">
+                <strong>REGISTRO PENDENTE</strong><br><br>
+                Esta página será preenchida automaticamente após a conclusão da assinatura eletrônica do(a) acadêmico(a).
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="botoes no-print">
+        {% if assinado %}<a href="/contrato/pdf/{{ contrato_id }}" target="_blank" class="btn">📄 ABRIR PDF ASSINADO</a>{% endif %}
+        <button onclick="window.print()" class="btn">🖨 IMPRIMIR</button>
+        {% if assinado %}<a href="/dashboard" class="btn btn-secundario">IR PARA A PLATAFORMA</a>{% endif %}
+        <button onclick="window.history.back()" class="btn btn-secundario">⬅ VOLTAR</button>
+    </div>
+</body>
+</html>

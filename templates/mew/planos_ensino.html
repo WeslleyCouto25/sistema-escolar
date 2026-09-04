@@ -340,15 +340,26 @@
                         {% for plano in planos %}
                         <tr>
                             <td>
-                                <strong>{{ plano.disciplina|default('N/A') }}</strong>
+                                {% if plano.disciplina %}
+                                <strong>{{ plano.disciplina }}</strong><br><small style="color:var(--success)">✓ Vinculado</small>
+                                {% else %}
+                                <strong style="color:var(--danger)">NÃO VINCULADO</strong>
+                                <form method="post" action="/mew/plano-ensino/{{ plano.id }}/vincular" style="margin-top:6px;display:flex;gap:4px">
+                                    <select name="disciplina_id" required style="max-width:220px;padding:5px">
+                                        <option value="">Disciplina...</option>
+                                        {% for d in disciplinas %}<option value="{{ d.id }}">{{ d.nome }}</option>{% endfor %}
+                                    </select>
+                                    <button class="btn btn-sm btn-warning" type="submit">Vincular</button>
+                                </form>
+                                {% endif %}
                             </td>
                             <td>
-                                <span class="badge badge-primary">{{ plano.codigo }}</span>
+                                <span class="badge badge-primary">{{ plano.codigo or 'SEM-CÓDIGO' }}</span>
                             </td>
                             <td>{{ plano.data_geracao }}</td>
                             <td>
                                 <span style="font-family: monospace; font-size: 11px;">
-                                    {{ plano.hash_documento[:10] }}...
+                                    {{ (plano.hash_documento or '')[:10] }}...
                                 </span>
                             </td>
                             <td>
@@ -356,7 +367,7 @@
                             </td>
                             <td>
                                 <div class="action-buttons">
-                                    <a href="/ver-documento/{{ plano.codigo }}" target="_blank" class="btn btn-sm btn-info" title="Visualizar">
+                                    <a href="/ver-documento/{{ plano.codigo or 'SEM-CÓDIGO' }}" target="_blank" class="btn btn-sm btn-info" title="Visualizar">
                                         <i>👁️</i>
                                     </a>
                                     <a href="/mew/enviar-plano-aluno/{{ plano.id }}" class="btn btn-sm btn-warning" title="Enviar para Aluno">

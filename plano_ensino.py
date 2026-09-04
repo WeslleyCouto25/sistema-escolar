@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sistema de Geração de Planos de Ensino - FACOP/SiGEU
+Sistema de Geração de Planos de Ensino - SiGEU Educação
 VERSÃO REFORMULADA - SÓ GERA O HTML, NÃO FAZ AUTENTICAÇÃO
 """
 
@@ -70,131 +70,16 @@ SISTEMA_AVALIACAO_FIXO = """
 # ============================================
 
 def gerar_prompt_simplificado(dados):
-    """Gera prompt para a IA"""
-    prompt = f"""
-VOCÊ É UM ESPECIALISTA EM PLANOS DE ENSINO DA FACOP/SiGEU.
+    """Mantém compatibilidade: usa o mesmo prompt central do api_planos.py."""
+    from api_planos import gerar_prompt_simplificado as gerar_prompt_api
+    return gerar_prompt_api(dados)
 
-## DADOS DA DISCIPLINA
-- **Disciplina**: {dados['disciplina']}
-- **DEPARTAMENTO**: {dados.get('departamento', 'DEPARTAMENTO DE EDUCAÇÃO AMBIENTAL')}
-- **Ementa Base**: {dados['ementa']}
-- **Carga Horária**: {dados.get('carga_horaria', '80H')}
-
-## INSTRUÇÕES ESPECÍFICAS - CUMPRA EXATAMENTE
-
-### 1. EMENTA (EXATAMENTE 20 itens numerados)
-Crie uma ementa expandida com EXATAMENTE 20 itens numerados (1. ao 20.).
-Formato OBRIGATÓRIO: "1. Primeiro tópico. 2. Segundo tópico. 3. Terceiro tópico. ... 20. Vigésimo tópico."
-Cada tópico deve ser uma frase curta e objetiva sobre um conteúdo específico da disciplina.
-NÃO use ponto e vírgula. NÃO use citações. Apenas os 20 tópicos numerados separados por ". ".
-
-### 2. CONTEÚDO PROGRAMÁTICO (4 unidades com quantidades EXATAS)
-Crie 4 unidades com a seguinte estrutura EXATA:
-
-UNIDADE I – [TÍTULO DA UNIDADE]
-• Subtópico 1.
-• Subtópico 2.
-• Subtópico 3.
-
-UNIDADE II – [TÍTULO DA UNIDADE]
-• Subtópico 1.
-• Subtópico 2.
-• Subtópico 3.
-• Subtópico 4.
-
-UNIDADE III – [TÍTULO DA UNIDADE]
-• Subtópico 1.
-• Subtópico 2.
-
-UNIDADE IV – [TÍTULO DA UNIDADE]
-• Subtópico 1.
-• Subtópico 2.
-• Subtópico 3.
-
-TOTAL EXATO: 12 subtópicos (3+4+2+3). NÃO altere as quantidades.
-
-IMPORTANTE: Use o símbolo • (bullet point) antes de cada subtópico. Use quebras de linha reais entre os itens.
-
-### 3. HABILIDADES (3 a 4 itens em numeração romana)
-Liste habilidades específicas que o aluno desenvolverá na disciplina.
-Formato OBRIGATÓRIO: "I - primeira habilidade. II - segunda habilidade. III - terceira habilidade." (numerais romanos seguidos de hífen)
-Mínimo 3, máximo 4 habilidades.
-
-### 4. BIBLIOGRAFIA (FORMATO ABNT)
-
-**Básica** (EXATAMENTE 5 obras):
-- Livros REAIS de editoras reconhecidas (EXISTENTES)
-- Pelo menos 1 obra em inglês
-Formato EXATO: SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
-Separe cada obra com <br>
-
-**Complementar** (EXATAMENTE 3 obras):
-- Livros REAIS de editoras reconhecidas (EXISTENTES)
-- Pelo menos 1 obra em inglês
-Formato EXATO: SOBRENOME, Nome. <strong>Título</strong>. Edição. Cidade: Editora, ano.
-Separe cada obra com <br>
-
-## FORMATO DE SAÍDA (JSON EXATO)
-{{
-    "ementa_expandida": "1. Tópico 1. 2. Tópico 2. 3. Tópico 3. ... 20. Tópico 20.",
-    "conteudo_programatico": "UNIDADE I – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\nUNIDADE II – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3\\n• Subtópico 4\\nUNIDADE III – Título\\n• Subtópico 1\\n• Subtópico 2\\nUNIDADE IV – Título\\n• Subtópico 1\\n• Subtópico 2\\n• Subtópico 3",
-    "habilidades": "I - Primeira habilidade. II - Segunda habilidade. III - Terceira habilidade. IV - Quarta habilidade.",
-    "bibliografia_basica": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.",
-    "bibliografia_complementar": "SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano.<br>SOBRENOME, Nome. <strong>Título</strong>. Ed. Cidade: Editora, ano."
-}}
-
-DISCIPLINA: {dados['disciplina']}
-DEPARTAMENTO: {dados.get('departamento', 'DEPARTAMENTO DE EDUCAÇÃO AMBIENTAL')}
-EMENTA BASE: {dados['ementa']}
-
-GERAR JSON AGORA. NÃO INCLUA TEXTO ANTES OU DEPOIS DO JSON. USE ESTRITAMENTE O FORMATO ACIMA.
-"""
-    return prompt
 
 def consultar_openai_para_plano(dados):
-    """Consulta o ChatGPT para gerar os campos necessários"""
-    prompt = gerar_prompt_simplificado(dados)
-    
-    response = client.chat.completions.create(
-        model="gpt-4-turbo",
-        messages=[
-            {
-                "role": "system",
-                "content": "Você é um especialista em planos de ensino da FACOP/SiGEU. Retorne APENAS JSON válido com os campos solicitados. NÃO inclua markdown, NÃO inclua texto explicativo, APENAS o JSON puro."
-            },
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.3,
-        max_tokens=4000,
-        response_format={"type": "json_object"}
-    )
-    
-    conteudo = response.choices[0].message.content
-    
-    try:
-        plano_json = json.loads(conteudo)
-    except json.JSONDecodeError as e:
-        raise Exception(f"Erro ao decodificar JSON da OpenAI: {str(e)}. Resposta: {conteudo[:200]}")
-    
-    # VALIDAÇÃO
-    campos_obrigatorios = [
-        'ementa_expandida', 
-        'conteudo_programatico', 
-        'habilidades', 
-        'bibliografia_basica', 
-        'bibliografia_complementar'
-    ]
-    
-    for campo in campos_obrigatorios:
-        if campo not in plano_json:
-            for chave in plano_json.keys():
-                if chave.lower() == campo.lower():
-                    plano_json[campo] = plano_json[chave]
-                    break
-            else:
-                raise Exception(f"Campo '{campo}' ausente no JSON retornado")
-    
-    return plano_json
+    """Usa a geração central: disciplina + sugestão de ementa; restante vem da IA."""
+    from api_planos import consultar_openai_para_plano as consultar_api
+    return consultar_api(dados)
+
 
 # ============================================
 # FUNÇÃO PRINCIPAL - SÓ GERA O HTML
@@ -218,8 +103,8 @@ def gerar_html_plano(dados):
     disciplina = dados['disciplina'].upper()
     departamento = dados.get('departamento', 'DEPARTAMENTO DE EDUCAÇÃO AMBIENTAL').upper()
     carga_horaria = dados.get('carga_horaria', '80 horas')
-    modalidade = dados.get('modalidade', 'EaD')
-    pre_requisitos = dados.get('pre_requisitos', 'Não há pré-requisitos formais para esta disciplina.')
+    modalidade = conteudo_ia.get('modalidade', 'EaD')
+    pre_requisitos = conteudo_ia.get('pre_requisitos', 'Não há pré-requisitos formais para esta disciplina.')
     
     ementa_expandida = conteudo_ia['ementa_expandida']
     conteudo_programatico = conteudo_ia['conteudo_programatico']
@@ -242,7 +127,7 @@ def gerar_html_plano(dados):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, print-scale=1">
-    <title>Plano de Ensino - {disciplina} | FACOP/SiGEU</title>
+    <title>Plano de Ensino - {disciplina} | SiGEU Educação - Facop Certificadora</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -485,9 +370,9 @@ def gerar_html_plano(dados):
             <div class="logo-area">
                 <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                 <div class="institution-name">
-                    <p><b>FACOP/SiGEU - 04.344.730/0001-60</b></p>
-                    <h2>Faculdade do Centro Oeste Paulista MANETEDORA</h2>
-                    <h2>SiGEu - Disciplinas Isoladas</h2>
+                    <p><b>FACOP 04.344.730/0001-60 | SiGEU Educacional</b></p>
+                    <h2>Faculdade do Centro Oeste Paulista Certificadora</h2>
+                    <h2>SiGEu Educação - Disciplinas Isoladas</h2>
                     <h2>e-mec 19325/CP - 2025</h2>
                 </div>
             </div>
@@ -523,9 +408,9 @@ def gerar_html_plano(dados):
             <div class="logo-area">
                 <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                 <div class="institution-name">
-                    <p><b>FACOP/SiGEU - 04.344.730/0001-60</b></p>
-                    <h2>Faculdade do Centro Oeste Paulista MANETEDORA</h2>
-                    <h2>SiGEu - Disciplinas Isoladas</h2>
+                    <p><b>FACOP 04.344.730/0001-60 | SiGEU Educacional </b></p>
+                    <h2>Faculdade do Centro Oeste Paulista Certificadora</h2>
+                    <h2>SiGEu Educação - Disciplinas Isoladas</h2>
                 </div>
             </div>
             <div class="meta-identifiers">
@@ -558,9 +443,9 @@ def gerar_html_plano(dados):
             <div class="logo-area">
                 <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                 <div class="institution-name">
-                    <p><b>FACOP/SiGEU - 04.344.730/0001-60</b></p>
-                    <h2>Faculdade do Centro Oeste Paulista MANETEDORA</h2>
-                    <h2>SiGEu - Disciplinas Isoladas</h2>
+                    <p><b>FACOP 04.344.730/0001-60 | SiGEU Educacional </b></p>
+                    <h2>Faculdade do Centro Oeste Paulista Certificadora</h2>
+                    <h2>SiGEu Educação - Disciplinas Isoladas</h2>
                 </div>
             </div>
             <div class="meta-identifiers">
@@ -591,9 +476,9 @@ def gerar_html_plano(dados):
             <div class="logo-area">
                 <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                 <div class="institution-name">
-                    <p><b>FACOP/SiGEU - 04.344.730/0001-60</b></p>
-                    <h2>Faculdade do Centro Oeste Paulista MANETEDORA</h2>
-                    <h2>SiGEu - Disciplinas Isoladas</h2>
+                    <p><b>FACOP 04.344.730/0001-60 | SiGEU Educacional </b></p>
+                    <h2>Faculdade do Centro Oeste Paulista Certificadora</h2>
+                    <h2>SiGEu Educação - Disciplinas Isoladas</h2>
                 </div>
             </div>
             <div class="meta-identifiers">
@@ -615,10 +500,10 @@ def gerar_html_plano(dados):
         <div class="footer-area">
             <div class="validation-info">
                 Documento validado digitalmente<br>
-                Sistema FACOP/SiGEU
+                Sistema SiGEU Educação
             </div>
             <div class="hash-info">
-                GERADO POR IA • FACOP/SiGEU
+                GERADO POR IA • SiGEU Educação
             </div>
         </div>
     </div>

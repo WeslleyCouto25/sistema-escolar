@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FACOP/SiGEU</title>
+    <title>SiGEU Educação</title>
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
@@ -1898,7 +1898,7 @@
                     answer: 'Oferecemos cursos em diferentes modalidades: 100% online (EAD), semipresencial (híbrido) e presencial. A modalidade depende do curso específico. Consulte a página do curso desejado para verificar a modalidade disponível.'
                 },
                 {
-                    question: 'Como validar a autenticidade de um documento da FACOP/SiGEU?',
+                    question: 'Como validar a autenticidade de um documento da SiGEU Educação?',
                     answer: 'Para validar a autenticidade de diplomas, históricos ou declarações emitidos pela FACOP, utilize nosso sistema de validação de documentos. Você pode acessar através do botão "Validar Documento" no cabeçalho do site ou na seção de Documentos. O sistema permite verificação por código de autenticação ou QR Code.'
                 }
             ];
@@ -1941,8 +1941,8 @@
         // MODAL FUNCTIONS
         function openWhatsAppModal(courseName = '') {
             const message = courseName
-                ? `Olá! Gostaria de mais informações sobre o curso de ${courseName} da FACOP/SiGEU.`
-                : 'Olá! Gostaria de mais informações sobre os cursos e atividades da FACOP/SiGEU.';
+                ? `Olá! Gostaria de mais informações sobre o curso de ${courseName} da SiGEU Educação.`
+                : 'Olá! Gostaria de mais informações sobre os cursos e atividades da SiGEU Educação.';
 
             const whatsappBtn = document.querySelector('#whatsappModal .whatsapp-btn-large');
             whatsappBtn.href = `https://wa.me/5521990020262?text=${encodeURIComponent(message)}`;

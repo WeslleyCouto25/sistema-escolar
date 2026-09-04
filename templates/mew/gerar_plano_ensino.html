@@ -300,112 +300,36 @@
             <div class="card-title">
                 <i>📝</i> Configuração do Plano de Ensino
             </div>
-            
             <div class="info-box">
-                <i>ℹ️</i> <strong>Gerador Automático com IA:</strong> A IA gera Objetivos, Ementa Expandida, Conteúdo Programático e Habilidades. Você preenche a Bibliografia específica da disciplina.
+                <i>🤖</i> <strong>Gerador 100% automático:</strong> você informa somente a disciplina e uma sugestão de ementa. A IA gera objetivos, ementa expandida, conteúdo programático, habilidades, pré-requisitos e bibliografias básica e complementar. Carga horária e docente vêm do cadastro do sistema.
             </div>
-            
+
             <div class="info-box" style="background: #f0fff4; border-left-color: #28a745;">
-                <i>📄</i> <strong>Organização do Documento (4 PÁGINAS):</strong><br>
-                • Página 1: Identificação, Objetivos (Geral e Específicos), Ementa<br>
-                • Página 2: Conteúdo Programático, Habilidades<br>
-                • Página 3: Metodologia, Avaliação<br>
-                • Página 4: Bibliografia (Básica e Complementar) + Enquadramento Curricular + Assinatura
+                <i>📄</i> <strong>O que continua institucional/automático:</strong> metodologia e critérios de avaliação permanecem padronizados pelo SIGEU; data, código, QR Code, hash, carga horária e docente são preenchidos pelo próprio sistema.
             </div>
-            
+
             <form id="formPlano">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i>📘</i> Disciplina *</label>
-                        <input type="text" class="form-control" id="disciplina" name="disciplina" required placeholder="Ex: Sistemas Hidráulicos e de Drenagem">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label><i>🎓</i> Curso</label>
-                        <input type="text" class="form-control" id="curso" name="curso" value="DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS">
-                    </div>
-                </div>
-                
                 <div class="form-group">
-                    <label><i>📋</i> Ementa Básica *</label>
-                    <textarea class="form-control" id="ementa" name="ementa" required placeholder="Descreva os principais tópicos da ementa..."></textarea>
+                    <label><i>📘</i> Disciplina *</label>
+                    <select class="form-control" id="disciplina_id" name="disciplina_id" required>
+                        <option value="">-- Selecione a disciplina --</option>
+                        {% for d in disciplinas %}
+                        <option value="{{ d.id }}" data-nome="{{ d.nome }}" data-carga="{{ d.carga_horaria or 80 }}">{{ d.nome }} — {{ d.carga_horaria or 80 }}h</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i>⏱️</i> Carga Horária</label>
-                        <select class="form-control" id="carga_horaria" name="carga_horaria">
-                            <option value="60 horas">60 horas</option>
-                            <option value="80 horas" selected>80 horas</option>
-                            <option value="120 horas">120 horas</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label><i>💻</i> Modalidade</label>
-                        <select class="form-control" id="modalidade" name="modalidade">
-                            <option value="EaD" selected>EaD</option>
-                            <option value="Presencial">Presencial</option>
-                            <option value="Híbrido">Híbrido</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i>👨‍🏫</i> Docente</label>
-                        <input type="text" class="form-control" id="docente" name="docente" value="Roberto S. M. Souza">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label><i>📅</i> Data de Geração</label>
-                        <input type="date" class="form-control" id="data_geracao" name="data_geracao" value="{{ hoje }}">
-                    </div>
-                </div>
-                
+
                 <div class="form-group">
-                    <label><i>📚</i> Enquadramento Curricular *</label>
-                    <textarea class="form-control" id="enquadramento_curricular" name="enquadramento_curricular" rows="4" required>Matemática Aplicada
-Física Geral
-Química Ambiental
-Geologia Aplicada
-Hidrologia Básica</textarea>
-                    <div class="info-box" style="margin-top: 10px; background: #fff3cd; border-left-color: #ffc107;">
-                        <i>💡</i> Liste as disciplinas relacionadas, uma por linha. Este conteúdo aparecerá na Página 4 do documento.
+                    <label><i>💡</i> Sugestão de ementa *</label>
+                    <textarea class="form-control" id="ementa" name="ementa" rows="7" required
+                              placeholder="Digite apenas uma orientação de ementa. Ex.: fundamentos de resistência dos materiais, tensões e deformações, flexão, torção e aplicações em engenharia."></textarea>
+                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd; border-left-color: #2196f3;">
+                        <i>ℹ️</i> Não precisa escrever objetivos, bibliografia, pré-requisitos, conteúdo programático ou habilidades. A IA completa tudo automaticamente.
                     </div>
                 </div>
-                
-                <!-- NOVO CAMPO: Bibliografia Básica -->
-                <div class="form-group">
-                    <label><i>📖</i> Bibliografia Básica *</label>
-                    <textarea class="form-control" id="bibliografia_basica" name="bibliografia_basica" rows="5" required placeholder="Digite as 5 obras da bibliografia básica no formato ABNT...">SOBRENOME, Nome. Título do Livro 1. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 2. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 3. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 4. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 5. Edição. Cidade: Editora, ano.</textarea>
-                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
-                        <i>💡</i> Digite uma obra por linha no formato ABNT. Use <strong> para destacar o título se desejar.
-                    </div>
-                </div>
-                
-                <!-- NOVO CAMPO: Bibliografia Complementar -->
-                <div class="form-group">
-                    <label><i>📖</i> Bibliografia Complementar *</label>
-                    <textarea class="form-control" id="bibliografia_complementar" name="bibliografia_complementar" rows="4" required placeholder="Digite as 3 obras da bibliografia complementar...">SOBRENOME, Nome. Título do Livro 6. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 7. Edição. Cidade: Editora, ano.
-SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
-                    <div class="info-box" style="margin-top: 10px; background: #e3f2fd;">
-                        <i>💡</i> Digite uma obra por linha.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i>🔗</i> Pré-requisitos (opcional)</label>
-                    <input type="text" class="form-control" id="pre_requisitos" name="pre_requisitos" value="Não há pré-requisitos formais">
-                </div>
-                
+
                 <div style="margin-top: 30px;">
-                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO DE ENSINO COM IA (4 PÁGINAS)</button>
+                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO COMPLETO COM IA</button>
                     <a href="/mew/planos-ensino" class="btn btn-secondary"><i>📋</i> Ver Planos Gerados</a>
                 </div>
             </form>
@@ -421,7 +345,7 @@ SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
             <div class="result-actions" id="resultActions">
                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                     <a href="#" id="visualizarLink" target="_blank" class="btn btn-primary">
-                        <i>👁️</i> Visualizar Plano (4 Páginas)
+                        <i>👁️</i> Visualizar Plano (3 Páginas)
                     </a>
                     <a href="/mew/planos-ensino" class="btn btn-secondary">
                         <i>📋</i> Ver Todos os Planos
@@ -431,10 +355,7 @@ SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
                     </button>
                 </div>
                 <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-                    <strong>📄 Organização:</strong> Página 1 (Identificação, Objetivos, Ementa) | 
-                    Página 2 (Conteúdo Programático, Habilidades) | 
-                    Página 3 (Metodologia, Avaliação) | 
-                    Página 4 (Bibliografia + Enquadramento)
+                    <strong>📄 Organização:</strong> Página 1 (Identificação, Objetivos, Ementa) | Página 2 (Conteúdo Programático, Habilidades) | Página 3 (Metodologia, Avaliação, Bibliografia e Autenticação)
                 </div>
             </div>
         </div>
@@ -449,94 +370,59 @@ SOBRENOME, Nome. Título do Livro 8. Edição. Cidade: Editora, ano.</textarea>
     <script>
         document.getElementById('formPlano').onsubmit = async function(e) {
             e.preventDefault();
-            
-            // Validar campos obrigatórios
-            const disciplina = document.getElementById('disciplina').value;
-            const ementa = document.getElementById('ementa').value;
-            const enquadramento = document.getElementById('enquadramento_curricular').value;
-            const bibliografiaBasica = document.getElementById('bibliografia_basica').value;
-            const bibliografiaComplementar = document.getElementById('bibliografia_complementar').value;
-            
-            if (!disciplina || !ementa) {
-                showAlert('Disciplina e ementa são obrigatórios', 'error');
+
+            const disciplinaId = document.getElementById('disciplina_id').value;
+            const ementa = document.getElementById('ementa').value.trim();
+
+            if (!disciplinaId || !ementa) {
+                showAlert('Selecione a disciplina e informe uma sugestão de ementa.', 'error');
                 return;
             }
-            
-            if (!enquadramento) {
-                showAlert('Enquadramento curricular é obrigatório', 'error');
-                return;
-            }
-            
-            if (!bibliografiaBasica || !bibliografiaComplementar) {
-                showAlert('Bibliografia básica e complementar são obrigatórias', 'error');
-                return;
-            }
-            
-            // Mostrar loading
+
             document.getElementById('loadingOverlay').style.display = 'flex';
             document.getElementById('resultBox').style.display = 'none';
-            
-            // Coletar dados (AGORA COM BIBLIOGRAFIA)
-            const formData = {
-                disciplina: disciplina,
-                curso: document.getElementById('curso').value,
-                ementa: ementa,
-                carga_horaria: document.getElementById('carga_horaria').value,
-                modalidade: document.getElementById('modalidade').value,
-                docente: document.getElementById('docente').value,
-                data_geracao: document.getElementById('data_geracao').value,
-                enquadramento_curricular: enquadramento,
-                pre_requisitos: document.getElementById('pre_requisitos').value,
-                // NOVOS CAMPOS DE BIBLIOGRAFIA
-                bibliografia_basica: bibliografiaBasica,
-                bibliografia_complementar: bibliografiaComplementar
-            };
-            
+
             try {
                 const response = await fetch('/mew/processar-plano-ensino', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
+                    body: JSON.stringify({
+                        disciplina_id: disciplinaId,
+                        ementa: ementa
+                    })
                 });
-                
+
                 const result = await response.json();
-                
                 document.getElementById('loadingOverlay').style.display = 'none';
-                
+
                 if (result.success) {
-                    // Mostrar resultado
                     document.getElementById('resultBox').style.display = 'block';
-                    
-                    let infoHtml = `
+                    document.getElementById('resultInfo').innerHTML = `
                         <p><strong>📘 Disciplina:</strong> ${result.disciplina}</p>
+                        <p><strong>⏱️ Carga horária:</strong> ${result.carga_horaria}</p>
+                        <p><strong>👨‍🏫 Docente:</strong> ${result.docente}</p>
+                        <p><strong>🤖 Bibliografias:</strong> geradas automaticamente pela IA</p>
                         <p><strong>🔑 Código:</strong> ${result.codigo}</p>
                         <p><strong>📅 Emissão:</strong> ${result.data_emissao}</p>
                         <p><strong>🔐 Hash:</strong> ${result.hash.substring(0, 30)}...</p>
                     `;
-                    
-                    document.getElementById('resultInfo').innerHTML = infoHtml;
-                    
                     document.getElementById('visualizarLink').href = result.url_visualizar;
-                    
-                    showAlert('Plano de ensino gerado com sucesso!', 'success');
+                    showAlert('Plano completo gerado com sucesso. Confira as referências antes do uso oficial.', 'success');
                 } else {
-                    showAlert('Erro: ' + result.message, 'error');
+                    showAlert('Erro: ' + (result.message || 'Falha ao gerar plano.'), 'error');
                 }
             } catch (error) {
                 document.getElementById('loadingOverlay').style.display = 'none';
                 showAlert('Erro de conexão: ' + error.message, 'error');
             }
         };
-        
+
         function showAlert(message, type) {
             const alertEl = document.getElementById('alertMessage');
             alertEl.className = 'alert ' + (type === 'success' ? 'alert-success' : 'alert-error');
             alertEl.textContent = message;
             alertEl.style.display = 'block';
-            
-            setTimeout(() => {
-                alertEl.style.display = 'none';
-            }, 5000);
+            setTimeout(() => { alertEl.style.display = 'none'; }, 7000);
         }
     </script>
 </body>

@@ -201,6 +201,12 @@
                     {% endif %}
                 </a>
                 
+                <a href="/mew/documentos-integrados" class="menu-item">
+                    <i class="fas fa-file-pdf"></i>
+                    <span class="text">Docs Integrados</span>
+                    {% if total_documentos_integrados_pendentes and total_documentos_integrados_pendentes > 0 %}<span class="badge">{{ total_documentos_integrados_pendentes }}</span>{% endif %}
+                </a>
+
                 <a href="/mew/solicitacoes-documentos" class="menu-item">
                     <i class="fas fa-file-contract"></i>
                     <span class="text">Documentos</span>
@@ -211,7 +217,7 @@
                 
                 <a href="/mew/contratos" class="menu-item">
     <i class="fas fa-file-signature"></i>
-    <span class="text">Contratos</span>
+    <span class="text">Contratos Automáticos</span>
 </a>
 
                 <a href="/mew/planos-ensino" class="menu-item">
@@ -303,8 +309,8 @@
     <div class="menu-icon" style="background: linear-gradient(135deg, #111827, #374151);">
         <i class="fas fa-file-signature"></i>
     </div>
-    <h3>Contratos</h3>
-    <p>Enviar contratos em PDF para os alunos assinarem digitalmente</p>
+    <h3>Contratos Automáticos</h3>
+    <p>Acompanhar contratos gerados automaticamente, pagamento e assinatura eletrônica</p>
 </div>
                 <!-- Card Meus Planos (Listagem) -->
                 <div class="menu-card" onclick="window.location.href='/mew/planos-ensino'">
@@ -339,6 +345,18 @@
                     <p>Solicitações de material didático e declarações</p>
                     {% if total_solicitacoes_pendentes and total_solicitacoes_pendentes > 0 %}
                     <span class="badge">{{ total_solicitacoes_pendentes }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Card NOVO: Solicitações Integradas -->
+                <div class="menu-card" onclick="window.location.href='/mew/documentos-integrados'">
+                    <div class="menu-icon" style="background: linear-gradient(135deg, #0a2c4e, #b8860b);">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <h3>Documentos Integrados</h3>
+                    <p>Gerar prévia automática, conferir, aprovar e liberar PDF único ao aluno</p>
+                    {% if total_documentos_integrados_pendentes and total_documentos_integrados_pendentes > 0 %}
+                    <span class="badge">{{ total_documentos_integrados_pendentes }}</span>
                     {% endif %}
                 </div>
 

@@ -1,4 +1,5 @@
 from pydoc import html
+import re
 from werkzeug.utils import secure_filename
 import json
 import time
@@ -9,7 +10,7 @@ from datetime import datetime
 import hashlib
 import random
 from datetime import datetime
-from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, jsonify, flash
+from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, jsonify, flash, send_file
 import os
 import secrets
 import mercadopago
@@ -26,7 +27,9 @@ import hashlib
 import json
 import plano_ensino  
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
+from weasyprint import HTML
 load_dotenv() 
 
 app = Flask(__name__)
@@ -90,7 +93,7 @@ def get_mercadopago_sdk():
 def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_id=None, base_url=None):
     init_pagamentos_db()
     valor = round(float(valor_total), 2)
-    external_reference = f"FACOP-ALUNO-{aluno_id}-{int(time.time())}-{secrets.token_hex(3)}"
+    external_reference = f"SIGEU-ALUNO-{aluno_id}-{int(time.time())}-{secrets.token_hex(3)}"
     base_url = (base_url or "https://campusvirtualfacop.com.br").rstrip("/")
     preference_data = {
         "items": [{
@@ -139,63 +142,54 @@ def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_i
     return {
         "id": cobranca_id,
         "preference_id": preference_id,
-        "checkout_url": sandbox_init_point or init_point,
+        "checkout_url": (
+            sandbox_init_point
+            if str(os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")).startswith("TEST-") and sandbox_init_point
+            else (init_point or sandbox_init_point)
+        ),
         "external_reference": external_reference
     }
 
 
-def gerar_contrato_cadastro(aluno_id, aluno, regras, forma_pagamento, valor_total):
+def criar_contrato_aluno(aluno_id):
+    """Cria apenas o registro do contrato padrão; o conteúdo vem de templates/contrato_padrao.html."""
     init_contratos_db()
-    os.makedirs("static/contratos", exist_ok=True)
-    def esc(v):
-        return str(escape(v if v is not None else ""))
-    regras_html = esc(regras).replace("\n", "<br>")
-    valor_fmt = f"{float(valor_total):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-    html_contrato = f'''<!DOCTYPE html>
-<html lang="pt-br"><head><meta charset="UTF-8"><title>Contrato Educacional - {esc(aluno.get('nome'))}</title>
-<style>
-body{{font-family:Arial,sans-serif;background:#e5e7eb;margin:0;padding:24px;color:#111827}}
-.pagina{{max-width:850px;margin:auto;background:#fff;padding:42px 48px;box-shadow:0 4px 18px rgba(0,0,0,.15)}}
-h1{{text-align:center;font-size:22px;margin:0 0 8px}}.sub{{text-align:center;color:#6b7280;margin-bottom:30px}}
-.dados{{border:1px solid #d1d5db;border-radius:8px;padding:18px;margin-bottom:28px;background:#f9fafb}}
-.grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}}.item{{padding:5px 0;border-bottom:1px solid #e5e7eb}}
-.label{{font-size:11px;text-transform:uppercase;color:#6b7280;font-weight:bold}}.valor{{font-size:14px;font-weight:600;margin-top:3px}}
-.regras{{line-height:1.65;text-align:justify}}.rodape{{margin-top:38px;padding-top:16px;border-top:1px solid #d1d5db;font-size:12px;color:#6b7280}}
-@media(max-width:700px){{.pagina{{padding:24px}}.grid{{grid-template-columns:1fr}}}}
-@media print{{body{{background:#fff;padding:0}}.pagina{{box-shadow:none;max-width:none}}}}
-</style></head><body><div class="pagina">
-<h1>CONTRATO DE PRESTAÇÃO DE SERVIÇOS EDUCACIONAIS</h1><div class="sub">FACOP / SiGEu • Emitido em {data_emissao}</div>
-<div class="dados"><div class="grid">
-<div class="item"><div class="label">Aluno</div><div class="valor">{esc(aluno.get('nome'))}</div></div>
-<div class="item"><div class="label">RA</div><div class="valor">{esc(aluno.get('ra'))}</div></div>
-<div class="item"><div class="label">CPF</div><div class="valor">{esc(aluno.get('cpf'))}</div></div>
-<div class="item"><div class="label">RG</div><div class="valor">{esc(aluno.get('rg'))}</div></div>
-<div class="item"><div class="label">E-mail</div><div class="valor">{esc(aluno.get('email'))}</div></div>
-<div class="item"><div class="label">Telefone</div><div class="valor">{esc(aluno.get('telefone'))}</div></div>
-<div class="item"><div class="label">Endereço</div><div class="valor">{esc(aluno.get('endereco'))}</div></div>
-<div class="item"><div class="label">Cidade / UF / CEP</div><div class="valor">{esc(aluno.get('cidade'))} / {esc(aluno.get('estado'))} / {esc(aluno.get('cep'))}</div></div>
-<div class="item"><div class="label">Curso de referência</div><div class="valor">{esc(aluno.get('curso_referencia'))}</div></div>
-<div class="item"><div class="label">Forma de pagamento</div><div class="valor">{esc(forma_pagamento)}</div></div>
-<div class="item"><div class="label">Valor total</div><div class="valor">R$ {valor_fmt}</div></div>
-</div></div><h2>Condições e regras gerais</h2><div class="regras">{regras_html}</div>
-<div class="rodape">Este contrato será considerado aceito após a assinatura eletrônica realizada no ambiente do aluno.</div>
-</div></body></html>'''
-    caminho = f"static/contratos/contrato_aluno_{aluno_id}_{int(time.time())}.html"
-    Path(caminho).write_text(html_contrato, encoding="utf-8")
-    caminho_publico = "/" + caminho.replace("\\", "/")
+    data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Evita duplicar contrato pendente para o mesmo aluno.
+    cursor.execute("""
+        SELECT id, pdf_path
+        FROM contratos_alunos
+        WHERE aluno_id = %s AND status = 'pendente'
+        ORDER BY id DESC
+        LIMIT 1
+    """, (aluno_id,))
+    existente = cursor.fetchone()
+
+    if existente:
+        conn.close()
+        return existente["id"]
+
     cursor.execute("""
         INSERT INTO contratos_alunos (aluno_id, pdf_path, status, data_envio)
         VALUES (%s, %s, 'pendente', %s)
         RETURNING id
-    """, (aluno_id, caminho_publico, data_emissao))
+    """, (aluno_id, "/contrato/registro/pendente", data_envio))
+
     contrato_id = cursor.fetchone()["id"]
+    caminho = f"/contrato/registro/{contrato_id}"
+
+    cursor.execute(
+        "UPDATE contratos_alunos SET pdf_path = %s WHERE id = %s",
+        (caminho, contrato_id)
+    )
+
     conn.commit()
     conn.close()
     return contrato_id
-
 
 def init_db():
     conn = get_db_connection()
@@ -437,6 +431,7 @@ def init_db():
     conn.close()
 
 def init_contratos_db():
+    """Garante a estrutura dos contratos e das evidências de assinatura eletrônica."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -454,9 +449,53 @@ def init_contratos_db():
         )
     """)
 
+    # Campos adicionados sem apagar contratos já existentes.
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS foto_assinatura_base64 TEXT")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS ip_assinatura TEXT")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS user_agent_assinatura TEXT")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS aceite_contrato BOOLEAN DEFAULT FALSE")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS aceite_foto BOOLEAN DEFAULT FALSE")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS texto_aceite TEXT")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS versao_contrato TEXT DEFAULT '3.0'")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS hash_assinado TEXT")
+    cursor.execute("ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS pdf_assinado BYTEA")
+
     conn.commit()
     conn.close()
-    
+
+
+VERSAO_CONTRATO = "3.0"
+
+TEXTO_ACEITE_CONTRATO = """Declaro, para todos os fins de direito, que li integralmente, compreendi e concordo expressamente com todas as cláusulas e condições deste Contrato de Prestação de Serviços Educacionais, referente à contratação do(s) curso(s), disciplina(s), Unidade(s) Curricular(es) Isolada(s), atividade(s) de extensão, capacitação ou demais serviços educacionais nele individualizados. Declaro estar ciente de que minha matrícula administrativa e a prestação dos serviços educacionais contratados são realizadas pelo Grupo Educacional Unificado [UNIGEU] / SIGEU Educacional, responsável pela oferta, organização, execução e acompanhamento acadêmico e operacional dos serviços educacionais contratados, e de que a FACULDADE DO CENTRO OESTE PAULISTA LTDA. (FACOP), Instituição de Ensino Superior devidamente credenciada e submetida à regulação e supervisão do Ministério da Educação (MEC), atua como INSTITUIÇÃO CERTIFICADORA nos termos da parceria/convênio educacional existente entre as instituições, realizando a certificação e/ou emissão dos documentos acadêmicos que lhe couberem, quando aplicável e observados os requisitos acadêmicos, documentais e legais pertinentes. Confirmo que os dados pessoais e acadêmicos apresentados neste instrumento, inclusive nome, CPF e Matrícula/RA, correspondem aos meus dados. Ao assinar eletronicamente este instrumento, manifesto minha concordância livre, expressa e inequívoca com a contratação e reconheço como minha a assinatura grafada abaixo, realizada por meio eletrônico, autorizando seu registro juntamente com a data e hora da assinatura, código individual do contrato, hash de integridade e demais evidências técnicas vinculadas à celebração eletrônica deste instrumento."""
+
+TEXTO_ACEITE_FOTO = """Autorizo a captura e o armazenamento da fotografia realizada neste ato exclusivamente para compor o registro de evidências da celebração eletrônica deste contrato, vinculada à minha identificação, Matrícula/RA, data e hora da assinatura e código individual do instrumento. A fotografia será utilizada como evidência documental da celebração eletrônica e não será submetida, por este procedimento, a reconhecimento facial ou identificação biométrica automatizada."""
+
+
+def agora_brasilia():
+    return datetime.now(ZoneInfo("America/Sao_Paulo"))
+
+
+def obter_ip_cliente():
+    encaminhado = request.headers.get("X-Forwarded-For", "").strip()
+    if encaminhado:
+        return encaminhado.split(",")[0].strip()
+    return (request.remote_addr or "").strip()
+
+
+def validar_data_image(data_url, tipos_permitidos, limite_bytes):
+    """Valida data URL de imagem e limita o tamanho para não aceitar conteúdo arbitrário."""
+    if not data_url or not isinstance(data_url, str) or "," not in data_url:
+        return False
+    cabecalho, conteudo = data_url.split(",", 1)
+    if cabecalho not in tipos_permitidos:
+        return False
+    try:
+        bruto = base64.b64decode(conteudo, validate=True)
+    except Exception:
+        return False
+    return 0 < len(bruto) <= limite_bytes
+
+
 def gerar_hash_documento(conteudo, ra, timestamp):
     """
     Gera um hash único para o documento baseado no conteúdo
@@ -1407,19 +1446,19 @@ body {
     <div class="cantoneira bottom-right"></div>
     
     <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educ - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | F142485-1/-Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
     
     <!-- MARCAS D'ÁGUA -->
-    <div class="marca-dagua-principal">FACOP SiGEu</div>
+    <div class="marca-dagua-principal">FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
     <div class="marca-dagua-pattern"></div>
     
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
     
     <!-- FAIXA IDENTIFICADORA -->
@@ -1442,7 +1481,7 @@ body {
             </div>
         </div>
         <div class="selo-autenticidade">
-            Facop/SiGEu<br>e-SIGEU-ICP-2026
+            FCP-SiGEu<br>e-SIGEU-GTP-2026
         </div>
     </div>
     
@@ -1456,7 +1495,7 @@ body {
     <div class="texto-abertura">
         A <span class="destaque">FACULDADE DO CENTRO OESTE PAULISTA (FACOP)</span>, 
         instituição de ensino superior devidamente credenciada pelo Ministério da Educação, 
-        no âmbito do Convênio Educacional <span class="destaque">FACOP/SiGEU – Grupo Educacional Unificado LTDA</span>, 
+        no âmbito do Convênio Educacional <span class="destaque">FACOP/SiGEu – Grupo Educacional Unificado LTDA</span>, 
         inscrita no CNPJ sob o nº 04.344.730/0001-60, 
         <strong>DECLARA</strong> para os devidos fins de direito que:
     </div>
@@ -1658,6 +1697,7 @@ def logout():
 
 @app.route("/dashboard")
 def dashboard():
+    init_documentos_integrados_db()
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
@@ -2962,44 +3002,38 @@ def mew_login():
 def mew_dashboard():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
+    init_documentos_integrados_db()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Contar total de alunos
-    cursor.execute("SELECT COUNT(*) as total FROM alunos")
+    cursor.execute("SELECT COUNT(*) AS total FROM alunos")
     total_alunos = cursor.fetchone()["total"]
-    
-    # Contar total de disciplinas
-    cursor.execute("SELECT COUNT(*) as total FROM disciplinas")
+    cursor.execute("SELECT COUNT(*) AS total FROM disciplinas")
     total_disciplinas = cursor.fetchone()["total"]
-    
-    # Contar solicitações pendentes
-    cursor.execute("SELECT COUNT(*) as total FROM solicitacoes_material WHERE entregue = 0")
+    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_material WHERE entregue = 0")
     material_pendente = cursor.fetchone()["total"]
-    
-    cursor.execute("SELECT COUNT(*) as total FROM solicitacoes_declaracoes WHERE entregue = 0")
+    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_declaracoes WHERE entregue = 0")
     declaracoes_pendente = cursor.fetchone()["total"]
-    
     total_solicitacoes_pendentes = material_pendente + declaracoes_pendente
-    
-    # Contar total de provas realizadas
-    cursor.execute("SELECT COUNT(*) as total FROM notas")
+    cursor.execute("SELECT COUNT(*) AS total FROM notas")
     total_provas = cursor.fetchone()["total"]
-    
-    # Adicione após as outras contagens na função mew_dashboard()
-    cursor.execute("SELECT COUNT(*) as total FROM solicitacoes_documentos WHERE status = 'pendente'")
+    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos WHERE status = 'pendente'")
     documentos_pendente = cursor.fetchone()["total"]
-
+    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos_integrados WHERE status IN ('pendente','erro','aguardando_aprovacao')")
+    integrados_pendente = cursor.fetchone()["total"]
+    cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados WHERE tipo='plano_ensino'")
+    total_planos = cursor.fetchone()["total"]
+    cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados")
+    total_documentos = cursor.fetchone()["total"]
     conn.close()
-    
+
     return render_template(
         "mew/dashboard.html",
-        total_alunos=total_alunos,
-        total_disciplinas=total_disciplinas,
-        total_solicitacoes_pendentes=total_solicitacoes_pendentes,
-        total_provas=total_provas,
-        total_solicitacoes_documentos_pendentes = documentos_pendente
+        total_alunos=total_alunos, total_disciplinas=total_disciplinas,
+        total_solicitacoes_pendentes=total_solicitacoes_pendentes, total_provas=total_provas,
+        total_solicitacoes_documentos_pendentes=documentos_pendente,
+        total_documentos_integrados_pendentes=integrados_pendente,
+        total_planos=total_planos, total_documentos=total_documentos
     )
 
 
@@ -3021,6 +3055,9 @@ def mew_alunos():
         email = request.form.get("email")
         senha = request.form.get("senha")
         cpf = request.form.get("cpf")
+        cpf_somente_numeros = re.sub(r"\D", "", cpf or "")
+        if len(cpf_somente_numeros) == 11:
+            senha = cpf_somente_numeros
         rg = request.form.get("rg")
         telefone = request.form.get("telefone")
         endereco = request.form.get("endereco")
@@ -3042,13 +3079,7 @@ def mew_alunos():
         estado_civil = request.form.get("estado_civil", "")
         email_alternativo = request.form.get("email_alternativo", "")
 
-        gerar_contrato = request.form.get("gerar_contrato") == "1"
-        regras_contrato = request.form.get("regras_contrato", "").strip()
         gerar_cobranca = request.form.get("gerar_cobranca") == "1"
-
-        if gerar_contrato and not regras_contrato:
-            conn.close()
-            return "Informe as regras do contrato ou desmarque a opção de gerar contrato.", 400
 
         if not data_inicio:
             conn.close()
@@ -3158,19 +3189,9 @@ def mew_alunos():
             conn.close()
             raise
 
-        contrato_id = None
-        if gerar_contrato:
-            contrato_id = gerar_contrato_cadastro(
-                aluno_id,
-                {
-                    "nome": nome, "email": email, "ra": ra, "cpf": cpf, "rg": rg,
-                    "telefone": telefone, "endereco": endereco, "cidade": cidade,
-                    "estado": estado, "cep": cep, "curso_referencia": curso_referencia
-                },
-                regras_contrato,
-                forma_pagamento or "Não informado",
-                valor_total or 0
-            )
+        # O contrato é padrão e obrigatório: cria automaticamente o registro
+        # usando os dados do aluno, matrícula/RA, disciplinas e financeiro já salvos.
+        contrato_id = criar_contrato_aluno(aluno_id)
 
         if gerar_cobranca:
             try:
@@ -3403,7 +3424,20 @@ def webhook_mercadopago():
             """, (cobranca["aluno_id"],))
 
         conn.commit()
+        aluno_id_email = cobranca["aluno_id"]
         conn.close()
+
+        # E-mail transacional: não bloqueia o webhook caso o Titan ainda não esteja configurado.
+        if status_mp == "approved" and not ja_pago:
+            try:
+                enviar_boas_vindas_titan(
+                    aluno_id_email,
+                    referencia=f"mp:{payment_id}:boas_vindas",
+                    pagamento_id=str(payment_id)
+                )
+            except Exception as email_erro:
+                print(f"Aviso: pagamento aprovado, mas o e-mail Titan não foi enviado: {email_erro}")
+
         return jsonify({"ok": True}), 200
     except Exception as e:
         print(f"Erro webhook Mercado Pago: {e}")
@@ -5069,22 +5103,6 @@ def ver_resultado_validacao(codigo):
             mensagem="Erro ao validar documento."
         )
         
-@app.route("/mew/deletar-documento/<codigo>")
-def mew_deletar_documento(codigo):
-    """Deleta um documento autenticado"""
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
-    
-    conn.commit()
-    conn.close()
-    
-    return redirect("/mew/listar-documentos?sucesso=Documento+removido")
-
 # ==========================
 # VALIDAÇÃO PÚBLICA DE DOCUMENTOS
 # ==========================
@@ -6010,7 +6028,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
         carga_horaria = disc['carga_horaria'] if disc['carga_horaria'] else 80
         
         # Determinar docente
-        docente_display = "Professor Titular"
+        docente_display = "Docente Responsável — Coordenação Acadêmica SIGEU"
         if disc['docente_nome']:
             docente_display = disc['docente_nome']
             if disc['docente_titulacao']:
@@ -6170,142 +6188,20 @@ def salvar_documento_autenticado(documento_data):
 
 @app.route("/mew/visualizar-documento/<codigo>")
 def mew_visualizar_documento(codigo):
-    """Visualiza um documento autenticado no MEW"""
+    """Visualiza tanto documentos antigos (codigo_autenticacao) quanto novos (codigo)."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
-    documento = cursor.fetchone()
-    
-    conn.close()
-    
+    init_documentos_integrados_db()
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo=%s OR codigo_autenticacao=%s ORDER BY id DESC LIMIT 1", (codigo, codigo))
+    documento = cursor.fetchone(); conn.close()
     if not documento:
         return "Documento não encontrado", 404
-    
-    # Adicionar botão de impressão e informações
-    conteudo_completo = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Histórico Escolar - {documento['aluno_id']}</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; }}
-            .no-print {{ 
-                background: #f8f9fa; 
-                padding: 20px; 
-                border-radius: 10px; 
-                margin: 20px 0; 
-                border: 1px solid #ddd;
-            }}
-            .print-btn {{
-                background: #1a237e;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 16px;
-            }}
-            .print-btn:hover {{
-                background: #0d1b6b;
-            }}
-            .info-box {{
-                background: #e8f5e8;
-                padding: 15px;
-                border-radius: 5px;
-                margin: 15px 0;
-            }}
-            @media print {{
-                .no-print {{ display: none !important; }}
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="no-print">
-            <h3>📄 Documento Autenticado</h3>
-            <div class="info-box">
-                <p><strong>Código:</strong> {documento['codigo_autenticacao']}</p>
-                <p><strong>Data de Emissão:</strong> {documento['data_emissao']}</p>
-                <p><strong>Hash:</strong> {documento['hash_documento'][:50]}...</p>
-            </div>
-            <button onclick="window.print()" class="print-btn">
-                🖨️ Imprimir Documento
-            </button>
-            <button onclick="window.close()" style="margin-left: 10px; padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                ❌ Fechar
-            </button>
-        </div>
-        
-        {documento['conteudo_html']}
-        
-        <script>
-            // Focar na janela de impressão
-            function imprimirDocumento() {{
-                window.print();
-            }}
-            
-            // Adicionar atalho de teclado (Ctrl+P)
-            document.addEventListener('keydown', function(e) {{
-                if ((e.ctrlKey || e.metaKey) && e.key === 'p') {{
-                    e.preventDefault();
-                    window.print();
-                }}
-            }});
-        </script>
-    </body>
-    </html>
-    """
-    
-    return conteudo_completo
+    doc = dict(documento)
+    cod = doc.get("codigo") or doc.get("codigo_autenticacao") or codigo
+    conteudo = doc.get("conteudo_html") or "<p>Conteúdo indisponível.</p>"
+    return f"""<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Documento {cod}</title><style>body{{margin:0;font-family:Arial}}.barra{{background:#0a2c4e;color:white;padding:12px;text-align:center}}.btn{{position:fixed;right:20px;bottom:20px;background:#0a2c4e;color:white;padding:10px 15px;border:0;border-radius:5px;z-index:999}}@media print{{.barra,.btn{{display:none}}}}</style></head><body><div class='barra'>Documento autenticado • Código: {cod}</div>{conteudo}<button class='btn' onclick='window.print()'>Imprimir / PDF</button></body></html>"""
 
-@app.route('/mew/visualizar-documento/<codigo>')
-def mew_visualizar_documento_completo(codigo):
-    """Visualiza um documento autenticado - VERSÃO CORRIGIDA"""
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo_autenticacao = %s", (codigo,))
-    documento = cursor.fetchone()
-    
-    conn.close()
-    
-    if not documento:
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Documento não encontrado</title>
-            <style>
-                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                .error-box { 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
-                    max-width: 600px;
-                    border: 1px solid #f5c6cb;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="error-box">
-                <h2>❌ Documento não encontrado</h2>
-                <p>O documento com o código <strong>{}</strong> não foi encontrado.</p>
-                <p><a href="/mew/gerar-documento">Voltar para gerar documento</a></p>
-            </div>
-        </body>
-        </html>
-        '''.format(codigo)
-    
-    return documento["conteudo_html"]
 
 def gerar_codigo_simples():
     """Gera código simples de 10 caracteres: FACP-XXXX"""
@@ -6617,7 +6513,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             if info_disc['titulacao']:
                 docente += f" ({info_disc['titulacao']})"
         else:
-            docente = 'Professor Titular'
+            docente = 'Docente Responsável — Coordenação Acadêmica SIGEU'
         
         # Determinar período
         cursor.execute("""
@@ -7451,7 +7347,7 @@ body {{
     <div class="cantoneira bottom-right"></div>
     
     <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -7463,7 +7359,7 @@ body {{
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
     
     <!-- FAIXA IDENTIFICADORA -->
@@ -7486,7 +7382,7 @@ body {{
             </div>
         </div>
         <div class="selo-autenticidade">
-            Facop/SiGEu<br>e-SIGEU-ICP-2026
+            FCP-SiGEu<br>e-SIGEU-GTP-2026
         </div>
     </div>
     
@@ -7589,7 +7485,7 @@ body {{
     <div class="cantoneira bottom-right"></div>
     
     <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -7601,7 +7497,7 @@ body {{
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+    <div class="microtexto-seguranca micro-3">FCP Certificadora | SiGEu Educacional</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
     
     <!-- FAIXA IDENTIFICADORA -->
@@ -7624,7 +7520,7 @@ body {{
             </div>
         </div>
         <div class="selo-autenticidade">
-            Facop/SiGEu<br>e-SIGEU-ICP-2026
+            FCP-SiGEu<br>e-SIGEU-GTP-2026 
         </div>
     </div>
     
@@ -7664,7 +7560,7 @@ body {{
     <!-- BOX DE OBSERVAÇÕES -->
     <div class="box-avaliacao2">
         <div class="observacoes-texto">
-            <p><strong>Normativo:</strong> Oferta de disciplina isolada de acordo com o art. 50 da Lei de Diretrizes e Bases da Educação Nacional - LDBEN (Lei nº 9.394/1996). Modalidade de ingresso isolada, respeitados os pré-requisitos exigidos para cada disciplina, conforme registrado no ato da matrícula, vinculada à estrutura curricular de curso reconhecido no convênio institucional FACOP/SiGEu.</p>
+            <p><strong>Normativo:</strong> Oferta de disciplina isolada de acordo com o art. 50 da Lei de Diretrizes e Bases da Educação Nacional - LDBEN (Lei nº 9.394/1996). Modalidade de ingresso isolada, respeitados os pré-requisitos exigidos para cada disciplina, conforme registrado no ato da matrícula, vinculada à estrutura curricular de curso reconhecido no convênio institucional FACOP/CERTIFICADORA/SiGEU EDUCACIONAL.</p>
             <p style="margin-top: 2mm;">Este documento possui validade em todo território nacional e pode ser utilizado para fins de aproveitamento de estudos, comprovação de conclusão de componentes curriculares e demais fins legais.</p>
         </div>
     </div>
@@ -7816,7 +7712,7 @@ def deletar_documento(codigo):
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo = %s", (codigo,))
+    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo = %s OR codigo_autenticacao = %s", (codigo, codigo))
     
     conn.commit()
     conn.close()
@@ -9087,7 +8983,7 @@ def visualizar_documento(envio_id):
     </head>
     <body>
         <div class="info-header">
-            📄 Documento disponibilizado pela FACOP/SiGEu
+            📄 Documento disponibilizado pela SiGEu Educa • Facop CTP
             <span class="badge">Código: {documento['codigo']}</span>
         </div>
         
@@ -9309,7 +9205,7 @@ Para visualizar e baixar seu histórico:
 Qualquer dúvida, estamos à disposição.
 
 Atenciosamente,
-Secretaria Acadêmica FACOP/SiGEu"""
+Secretaria Acadêmica SiGEu Educacional"""
     
     elif tipo_documento == 'declaracao_conclusao':
         return f"""Olá {aluno_nome},
@@ -9327,7 +9223,7 @@ Para visualizar e baixar sua declaração:
 Parabéns pela conquista!
 
 Atenciosamente,
-Secretaria Acadêmica FACOP/SiGEu"""
+Secretaria Acadêmica SiGEu Educ • Facop CTF"""
     
     elif tipo_documento == 'plano_ensino':
         return f"""Olá {aluno_nome},
@@ -9345,7 +9241,7 @@ Para visualizar e baixar o plano de ensino:
 Bons estudos!
 
 Atenciosamente,
-Coordenação Acadêmica FACOP/SiGEu"""
+Coordenação Acadêmica SiGEu Educacional - FACOP Certificadora"""
     
     else:
         return f"""Olá {aluno_nome},
@@ -9360,7 +9256,7 @@ Para visualizar e baixar:
 3. Guarde o código de autenticação para validação futura
 
 Atenciosamente,
-Secretaria Acadêmica FACOP/SiGEu"""
+Secretaria Acadêmica SiGEu Eduacional - Facop Certificadora"""
 
 # ============================================
 # MEW - GERAR PLANOS DE ENSINO COM IA
@@ -9368,255 +9264,159 @@ Secretaria Acadêmica FACOP/SiGEu"""
 
 @app.route("/mew/gerar-plano-ensino")
 def mew_gerar_plano_ensino():
-    """Página para gerar planos de ensino com IA"""
+    """Gera plano já vinculado a uma disciplina real do cadastro."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    from datetime import datetime
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nome, COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas ORDER BY nome")
+    disciplinas = cursor.fetchall()
+    conn.close()
     hoje = datetime.now().strftime("%Y-%m-%d")
-    
-    return render_template("mew/gerar_plano_ensino.html", hoje=hoje)
+    return render_template("mew/gerar_plano_ensino.html", hoje=hoje, disciplinas=disciplinas)
+
 
 @app.route("/mew/processar-plano-ensino", methods=["POST"])
 def mew_processar_plano_ensino():
-    """Processa a geração do plano de ensino com IA e salva no banco"""
+    """Gera o plano a partir apenas da disciplina cadastrada + sugestão de ementa."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
-    
+        return jsonify({"success": False, "message": "Não autorizado"}), 403
+
+    init_documentos_integrados_db()
+    dados_recebidos = request.get_json(silent=True) or {}
+
     try:
-        dados = request.json
-        print(f"📥 Dados recebidos: {dados}")
-        
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            print(" OPENAI_API_KEY não encontrada no ambiente")
-            return jsonify({
-                "success": False, 
-                "message": "Chave da API OpenAI não configurada. Configure OPENAI_API_KEY no ambiente do Render."
-            })
-        
-        print(f"API Key encontrada: {api_key[:5]}... (tamanho: {len(api_key)})")
-        
-        # Importar função
-        try:
-            from api_planos import consultar_openai_para_plano
-            print("Função consultar_openai_para_plano importada com sucesso")
-        except ImportError as e:
-            print(f"Erro ao importar consultar_openai_para_plano: {e}")
-            return jsonify({
-                "success": False,
-                "message": f"Erro ao importar módulo da API: {str(e)}"
-            })
-        
-        # Chamar API OpenAI
-        try:
-            print("Chamando consultar_openai_para_plano...")
-            conteudo_ia = consultar_openai_para_plano(dados)
-            print(f"Conteúdo IA recebido: {list(conteudo_ia.keys()) if conteudo_ia else 'VAZIO'}")
-        except Exception as e:
-            print(f"Erro na chamada OpenAI: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                "success": False,
-                "message": f"Erro na API OpenAI: {str(e)}"
-            })
-        
+        disciplina_id = int(dados_recebidos.get("disciplina_id"))
+    except Exception:
+        return jsonify({"success": False, "message": "Selecione uma disciplina cadastrada."}), 400
+
+    ementa_sugerida = (dados_recebidos.get("ementa") or "").strip()
+    if not ementa_sugerida:
+        return jsonify({"success": False, "message": "Informe uma sugestão de ementa."}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, nome, COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE id=%s",
+        (disciplina_id,)
+    )
+    disc = cursor.fetchone()
+    if not disc:
+        conn.close()
+        return jsonify({"success": False, "message": "Disciplina não encontrada."}), 404
+
+    # Docente é dado institucional: usa o cadastro real e, na ausência, o responsável institucional padrão.
+    docente = _docente_documental_disciplina(cursor, disciplina_id, disc["nome"])
+    conn.commit()
+    conn.close()
+
+    if not os.getenv("OPENAI_API_KEY"):
+        return jsonify({"success": False, "message": "OPENAI_API_KEY não configurada no Render."}), 500
+
+    # ÚNICOS DADOS DE CONTEÚDO: título real da disciplina + sugestão de ementa.
+    # Carga vem do banco. Todo o conteúdo pedagógico variável e bibliografias vêm da IA.
+    dados_ia = {
+        "disciplina": disc["nome"],
+        "ementa": ementa_sugerida,
+        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas"
+    }
+
+    try:
+        from api_planos import consultar_openai_para_plano
+        conteudo_ia = consultar_openai_para_plano(dados_ia)
         if not conteudo_ia:
-            print("Conteúdo IA vazio ou None")
-            return jsonify({"success": False, "message": "Erro ao gerar conteúdo com IA - retorno vazio"})
-        
-        # Extrair dados do formulário
-        disciplina = dados.get('disciplina', '').upper()
-        departamento = dados.get('departamento', 'DEP CIÊNCIAS HUMANAS E SOCIAIS APLICADAS')  # 👈 NOVO CAMPO
-        carga_horaria = dados.get('carga_horaria', '120 horas')
-        modalidade = dados.get('modalidade', 'EaD')
-        docente = dados.get('docente', 'Roberto S. M. Souza')
-        data_geracao = dados.get('data_geracao', '')
-        
-        print(f"📝 Processando dados: {disciplina}, {departamento}, {modalidade}, {carga_horaria}")
-        
-        from datetime import datetime, timedelta
-        
-        # Processar data
-        if data_geracao:
-            try:
-                data_obj = datetime.strptime(data_geracao, "%Y-%m-%d")
-                data_formatada = data_obj.strftime("%d/%m/%Y")
-            except:
-                data_formatada = datetime.now().strftime("%d/%m/%Y")
-        else:
-            data_formatada = datetime.now().strftime("%d/%m/%Y")
-        
-        # Gerar código único
+            raise ValueError("A IA retornou conteúdo vazio.")
+
+        disciplina = disc["nome"].upper()
+        carga_horaria = f"{int(disc['carga_horaria'] or 80)} horas"
+
+        # Modalidade e pré-requisitos são gerados pela IA; metodologia e avaliação continuam institucionais/fixas.
+        dados_html = dict(conteudo_ia)
+        modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
+
+        data_formatada = datetime.now().strftime("%d/%m/%Y")
         codigo = gerar_codigo_simples()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        
-        print(f"Código gerado: {codigo}")
-        
         hash_documento = gerar_hash_documento(
-            f"plano_ensino_{disciplina}_{data_geracao}",
-            "ADMIN",
-            timestamp
+            f"plano_ensino_{disciplina_id}_{timestamp}", "ADMIN", timestamp
         )
-        
-        # Gerar QR Code
-        base_url = request.host_url.rstrip('/')
-        link_validacao = f"{base_url}/validar-documento/{codigo}"
-        qr_code_base64 = gerar_qrcode_base64(link_validacao)
-        
-        if not qr_code_base64:
-            print("QR Code não gerado, usando placeholder")
-            qr_code_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-        
-        metadados = criar_metadados_documento(
-            aluno_id=None, 
-            tipo_documento='plano_ensino', 
-            codigo=codigo, 
-            hash_val=hash_documento
-        )
-        
+        base_url = request.host_url.rstrip("/")
+        qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+        metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-        
-        # Gerar HTML do plano
-        print("🔄 Gerando HTML do plano de ensino...")
-        try:
-            html_completo = gerar_html_plano_ensino(
-                disciplina=disciplina,
-                departamento=departamento,  # 👈 NOVO PARÂMETRO ADICIONADO
-                codigo=codigo,
-                hash_completa=hash_documento,
-                carga_horaria=carga_horaria,
-                modalidade=modalidade,
-                docente=docente,
-                data_formatada=data_formatada,
-                qr_code_base64=qr_code_base64,
-                enquadramento_curricular=dados.get('enquadramento_curricular', ''),
-                bibliografia_basica=dados.get('bibliografia_basica', ''),
-                bibliografia_complementar=dados.get('bibliografia_complementar', ''),
-                **conteudo_ia
-            )
-            print(f"HTML gerado, tamanho: {len(html_completo)} caracteres")
-        except Exception as e:
-            print(f"Erro ao gerar HTML: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                "success": False,
-                "message": f"Erro ao gerar HTML do plano: {str(e)}"
-            })
-        
-        # Salvar no banco
-        print("🔄 Salvando no banco de dados...")
-        conn = None
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Garantir que a tabela tem as colunas necessárias
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS documentos_autenticados (
-                    id SERIAL PRIMARY KEY,
-                    codigo TEXT UNIQUE,
-                    aluno_id INTEGER,
-                    aluno_nome TEXT,
-                    aluno_ra TEXT,
-                    tipo TEXT,
-                    conteudo_html TEXT,
-                    data_geracao TEXT,
-                    qr_code TEXT,
-                    hash_documento TEXT,
-                    data_emissao TEXT,
-                    data_validade TEXT,
-                    metadados TEXT,
-                    disciplina_id INTEGER
-                )
-            ''')
-            
-            cursor.execute('''
-                INSERT INTO documentos_autenticados 
-                (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
-                 qr_code, hash_documento, data_emissao, data_validade, metadados)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            ''', (
-                codigo,
-                None,
-                "ADMIN - MEW",
-                "ADMIN",
-                'plano_ensino',
-                html_completo,
-                data_emissao,
-                qr_code_base64,
-                hash_documento,
-                data_emissao,
-                data_validade,
-                metadados
-            ))
-            
-            documento_id = cursor.fetchone()["id"]
-            conn.commit()
-            print(f"Documento salvo com ID: {documento_id}")
-            
-        except Exception as e:
-            print(f"Erro ao salvar no banco: {e}")
-            import traceback
-            traceback.print_exc()
-            if conn:
-                conn.close()
-            return jsonify({
-                "success": False,
-                "message": f"Erro ao salvar no banco de dados: {str(e)}"
-            })
-        finally:
-            if conn:
-                conn.close()
-        
+        data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+
+        html_completo = gerar_html_plano_ensino(
+            disciplina=disciplina,
+            codigo=codigo,
+            hash_completa=hash_documento,
+            carga_horaria=carga_horaria,
+            modalidade=modalidade,
+            docente=docente,
+            data_formatada=data_formatada,
+            qr_code_base64=qr_code_base64,
+            **dados_html
+        )
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO documentos_autenticados
+            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+             qr_code, hash_documento, data_emissao, data_validade, metadados, disciplina_id)
+            VALUES (%s,NULL,'ADMIN - MEW','ADMIN','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            codigo, html_completo, data_emissao, qr_code_base64, hash_documento,
+            data_emissao, data_validade, metadados, disciplina_id
+        ))
+        documento_id = cursor.fetchone()["id"]
+        conn.commit()
+        conn.close()
+
         return jsonify({
             "success": True,
+            "id": documento_id,
             "codigo": codigo,
             "hash": hash_documento,
-            "qr_code": qr_code_base64,
             "disciplina": disciplina,
-            "departamento": departamento,  # 👈 RETORNANDO O DEPARTAMENTO NA RESPOSTA
-            "url_validacao": link_validacao,
+            "disciplina_id": disciplina_id,
+            "docente": docente,
+            "carga_horaria": carga_horaria,
+            "modalidade": modalidade,
+            "bibliografia_gerada_por_ia": True,
             "url_visualizar": f"/ver-documento/{codigo}",
             "data_emissao": data_emissao,
             "data_validade": data_validade
         })
-        
     except Exception as e:
         import traceback
-        print(f"Erro em mew_processar_plano_ensino: {e}")
-        print(traceback.format_exc())
-        return jsonify({"success": False, "message": f"Erro ao processar plano: {str(e)}"})
+        traceback.print_exc()
+        return jsonify({"success": False, "message": f"Erro ao gerar plano: {str(e)}"}), 500
+
 
 @app.route("/mew/planos-ensino")
 def mew_planos_ensino():
-    """Lista todos os planos de ensino gerados"""
+    """Lista planos e mostra claramente a disciplina vinculada."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+    init_documentos_integrados_db()
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     cursor.execute("""
-        SELECT * FROM documentos_autenticados 
-        WHERE tipo = 'plano_ensino'
-        ORDER BY data_geracao DESC
+        SELECT da.*, d.nome AS disciplina
+        FROM documentos_autenticados da
+        LEFT JOIN disciplinas d ON d.id=da.disciplina_id
+        WHERE da.tipo='plano_ensino'
+        ORDER BY da.id DESC
     """)
-    
     planos = cursor.fetchall()
-    total_planos = len(planos)
-    
+    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome")
+    disciplinas = cursor.fetchall()
     conn.close()
-    
-    return render_template(
-        "mew/planos_ensino.html",
-        planos=planos,
-        total_planos=total_planos
-    )
+    return render_template("mew/planos_ensino.html", planos=planos, total_planos=len(planos), disciplinas=disciplinas)
+
 
 
 def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria, 
@@ -9633,7 +9433,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     habilidades = kwargs.get('habilidades', '')
     enquadramento_curricular = kwargs.get('enquadramento_curricular', '')
     
-    # 👇 BIBLIOGRAFIA AGORA VEM DO FORMULÁRIO (NÃO DA IA)
+    # Bibliografia gerada automaticamente pela IA
     bibliografia_basica = kwargs.get('bibliografia_basica', '')
     bibliografia_complementar = kwargs.get('bibliografia_complementar', '')
     
@@ -9660,10 +9460,10 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, print-scale=1">
-    <title>Plano de Ensino - {disciplina} | FACOP/SiGEU</title>
+    <title>Plano de Ensino - {disciplina} | FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-        /* ESTILO PROFISSIONAL INSTITUCIONAL - FACOP/SiGEu */
+        /* ESTILO PROFISSIONAL INSTITUCIONAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL */
         /* PADRÃO DE CORES: AZUL MARINHO (#1a237e), CINZA, DETALHES DE SEGURANÇA */
         * {{
             margin: 0;
@@ -10366,7 +10166,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -10378,7 +10178,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
@@ -10390,7 +10190,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 <div class="logo-area">
                     <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1>FACOP/SiGEU</h1>
+                        <h1>FACOP Certificado | SiGEU Educacional</h1>
                         <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
@@ -10443,7 +10243,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -10455,7 +10255,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
@@ -10467,7 +10267,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 <div class="logo-area">
                     <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1>FACOP/SiGEU</h1>
+                        <h1>FACOP Certificadora/SiGEU Educacional</h1>
                         <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
@@ -10500,7 +10300,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -10512,7 +10312,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/SIGEU</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
@@ -10524,7 +10324,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 <div class="logo-area">
                     <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1>FACOP/SiGEU</h1>
+                        <h1> SiGEU EDUC • FACOP CTF</h1>
                         <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
@@ -10588,16 +10388,16 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                         </div>
                     </div>
                     <div style="margin-top: 12px; color: #1d513b; font-size: 13px; font-weight: 600;">
-                        << autenticação por infraestrutura de chaves FACOP/SiGEU >>
+                        << registro eletrônico de integridade • SHA-256 • SIGEU Educacional >>
                     </div>
                 </div>
 
                 <div class="stamp-date">
                     <div class="secretary-signature">
-                        <div class="secretary-name">DEAP • FACOP/SiGEU</div>
+                        <div class="secretary-name">DEAP • FCP CTFC/SiGEU Educ</div>
                         <div class="secretary-title">DEPARTAMENTO EDUCACIONAL</div>
                         <div class="signature-line">
-                            <span class="simulated-signature">Roberto S. M. Souza</span>
+                            <span class="simulated-signature">{docente}</span>
                             <span style="font-size:28px; color:#0f402e;"><path xmlns="http://www.w3.org/2000/svg" d="M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z"/></span>
                         </div>
                         <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
@@ -10728,7 +10528,7 @@ Para visualizar e baixar o plano de ensino:
 Bons estudos!
 
 Atenciosamente,
-Coordenação Acadêmica FACOP/SiGEU"""
+Coordenação Acadêmica SiGEU Educacional"""
         
         mensagem_final = mensagem_personalizada if mensagem_personalizada.strip() else mensagem_padrao
         
@@ -11343,15 +11143,29 @@ def contrato_pendente():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Segurança: a assinatura só pode ocorrer depois do pagamento aprovado.
     cursor.execute("""
-        SELECT c.*, a.nome, a.ra
+        SELECT status
+        FROM situacao_financeira
+        WHERE aluno_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (aluno_id,))
+    financeiro = cursor.fetchone()
+
+    if financeiro and financeiro.get("status") != "pago":
+        conn.close()
+        return redirect(url_for("aguardando_pagamento"))
+
+    cursor.execute("""
+        SELECT c.*, a.nome, a.ra, a.email, dp.cpf
         FROM contratos_alunos c
         JOIN alunos a ON a.id = c.aluno_id
+        LEFT JOIN dados_pessoais dp ON dp.aluno_id = a.id
         WHERE c.aluno_id = %s AND c.status = 'pendente'
         ORDER BY c.id DESC
         LIMIT 1
     """, (aluno_id,))
-
     contrato = cursor.fetchone()
 
     if not contrato:
@@ -11359,388 +11173,119 @@ def contrato_pendente():
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
-        assinatura = request.form.get("assinatura")
+        assinatura = request.form.get("assinatura", "")
+        foto = request.form.get("foto_assinatura", "")
+        aceite_contrato = request.form.get("aceite_contrato") == "1"
+        aceite_foto = request.form.get("aceite_foto") == "1"
 
-        if not assinatura or "data:image/png;base64" not in assinatura:
+        if not aceite_contrato:
             conn.close()
-            return "Assinatura não recebida."
+            return "É obrigatório declarar a leitura e o aceite do contrato.", 400
 
-        os.makedirs("static/contratos_assinados", exist_ok=True)
+        if not aceite_foto:
+            conn.close()
+            return "É obrigatória a autorização específica para o registro fotográfico desta assinatura.", 400
 
-        data_assinatura = datetime.now().strftime("%d/%m/%Y %H:%M")
-        hash_contrato = hashlib.sha256(
-            f"{contrato['id']}-{contrato['aluno_id']}-{contrato['nome']}-{contrato['ra']}-{data_assinatura}-{secrets.token_hex(8)}".encode("utf-8")
-        ).hexdigest()
+        if not validar_data_image(
+            assinatura,
+            {"data:image/png;base64", "data:image/jpeg;base64"},
+            1_500_000
+        ):
+            conn.close()
+            return "Assinatura eletrônica inválida ou muito grande.", 400
 
-        caminho_html = f"static/contratos_assinados/contrato_assinado_{contrato['id']}.html"
-        caminho_publico = "/" + caminho_html.replace("\\", "/")
+        if not validar_data_image(
+            foto,
+            {"data:image/jpeg;base64", "data:image/png;base64", "data:image/webp;base64"},
+            3_000_000
+        ):
+            conn.close()
+            return "Fotografia de confirmação inválida ou muito grande.", 400
 
-        html_assinado = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Contrato Assinado</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background: #ddd;
-                    margin: 0;
-                    padding: 20px;
-                }}
+        agora = agora_brasilia()
+        data_assinatura = agora.strftime("%d/%m/%Y %H:%M:%S")
+        ip_assinatura = obter_ip_cliente()
+        user_agent = (request.headers.get("User-Agent") or "")[:1000]
 
-                .topo {{
-                    background: #111827;
-                    color: white;
-                    padding: 18px;
-                    border-radius: 10px;
-                    margin-bottom: 20px;
-                    display: flex;
-                    gap: 12px;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                }}
+        texto_aceite_completo = (
+            TEXTO_ACEITE_CONTRATO
+            + "\n\nAUTORIZAÇÃO DO REGISTRO FOTOGRÁFICO:\n"
+            + TEXTO_ACEITE_FOTO
+        )
 
-                .topo a, .topo button {{
-                    background: #16a34a;
-                    color: white;
-                    padding: 12px 18px;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    border: none;
-                    cursor: pointer;
-                }}
+        # O hash final vincula assinatura, foto, identidade, aceite e evidências técnicas.
+        dados_hash = json.dumps({
+            "contrato_id": contrato["id"],
+            "aluno_id": aluno_id,
+            "nome": contrato.get("nome") or "",
+            "ra": contrato.get("ra") or "",
+            "cpf": contrato.get("cpf") or "",
+            "data_assinatura": data_assinatura,
+            "assinatura": assinatura,
+            "foto": foto,
+            "ip": ip_assinatura,
+            "user_agent": user_agent,
+            "aceite": texto_aceite_completo,
+            "versao": VERSAO_CONTRATO
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        hash_assinado = hashlib.sha256(dados_hash.encode("utf-8")).hexdigest().upper()
 
-                .topo button.pdf {{
-                    background: #2563eb;
-                }}
-
-                .pagina {{
-                    background: white;
-                    width: 210mm;
-                    min-height: 297mm;
-                    margin: 0 auto 20px auto;
-                    padding: 12mm;
-                    box-sizing: border-box;
-                }}
-
-                iframe {{
-                    width: 100%;
-                    height: 260mm;
-                    border: 1px solid #ccc;
-                    background: white;
-                }}
-
-                .assinatura-box {{
-                    background: white;
-                    width: 210mm;
-                    min-height: 297mm;
-                    margin: 0 auto;
-                    padding: 25mm;
-                    box-sizing: border-box;
-                }}
-
-                .assinatura {{
-                    margin-top: 50px;
-                    border-top: 2px solid #000;
-                    width: 420px;
-                    text-align: center;
-                    padding-top: 10px;
-                }}
-
-                .hash {{
-                    margin-top: 40px;
-                    font-size: 11px;
-                    color: #333;
-                    word-break: break-all;
-                    border-top: 1px solid #ccc;
-                    padding-top: 15px;
-                }}
-
-                @media print {{
-                    body {{
-                        background: white;
-                        padding: 0;
-                    }}
-
-                    .topo, .pagina {{
-                        display: none;
-                    }}
-
-                    .assinatura-box {{
-                        margin: 0;
-                        width: 210mm;
-                        min-height: 297mm;
-                    }}
-                }}
-            </style>
-        </head>
-        <body>
-
-            <div class="topo">
-                <h2>✅ Contrato assinado com sucesso</h2>
-
-                <div>
-                    <button class="pdf" onclick="imprimirPDF()">IMPRIMIR PDF DO CONTRATO</button>
-                    <button onclick="window.print()">IMPRIMIR PÁGINA DA ASSINATURA</button>
-                    <a href="/dashboard">IR PARA A DASHBOARD</a>
-                </div>
-            </div>
-
-            <div class="pagina">
-                <iframe src="{contrato['pdf_path']}"></iframe>
-            </div>
-
-            <div class="assinatura-box">
-                <h2>Comprovante de Assinatura Digital</h2>
-
-                <p><strong>Aluno:</strong> {contrato['nome']}</p>
-                <p><strong>RA:</strong> {contrato['ra']}</p>
-                <p><strong>Data da assinatura:</strong> {data_assinatura}</p>
-
-                <div class="assinatura">
-                    <img src="{assinatura}" style="max-width: 380px;">
-                    <p>{contrato['nome']}</p>
-                </div>
-
-                <div class="hash">
-                    <strong>Hash de autenticação:</strong><br>
-                    {hash_contrato}
-                </div>
-            </div>
-
-            <script>
-                function imprimirPDF() {{
-                    const janela = window.open("{contrato['pdf_path']}", "_blank");
-                    setTimeout(function() {{
-                        janela.focus();
-                        janela.print();
-                    }}, 800);
-                }}
-            </script>
-
-        </body>
-        </html>
-        """
-
-        with open(caminho_html, "w", encoding="utf-8") as f:
-            f.write(html_assinado)
+        caminho_publico = f"/contrato/pdf/{contrato['id']}"
 
         cursor.execute("""
             UPDATE contratos_alunos
             SET status = 'assinado',
                 assinatura_base64 = %s,
+                foto_assinatura_base64 = %s,
                 arquivo_assinado_path = %s,
-                data_assinatura = %s
-            WHERE id = %s
+                data_assinatura = %s,
+                ip_assinatura = %s,
+                user_agent_assinatura = %s,
+                aceite_contrato = TRUE,
+                aceite_foto = TRUE,
+                texto_aceite = %s,
+                versao_contrato = %s,
+                hash_assinado = %s
+            WHERE id = %s AND status = 'pendente'
         """, (
             assinatura,
+            foto,
             caminho_publico,
             data_assinatura,
+            ip_assinatura,
+            user_agent,
+            texto_aceite_completo,
+            VERSAO_CONTRATO,
+            hash_assinado,
             contrato["id"]
         ))
+
+        if cursor.rowcount != 1:
+            conn.rollback()
+            conn.close()
+            return "Este contrato já foi assinado ou não está mais disponível.", 409
 
         conn.commit()
         conn.close()
 
-        return redirect(caminho_publico)
+        # Gera e grava o PDF definitivo. Se houver falha externa de renderização,
+        # a assinatura permanece válida e o PDF poderá ser gerado novamente ao abrir a rota.
+        try:
+            gerar_pdf_contrato_assinado(contrato["id"], salvar=True)
+        except Exception as e:
+            print(f"Erro ao gerar PDF final do contrato {contrato['id']}: {e}")
+
+        return redirect(url_for("visualizar_contrato_registro", contrato_id=contrato["id"]))
 
     conn.close()
 
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Assinar Contrato</title>
-        <style>
-            body {
-                margin: 0;
-                font-family: Arial, sans-serif;
-                background: #050505;
-                color: white;
-            }
+    return render_template(
+        "assinar_contrato.html",
+        contrato=contrato,
+        texto_aceite_contrato=TEXTO_ACEITE_CONTRATO,
+        texto_aceite_foto=TEXTO_ACEITE_FOTO
+    )
 
-            .container {
-                max-width: 1000px;
-                margin: auto;
-                padding: 30px;
-            }
-
-            iframe {
-                width: 100%;
-                height: 650px;
-                border: 0;
-                background: white;
-                border-radius: 10px;
-            }
-
-            canvas {
-                background: white;
-                border: 3px solid #16a34a;
-                border-radius: 10px;
-                width: 100%;
-                height: 220px;
-                touch-action: none;
-                display: block;
-                cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ctext y='24' font-size='24'%3E✍️%3C/text%3E%3C/svg%3E") 4 28, crosshair;
-            }
-
-            button {
-                padding: 14px 25px;
-                border: 0;
-                border-radius: 8px;
-                cursor: pointer;
-                font-weight: bold;
-                margin-top: 15px;
-            }
-
-            .btn-principal {
-                background: #16a34a;
-                color: white;
-            }
-
-            .btn-limpar {
-                background: #dc2626;
-                color: white;
-            }
-
-            .aviso {
-                background: #111827;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 15px;
-            }
-
-            #assinaturaArea {
-                display: none;
-                margin-top: 25px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>ASSINAR CONTRATO</h1>
-
-            <div class="aviso">
-                Leia o contrato abaixo. Depois clique em <strong>Prosseguir para assinatura</strong>.
-            </div>
-
-            <iframe src="{{ contrato.pdf_path }}"></iframe>
-
-            <button class="btn-principal" onclick="mostrarAssinatura()">PROSSEGUIR PARA ASSINATURA</button>
-
-<a href="{{ url_for('logout') }}"
-   style="
-       display:inline-block;
-       padding:14px 25px;
-       border-radius:8px;
-       background:#dc2626;
-       color:white;
-       text-decoration:none;
-       font-weight:bold;
-       margin-top:15px;
-       margin-left:10px;">
-    SAIR
-</a>
-            <div id="assinaturaArea">
-                <h2>Assine abaixo com o mouse ou dedo</h2>
-
-                <canvas id="canvas"></canvas>
-
-                <form method="POST" onsubmit="return salvarAssinatura()">
-                    <input type="hidden" name="assinatura" id="assinatura">
-                    <button type="button" class="btn-limpar" onclick="limpar()">Limpar</button>
-                    <button type="submit" class="btn-principal">FINALIZAR ASSINATURA</button>
-                </form>
-            </div>
-        </div>
-
-        <script>
-            const canvas = document.getElementById("canvas");
-            const ctx = canvas.getContext("2d");
-            let desenhando = false;
-            let assinou = false;
-
-            function ajustarCanvas() {
-                const rect = canvas.getBoundingClientRect();
-                canvas.width = rect.width;
-                canvas.height = 220;
-                ctx.lineWidth = 3;
-                ctx.lineCap = "round";
-                ctx.strokeStyle = "#000";
-            }
-
-            window.addEventListener("load", ajustarCanvas);
-            window.addEventListener("resize", ajustarCanvas);
-
-            function pegarPosicao(e) {
-                const rect = canvas.getBoundingClientRect();
-                const toque = e.touches ? e.touches[0] : e;
-                return {
-                    x: toque.clientX - rect.left,
-                    y: toque.clientY - rect.top
-                };
-            }
-
-            function iniciar(e) {
-                e.preventDefault();
-                desenhando = true;
-                assinou = true;
-                const p = pegarPosicao(e);
-                ctx.beginPath();
-                ctx.moveTo(p.x, p.y);
-            }
-
-            function desenhar(e) {
-                if (!desenhando) return;
-                e.preventDefault();
-                const p = pegarPosicao(e);
-                ctx.lineTo(p.x, p.y);
-                ctx.stroke();
-            }
-
-            function parar(e) {
-                e.preventDefault();
-                desenhando = false;
-            }
-
-            canvas.addEventListener("mousedown", iniciar);
-            canvas.addEventListener("mousemove", desenhar);
-            canvas.addEventListener("mouseup", parar);
-            canvas.addEventListener("mouseleave", parar);
-
-            canvas.addEventListener("touchstart", iniciar, { passive: false });
-            canvas.addEventListener("touchmove", desenhar, { passive: false });
-            canvas.addEventListener("touchend", parar, { passive: false });
-
-            function limpar() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                assinou = false;
-            }
-
-            function mostrarAssinatura() {
-                document.getElementById("assinaturaArea").style.display = "block";
-                setTimeout(ajustarCanvas, 100);
-                document.getElementById("assinaturaArea").scrollIntoView({ behavior: "smooth" });
-            }
-
-            function salvarAssinatura() {
-                if (!assinou) {
-                    alert("Faça sua assinatura antes de finalizar.");
-                    return false;
-                }
-
-                document.getElementById("assinatura").value = canvas.toDataURL("image/png");
-                return true;
-            }
-        </script>
-    </body>
-    </html>
-    """, contrato=contrato)
-    
-    
 
 @app.route("/mew/contratos", methods=["GET", "POST"])
 def mew_contratos():
@@ -11750,41 +11295,24 @@ def mew_contratos():
     init_contratos_db()
 
     if request.method == "POST":
-        aluno_id = request.form.get("aluno_id")
-        arquivo = request.files.get("pdf")
-
-        if not aluno_id or not arquivo:
-            return "Selecione o aluno e envie um PDF."
-
-        os.makedirs("static/contratos", exist_ok=True)
-
-        nome_arquivo = secure_filename(arquivo.filename)
-        caminho = f"static/contratos/contrato_aluno_{aluno_id}_{nome_arquivo}"
-        arquivo.save(caminho)
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO contratos_alunos
-            (aluno_id, pdf_path, status, data_envio)
-            VALUES (%s, %s, 'pendente', %s)
-        """, (
-            aluno_id,
-            "/" + caminho.replace("\\", "/"),
-            datetime.now().strftime("%d/%m/%Y %H:%M")
-        ))
-
-        conn.commit()
-        conn.close()
-
+        aluno_id = request.form.get("aluno_id", type=int)
+        if not aluno_id:
+            return redirect("/mew/contratos")
+        criar_contrato_aluno(aluno_id)
         return redirect("/mew/contratos")
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
-    alunos = cursor.fetchall()
+    cursor.execute("""
+        SELECT a.id, a.nome, a.ra
+        FROM alunos a
+        WHERE NOT EXISTS (
+            SELECT 1 FROM contratos_alunos c WHERE c.aluno_id = a.id
+        )
+        ORDER BY a.nome
+    """)
+    alunos_sem_contrato = cursor.fetchall()
 
     cursor.execute("""
         SELECT c.*, a.nome, a.ra
@@ -11793,102 +11321,89 @@ def mew_contratos():
         ORDER BY c.id DESC
     """)
     contratos = cursor.fetchall()
-
     conn.close()
 
     return render_template_string("""
     <!DOCTYPE html>
-    <html>
+    <html lang="pt-br">
     <head>
-        <title>MEW - Contratos</title>
+        <meta charset="UTF-8">
+        <title>MEW - Contratos Automáticos</title>
         <style>
-            body { font-family: Arial; padding: 30px; background: #f4f4f4; }
-            .box { background: white; padding: 25px; border-radius: 10px; margin-bottom: 25px; }
-            select, input, button { padding: 10px; margin: 5px 0; width: 100%; }
-            button { background: #111827; color: white; border: 0; cursor: pointer; }
-            table { width: 100%; border-collapse: collapse; background: white; }
-            th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-            .pendente { color: #b45309; font-weight: bold; }
-            .assinado { color: #15803d; font-weight: bold; }
+            body { font-family:Arial,sans-serif; padding:30px; background:#f4f4f4; color:#111827; }
+            .box { background:white; padding:25px; border-radius:10px; margin-bottom:25px; }
+            select, button { padding:10px; margin:5px 0; width:100%; }
+            button { background:#111827; color:white; border:0; cursor:pointer; }
+            table { width:100%; border-collapse:collapse; background:white; }
+            th, td { padding:10px; border-bottom:1px solid #ddd; text-align:left; }
+            .pendente { color:#b45309; font-weight:bold; }
+            .assinado { color:#15803d; font-weight:bold; }
+            a { color:#1d4ed8; }
         </style>
     </head>
     <body>
+        <p><a href="/mew/dashboard">← Voltar ao Dashboard</a></p>
         <div class="box">
-            <h2>Enviar contrato para aluno</h2>
+            <h2>Contratos automáticos</h2>
+            <p>O contrato padrão é criado automaticamente no cadastro do aluno. Não é mais necessário anexar PDF.</p>
 
-            <form method="POST" enctype="multipart/form-data">
-                <label>Aluno:</label>
+            {% if alunos_sem_contrato %}
+            <form method="POST">
+                <label>Gerar contrato para cadastro antigo sem contrato:</label>
                 <select name="aluno_id" required>
                     <option value="">Selecione...</option>
-                    {% for aluno in alunos %}
-                        <option value="{{ aluno.id }}">{{ aluno.nome }} - RA {{ aluno.ra }}</option>
+                    {% for aluno in alunos_sem_contrato %}
+                    <option value="{{ aluno.id }}">{{ aluno.nome }} - RA {{ aluno.ra }}</option>
                     {% endfor %}
                 </select>
-
-                <label>PDF do contrato:</label>
-                <input type="file" name="pdf" accept="application/pdf" required>
-
-                <button type="submit">Enviar contrato</button>
+                <button type="submit">GERAR CONTRATO PADRÃO</button>
             </form>
+            {% endif %}
         </div>
 
         <div class="box">
-            <h2>Contratos enviados</h2>
-
+            <h2>Contratos</h2>
             <table>
-                <tr>
-                    <th>Aluno</th>
-                    <th>RA</th>
-                    <th>Status</th>
-                    <th>Data envio</th>
-                    <th>Arquivo assinado</th>
-                </tr>
-
+                <tr><th>Aluno</th><th>Matrícula/RA</th><th>Status</th><th>Envio</th><th>Documento</th></tr>
                 {% for c in contratos %}
                 <tr>
                     <td>{{ c.nome }}</td>
                     <td>{{ c.ra }}</td>
-                    <td class="{{ c.status }}">{{ c.status }}</td>
+                    <td class="{{ c.status }}">{{ c.status|upper }}</td>
                     <td>{{ c.data_envio }}</td>
-                    <td>
-                        {% if c.arquivo_assinado_path %}
-                            <a href="{{ c.arquivo_assinado_path }}" target="_blank">Ver assinado</a>
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
+                    <td><a href="/contrato/registro/{{ c.id }}" target="_blank">Abrir contrato</a></td>
                 </tr>
                 {% endfor %}
             </table>
         </div>
     </body>
     </html>
-    """, alunos=alunos, contratos=contratos)
-
+    """, contratos=contratos, alunos_sem_contrato=alunos_sem_contrato)
 
 @app.before_request
-def bloquear_aluno_com_contrato_pendente():
-    # Não bloquear MEW/admin
-    if request.path.startswith("/mew"):
+def controlar_acesso_aluno_pagamento_contrato():
+    """Fluxo do aluno: pagamento aprovado -> assinatura do contrato -> acesso à plataforma."""
+    if request.path.startswith("/mew") or request.path.startswith("/static"):
         return
 
-    # Não bloquear arquivos estáticos
-    if request.path.startswith("/static"):
-        return
-
-    # Não bloquear login, logout e a própria tela do contrato
-    rotas_liberadas = [
+    rotas_liberadas = {
         "login",
         "logout",
+        "index",
+        "aguardando_pagamento",
+        "pagamento_mercadopago_sucesso",
+        "pagamento_mercadopago_pendente",
+        "pagamento_mercadopago_falha",
+        "webhook_mercadopago",
         "contrato_pendente",
-        "static"
-    ]
+        "visualizar_contrato_registro",
+        "visualizar_contrato_aluno"
+    }
 
     if request.endpoint in rotas_liberadas:
         return
 
     aluno_id = session.get("aluno_id")
-
     if not aluno_id:
         return
 
@@ -11896,17 +11411,82 @@ def bloquear_aluno_com_contrato_pendente():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id FROM contratos_alunos
-        WHERE aluno_id = %s AND status = 'pendente'
+        SELECT status
+        FROM situacao_financeira
+        WHERE aluno_id = %s
+        ORDER BY id DESC
         LIMIT 1
     """, (aluno_id,))
+    financeiro = cursor.fetchone()
 
+    # Se existe situação financeira, somente libera após status PAGO.
+    if financeiro and financeiro.get("status") != "pago":
+        conn.close()
+        return redirect(url_for("aguardando_pagamento"))
+
+    cursor.execute("""
+        SELECT id
+        FROM contratos_alunos
+        WHERE aluno_id = %s AND status = 'pendente'
+        ORDER BY id DESC
+        LIMIT 1
+    """, (aluno_id,))
     contrato = cursor.fetchone()
     conn.close()
 
     if contrato:
         return redirect(url_for("contrato_pendente"))
 
+
+@app.route("/aguardando-pagamento")
+def aguardando_pagamento():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT sf.status, sf.valor_total,
+               pm.checkout_url, pm.sandbox_checkout_url, pm.status AS status_mp_local
+        FROM situacao_financeira sf
+        LEFT JOIN LATERAL (
+            SELECT checkout_url, sandbox_checkout_url, status
+            FROM pagamentos_mercadopago
+            WHERE aluno_id = sf.aluno_id
+            ORDER BY id DESC
+            LIMIT 1
+        ) pm ON TRUE
+        WHERE sf.aluno_id = %s
+        ORDER BY sf.id DESC
+        LIMIT 1
+    """, (aluno_id,))
+    financeiro = cursor.fetchone()
+    conn.close()
+
+    if not financeiro or financeiro.get("status") == "pago":
+        return redirect(url_for("dashboard"))
+
+    checkout = financeiro.get("checkout_url") or financeiro.get("sandbox_checkout_url")
+
+    return render_template_string("""
+    <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aguardando pagamento | SIGEU Educacional</title>
+    <style>
+      body{font-family:Arial;background:#f3f4f6;margin:0;padding:30px;color:#111827}
+      .card{max-width:650px;margin:70px auto;background:#fff;padding:35px;border-radius:14px;box-shadow:0 10px 30px #0001;text-align:center}
+      .btn{display:inline-block;margin:10px;padding:13px 22px;border-radius:8px;background:#009ee3;color:#fff;text-decoration:none;font-weight:700}
+      .sair{background:#374151}
+    </style></head><body><div class="card">
+      <h1>⏳ Pagamento pendente</h1>
+      <p>O acesso às disciplinas será liberado automaticamente após a confirmação do pagamento.</p>
+      <p>Depois da aprovação, você realizará a assinatura do contrato com sua matrícula/RA já vinculada.</p>
+      {% if checkout %}<a class="btn" href="{{ checkout }}" target="_blank">ABRIR PAGAMENTO</a>{% endif %}
+      <a class="btn" href="/dashboard">VERIFICAR NOVAMENTE</a>
+      <a class="btn sair" href="/logout">SAIR</a>
+    </div></body></html>
+    """, checkout=checkout)
 
 @app.route("/mew/anexar-documento", methods=["GET", "POST"])
 def mew_anexar_documento():
@@ -11919,7 +11499,7 @@ def mew_anexar_documento():
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Anexar Documento - FACOP/SiGEU</title>
+            <title>Anexar Documento - SiGEU Educacional</title>
             <style>
                 body { font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }
                 .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #1a237e; }
@@ -12059,7 +11639,7 @@ def mew_anexar_documento():
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>{titulo} - FACOP/SiGEU</title>
+            <title>{titulo} - SiGEU Educação</title>
             <style>
                 * {{
                     margin: 0;
@@ -12427,7 +12007,7 @@ def mew_anexar_documento():
                 <div class="cantoneira bottom-left"></div>
                 <div class="cantoneira bottom-right"></div>
                 
-                <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/SIGEU - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
+                <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educ - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
                 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
                 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
                 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
@@ -12445,7 +12025,7 @@ def mew_anexar_documento():
                             <div class="instituicao-sub">Faculdade do Centro Oeste Paulista<br>Credenciada pela Portaria MEC nº 887 de 26/07/2017</div>
                         </div>
                     </div>
-                    <div class="selo-autenticidade">Facop/SiGEu<br>e-SIGEU-ICP-2026</div>
+                    <div class="selo-autenticidade">SiGEu Educacional<br>e-SIGEU-ICP-2026</div>
                 </div>
                 
                 <div class="titulo-documento">
@@ -12476,7 +12056,7 @@ def mew_anexar_documento():
                 <div class="assinatura-area">
     <img src="/static/img/assinatura_total.png" alt="Assinatura e Carimbo" style="max-width: 250px; height: auto;">
     <div style="margin-top: 5px; font-size: 8pt; color: #555; text-transform: uppercase; letter-spacing: 1px;">
-        DEPARTAMENTO EDUCACIONAL • FACOP/SiGEU
+        DEPARTAMENTO EDUCACIONAL • SiGEU Educacional
     </div>
 </div>
                 
@@ -12552,7 +12132,7 @@ def mew_anexar_documento():
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Documento Autenticado - FACOP/SiGEU</title>
+            <title>Documento Autenticado - SiGEU Educação/Facop Certificadora</title>
             <style>
                 body {{ font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #16a34a; text-align: center; }}
@@ -13163,12 +12743,1206 @@ def corrigir_projeto_final(projeto_id):
         "/mew/arquivo-final?sucesso=Nota+lançada.+Projeto+Final+substituiu+a+Prova+Final"
     )
 
+# ============================================================
+# SIGEU - DOCUMENTOS ACADÊMICOS INTEGRADOS + TITAN SMTP
+# ============================================================
+
+def init_documentos_integrados_db():
+    """Cria/atualiza as estruturas do novo fluxo sem exigir SQL manual."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Colunas acadêmicas usadas automaticamente pelos documentos.
+    cursor.execute("ALTER TABLE disciplinas ADD COLUMN IF NOT EXISTS carga_horaria INTEGER DEFAULT 80")
+    cursor.execute("ALTER TABLE disciplinas ADD COLUMN IF NOT EXISTS docente_documental TEXT")
+
+    # Estrutura de docentes, caso a instalação antiga ainda não a tenha criado.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS docentes (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            titulacao TEXT,
+            email TEXT,
+            telefone TEXT,
+            ativo INTEGER DEFAULT 1
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS disciplina_docente (
+            id SERIAL PRIMARY KEY,
+            disciplina_id INTEGER NOT NULL,
+            docente_id INTEGER NOT NULL,
+            ano_semestre TEXT,
+            FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id),
+            FOREIGN KEY (docente_id) REFERENCES docentes(id)
+        )
+    """)
+
+    # Garante uma estrutura compatível com os documentos já existentes.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_autenticados (
+            id SERIAL PRIMARY KEY,
+            codigo TEXT UNIQUE,
+            aluno_id INTEGER,
+            aluno_nome TEXT,
+            aluno_ra TEXT,
+            tipo TEXT,
+            conteudo_html TEXT,
+            data_geracao TEXT,
+            qr_code TEXT,
+            hash_documento TEXT,
+            data_emissao TEXT,
+            data_validade TEXT,
+            metadados TEXT,
+            disciplina_id INTEGER
+        )
+    """)
+    for sql in [
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS codigo TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS codigo_autenticacao TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS aluno_id INTEGER",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS aluno_nome TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS aluno_ra TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS tipo TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS tipo_documento TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS observacoes TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS conteudo_html TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS data_geracao TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS qr_code TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS hash_documento TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS data_emissao TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS data_validade TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS metadados TEXT",
+        "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS disciplina_id INTEGER",
+    ]:
+        cursor.execute(sql)
+
+    # Mantém compatibilidade com a área manual "Meus Documentos" já existente.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS documentos_enviados (
+            id SERIAL PRIMARY KEY,
+            documento_original_id INTEGER,
+            aluno_id INTEGER NOT NULL,
+            codigo TEXT,
+            tipo TEXT,
+            titulo TEXT,
+            disciplina_id INTEGER,
+            data_envio TEXT,
+            mensagem TEXT,
+            status TEXT DEFAULT 'enviado',
+            data_visualizacao TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+        )
+    """)
+
+    cursor.execute("ALTER TABLE docentes ADD COLUMN IF NOT EXISTS titulacao TEXT")
+    cursor.execute("ALTER TABLE docentes ADD COLUMN IF NOT EXISTS email TEXT")
+    cursor.execute("ALTER TABLE docentes ADD COLUMN IF NOT EXISTS telefone TEXT")
+    cursor.execute("ALTER TABLE docentes ADD COLUMN IF NOT EXISTS ativo INTEGER DEFAULT 1")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS solicitacoes_documentos_integrados (
+            id SERIAL PRIMARY KEY,
+            aluno_id INTEGER NOT NULL,
+            tipo_solicitacao TEXT NOT NULL,
+            tipos_documentos TEXT NOT NULL,
+            disciplinas_ids TEXT NOT NULL,
+            detalhes TEXT,
+            data_solicitacao TEXT,
+            status TEXT DEFAULT 'pendente',
+            mensagem_status TEXT,
+            codigo_pacote TEXT,
+            pdf_previa BYTEA,
+            pdf_final BYTEA,
+            nome_arquivo TEXT,
+            hash_pdf TEXT,
+            componentes_json TEXT,
+            data_preparacao TEXT,
+            data_aprovacao TEXT,
+            FOREIGN KEY (aluno_id) REFERENCES alunos(id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_solic_doc_int_aluno ON solicitacoes_documentos_integrados(aluno_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_solic_doc_int_status ON solicitacoes_documentos_integrados(status)")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS emails_transacionais (
+            id SERIAL PRIMARY KEY,
+            aluno_id INTEGER,
+            tipo TEXT,
+            referencia TEXT UNIQUE,
+            destinatario TEXT,
+            data_envio TEXT,
+            status TEXT,
+            erro TEXT
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def _parse_data_sigeu(valor):
+    if not valor:
+        return None
+    texto = str(valor).strip().split(" ")[0]
+    for formato in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(texto, formato)
+        except Exception:
+            pass
+    return None
+
+
+def _docente_documental_disciplina(cursor, disciplina_id, disciplina_nome):
+    """Usa docente real quando cadastrado; nunca inventa uma pessoa inexistente."""
+    cursor.execute("""
+        SELECT doc.nome, doc.titulacao
+        FROM disciplina_docente dd
+        JOIN docentes doc ON doc.id = dd.docente_id
+        WHERE dd.disciplina_id = %s AND COALESCE(doc.ativo, 1) = 1
+        ORDER BY dd.id DESC
+        LIMIT 1
+    """, (disciplina_id,))
+    row = cursor.fetchone()
+    if row and row.get("nome"):
+        nome = row["nome"]
+        if row.get("titulacao"):
+            nome += f" ({row['titulacao']})"
+        return nome
+
+    cursor.execute("SELECT docente_documental FROM disciplinas WHERE id = %s", (disciplina_id,))
+    row = cursor.fetchone()
+    if row and row.get("docente_documental"):
+        return row["docente_documental"]
+
+    # Designação funcional: evita atribuir falsamente a disciplina a uma pessoa real/fictícia.
+    designacao = "Docente Responsável — Coordenação Acadêmica SIGEU"
+    cursor.execute(
+        "UPDATE disciplinas SET docente_documental = %s WHERE id = %s",
+        (designacao, disciplina_id)
+    )
+    return designacao
+
+
+def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
+    """Verifica 20 dias + capítulos + avaliações + final/projeto + aprovação."""
+    fechar = cursor is None
+    if fechar:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+    else:
+        conn = None
+
+    cursor.execute("""
+        SELECT d.id, d.nome, COALESCE(d.carga_horaria, 80) AS carga_horaria,
+               addd.data_inicio, addd.data_fim_previsto,
+               nf.nota_final, nf.media_disciplina, nf.media_final, nf.status AS status_final,
+               nf.data_realizacao
+        FROM disciplinas d
+        JOIN aluno_disciplina ad ON ad.disciplina_id = d.id AND ad.aluno_id = %s
+        LEFT JOIN aluno_disciplina_datas addd
+          ON addd.aluno_id = ad.aluno_id AND addd.disciplina_id = d.id
+        LEFT JOIN notas_finais nf
+          ON nf.aluno_id = ad.aluno_id AND nf.disciplina_id = d.id
+        WHERE d.id = %s
+    """, (aluno_id, disciplina_id))
+    d = cursor.fetchone()
+    if not d:
+        if fechar:
+            conn.close()
+        return {"elegivel": False, "motivo": "Disciplina não pertence à matrícula do aluno."}
+
+    cursor.execute("SELECT COUNT(*) AS total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
+    total_capitulos = int((cursor.fetchone() or {}).get("total") or 0)
+
+    cursor.execute("""
+        SELECT COUNT(DISTINCT capitulo) AS total
+        FROM notas WHERE aluno_id = %s AND disciplina_id = %s
+    """, (aluno_id, disciplina_id))
+    capitulos_avaliados = int((cursor.fetchone() or {}).get("total") or 0)
+
+    cursor.execute("""
+        SELECT corrigido, nota, arquivo_path, data_envio
+        FROM projetos_finais
+        WHERE aluno_id = %s AND disciplina_id = %s
+        LIMIT 1
+    """, (aluno_id, disciplina_id))
+    projeto = cursor.fetchone()
+
+    data_inicio = _parse_data_sigeu(d.get("data_inicio"))
+    dias_cursados = (datetime.now().date() - data_inicio.date()).days if data_inicio else 0
+    faltam_dias = max(0, 20 - dias_cursados)
+
+    motivos = []
+    if not data_inicio:
+        motivos.append("data de início da disciplina não cadastrada")
+    elif faltam_dias > 0:
+        motivos.append(f"faltam {faltam_dias} dia(s) para completar o prazo mínimo de 20 dias")
+
+    if total_capitulos <= 0:
+        motivos.append("disciplina sem capítulos cadastrados")
+    elif capitulos_avaliados < total_capitulos:
+        motivos.append(f"faltam {total_capitulos - capitulos_avaliados} avaliação(ões) de capítulo")
+
+    final_concluido = False
+    final_tipo = "Prova Final"
+    if projeto:
+        final_tipo = "Projeto Final"
+        final_concluido = bool(projeto.get("corrigido")) and projeto.get("nota") is not None
+        if not final_concluido:
+            motivos.append("Projeto Final ainda não foi corrigido e lançado")
+    else:
+        final_concluido = d.get("media_final") is not None or d.get("nota_final") is not None
+        if not final_concluido:
+            motivos.append("avaliação final ainda não foi concluída/lançada")
+
+    aprovado = str(d.get("status_final") or "").lower() == "aprovado"
+    if final_concluido and not aprovado:
+        motivos.append("disciplina ainda não consta como aprovada")
+
+    atividades_total = max(total_capitulos, 0) + 1
+    atividades_feitas = min(capitulos_avaliados, max(total_capitulos, 0)) + (1 if final_concluido else 0)
+    frequencia = round((atividades_feitas / atividades_total) * 100, 2) if atividades_total else 0.0
+
+    docente = _docente_documental_disciplina(cursor, disciplina_id, d["nome"])
+
+    resultado = {
+        "id": d["id"],
+        "nome": d["nome"],
+        "carga_horaria": int(d.get("carga_horaria") or 80),
+        "data_inicio": d.get("data_inicio") or "",
+        "data_fim_previsto": d.get("data_fim_previsto") or "",
+        "nota_final": d.get("nota_final"),
+        "media_disciplina": d.get("media_disciplina"),
+        "media_final": d.get("media_final"),
+        "status_final": d.get("status_final") or "",
+        "data_realizacao": d.get("data_realizacao") or "",
+        "total_capitulos": total_capitulos,
+        "capitulos_avaliados": capitulos_avaliados,
+        "final_tipo": final_tipo,
+        "final_concluido": final_concluido,
+        "frequencia": frequencia,
+        "docente": docente,
+        "elegivel": len(motivos) == 0,
+        "motivo": "; ".join(motivos) if motivos else "Elegível para emissão documental."
+    }
+
+    if fechar:
+        conn.commit()
+        conn.close()
+    return resultado
+
+
+def _disciplinas_documentos_aluno(aluno_id):
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT d.id
+        FROM disciplinas d
+        JOIN aluno_disciplina ad ON ad.disciplina_id = d.id
+        WHERE ad.aluno_id = %s
+        ORDER BY d.nome
+    """, (aluno_id,))
+    ids = [r["id"] for r in cursor.fetchall()]
+    resultado = [_status_disciplina_documentos(aluno_id, did, cursor) for did in ids]
+    conn.commit()
+    conn.close()
+    return resultado
+
+
+def _calcular_ira_automatico(disciplinas):
+    """IRA em escala 0-10, ponderado pela carga horária real."""
+    soma = 0.0
+    carga = 0
+    aprovadas = 0
+    for d in disciplinas:
+        nota = d.get("media_final")
+        if nota is None:
+            nota = d.get("nota_final")
+        if nota is None:
+            continue
+        ch = int(d.get("carga_horaria") or 80)
+        soma += float(nota) * ch
+        carga += ch
+        if str(d.get("status_final") or "").lower() == "aprovado":
+            aprovadas += 1
+    return {
+        "ira": round(soma / carga, 2) if carga else 0.0,
+        "carga_total": carga,
+        "disciplinas_aprovadas": aprovadas,
+        "total_disciplinas": len(disciplinas)
+    }
+
+
+def _dados_aluno_documentos(aluno_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.id, a.nome, a.email, a.ra,
+               dp.cpf, dp.rg, dp.telefone, dp.endereco, dp.cidade, dp.estado, dp.cep,
+               dp.curso_referencia, dp.nome_pai, dp.nome_mae, dp.naturalidade,
+               dp.nacionalidade, dp.data_nascimento, dp.sexo, dp.estado_civil
+        FROM alunos a
+        LEFT JOIN dados_pessoais dp ON dp.aluno_id = a.id
+        WHERE a.id = %s
+    """, (aluno_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    dados = dict(row)
+    cpf = re.sub(r"\D", "", dados.get("cpf") or "")
+    dados["cpf_formatado"] = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else dados.get("cpf", "")
+    return dados
+
+
+def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_documento):
+    resumo = _calcular_ira_automatico(disciplinas)
+    linhas = []
+    for d in disciplinas:
+        nota = d.get("media_final")
+        if nota is None:
+            nota = d.get("nota_final")
+        nota_txt = f"{float(nota):.2f}" if nota is not None else "N/I"
+        status_txt = str(d.get("status_final") or "").upper() or "N/I"
+        inicio = d.get("data_inicio") or "N/I"
+        linhas.append(f"""
+        <tr>
+          <td>{escape(d['nome'])}</td><td>{d['carga_horaria']}h</td><td>{escape(d['docente'])}</td>
+          <td>{nota_txt}</td><td>{d['frequencia']:.0f}%</td><td>{status_txt}</td><td>{inicio}</td>
+        </tr>""")
+    return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
+    <style>
+    @page {{ size:A4; margin:16mm; }} body{{font-family:Arial,sans-serif;color:#18212b;font-size:10.5pt}}
+    .cab{{border-bottom:3px solid #0a2c4e;padding-bottom:12px;margin-bottom:18px}} h1{{font-size:20pt;color:#0a2c4e;margin:0}}
+    .sub{{color:#555;margin-top:5px}} .dados{{display:grid;grid-template-columns:1fr 1fr;gap:7px;background:#f5f7fa;padding:12px;margin:14px 0}}
+    table{{width:100%;border-collapse:collapse;font-size:8.8pt}} th,td{{border:1px solid #aab3bd;padding:6px}} th{{background:#0a2c4e;color:#fff}}
+    .resumo{{margin-top:18px;padding:12px;border:1px solid #c8d0d8}} .auth{{margin-top:18px;display:flex;gap:16px;align-items:center;border-top:1px solid #bbb;padding-top:12px}}
+    .auth img{{width:90px;height:90px}} .hash{{font-family:monospace;font-size:7pt;word-break:break-all}}
+    </style></head><body>
+    <div class='cab'><h1>HISTÓRICO ACADÊMICO</h1><div class='sub'>SIGEU Educacional • documento eletrônico autenticado</div></div>
+    <div class='dados'><div><b>Aluno:</b> {escape(aluno.get('nome',''))}</div><div><b>RA:</b> {escape(aluno.get('ra',''))}</div>
+    <div><b>CPF:</b> {escape(aluno.get('cpf_formatado',''))}</div><div><b>Curso/Referência:</b> {escape(aluno.get('curso_referencia') or 'Disciplinas/Unidades Curriculares')}</div></div>
+    <table><thead><tr><th>Disciplina</th><th>CH</th><th>Docente</th><th>Média</th><th>Frequência</th><th>Situação</th><th>Início</th></tr></thead>
+    <tbody>{''.join(linhas)}</tbody></table>
+    <div class='resumo'><b>IRA automático:</b> {resumo['ira']:.2f}/10 &nbsp; • &nbsp; <b>Disciplinas:</b> {resumo['total_disciplinas']} &nbsp; • &nbsp; <b>Carga horária:</b> {resumo['carga_total']}h</div>
+    <div class='auth'><img src='{qr_code}'><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>{hash_documento}</div></div></div>
+    </body></html>"""
+
+
+def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
+    nota = d.get("media_final") if d.get("media_final") is not None else d.get("nota_final")
+    nota_txt = f"{float(nota):.2f}" if nota is not None else "N/I"
+    data_conclusao = d.get("data_realizacao") or datetime.now().strftime("%d/%m/%Y")
+    data_conclusao = str(data_conclusao).split(" ")[0]
+    return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
+    <style>@page{{size:A4;margin:20mm}}body{{font-family:Arial,sans-serif;color:#1b2430;line-height:1.65}}.box{{border:1px solid #9ba7b4;padding:24px;min-height:230mm;position:relative}}h1{{text-align:center;color:#0a2c4e;font-size:20pt;margin:15mm 0 20mm}}p{{text-align:justify;font-size:12pt}}.rod{{position:absolute;bottom:20mm;left:24px;right:24px;border-top:1px solid #bbb;padding-top:12px;display:flex;align-items:center;gap:15px}}.rod img{{width:86px}}.hash{{font-size:7pt;font-family:monospace;word-break:break-all}}</style></head><body>
+    <div class='box'><div><b>SIGEU EDUCACIONAL</b><br><small>Declaração acadêmica eletrônica</small></div><h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
+    <p>Declaramos, para os devidos fins, que <b>{escape(aluno.get('nome',''))}</b>, CPF {escape(aluno.get('cpf_formatado',''))}, matrícula/RA <b>{escape(aluno.get('ra',''))}</b>, concluiu com aproveitamento a disciplina <b>{escape(d['nome'])}</b>, com carga horária de <b>{d['carga_horaria']} horas</b>, frequência acadêmica registrada de <b>{d['frequencia']:.0f}%</b> e média final <b>{nota_txt}</b>.</p>
+    <p>A conclusão foi registrada em {escape(data_conclusao)}. Docente/Responsável acadêmico registrado: <b>{escape(d['docente'])}</b>.</p>
+    <p>Documento emitido eletronicamente mediante solicitação do acadêmico, com código e hash para verificação de integridade.</p>
+    <div class='rod'><img src='{qr_code}'><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>{hash_documento}</div></div></div></div></body></html>"""
+
+
+def _html_para_pdf(html_texto, base_url=None):
+    return HTML(string=html_texto, base_url=base_url or request.host_url).write_pdf()
+
+
+def _mesclar_pdfs(lista_pdfs):
+    from pypdf import PdfReader, PdfWriter
+    writer = PdfWriter()
+    buffers = []
+    try:
+        for pdf_bytes in lista_pdfs:
+            b = BytesIO(pdf_bytes)
+            buffers.append(b)
+            reader = PdfReader(b)
+            for page in reader.pages:
+                writer.add_page(page)
+        out = BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    finally:
+        for b in buffers:
+            try: b.close()
+            except Exception: pass
+
+
+def _salvar_componente_autenticado(cursor, aluno, tipo, html_texto, codigo, hash_doc, disciplina_id=None, qr_code=None):
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+    cursor.execute("""
+        INSERT INTO documentos_autenticados
+        (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
+         qr_code, hash_documento, data_emissao, data_validade, metadados, disciplina_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        RETURNING id
+    """, (
+        codigo, aluno["id"], aluno.get("nome"), aluno.get("ra"), tipo, html_texto, agora,
+        qr_code, hash_doc, agora, validade,
+        json.dumps({"origem": "solicitacao_integrada", "versao": "1.0"}, ensure_ascii=False),
+        disciplina_id
+    ))
+    return cursor.fetchone()["id"]
+
+
+def _gerar_previa_solicitacao_integrada(solicitacao_id):
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM solicitacoes_documentos_integrados WHERE id = %s", (solicitacao_id,))
+        s = cursor.fetchone()
+        if not s:
+            raise ValueError("Solicitação não encontrada.")
+
+        aluno = _dados_aluno_documentos(s["aluno_id"])
+        if not aluno:
+            raise ValueError("Aluno não encontrado.")
+
+        ids = [int(x) for x in str(s.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+        if not ids:
+            raise ValueError("Nenhuma disciplina foi selecionada.")
+
+        disciplinas = []
+        for did in ids:
+            status = _status_disciplina_documentos(s["aluno_id"], did, cursor)
+            if not status.get("elegivel"):
+                raise ValueError(f"{status.get('nome','Disciplina')}: {status.get('motivo')}")
+            disciplinas.append(status)
+
+        tipos = json.loads(s.get("tipos_documentos") or "[]")
+        if not tipos:
+            raise ValueError("Nenhum tipo de documento solicitado.")
+
+        pdfs = []
+        componentes = []
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        base_url = request.host_url.rstrip("/")
+
+        if "historico" in tipos:
+            codigo = f"HIST-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
+            hash_doc = gerar_hash_documento("historico-integrado-" + str(solicitacao_id), aluno["ra"], timestamp)
+            qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+            html_h = _html_historico_integrado(aluno, disciplinas, codigo, qr, hash_doc)
+            doc_id = _salvar_componente_autenticado(cursor, aluno, "historico", html_h, codigo, hash_doc, None, qr)
+            pdfs.append(_html_para_pdf(html_h, base_url))
+            componentes.append({"id": doc_id, "tipo": "historico", "codigo": codigo})
+
+        if "conclusao" in tipos:
+            for d in disciplinas:
+                codigo = f"DECL-{aluno['ra']}-{d['id']}-{timestamp}-{secrets.token_hex(2).upper()}"
+                hash_doc = gerar_hash_documento(f"declaracao-{s['id']}-{d['id']}", aluno["ra"], timestamp)
+                qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+                html_d = _html_declaracao_integrada(aluno, d, codigo, qr, hash_doc)
+                doc_id = _salvar_componente_autenticado(cursor, aluno, "declaracao_conclusao", html_d, codigo, hash_doc, d["id"], qr)
+                pdfs.append(_html_para_pdf(html_d, base_url))
+                componentes.append({"id": doc_id, "tipo": "declaracao_conclusao", "disciplina_id": d["id"], "codigo": codigo})
+
+        if "plano_ensino" in tipos:
+            for d in disciplinas:
+                cursor.execute("""
+                    SELECT id, codigo, conteudo_html, hash_documento
+                    FROM documentos_autenticados
+                    WHERE tipo = 'plano_ensino' AND disciplina_id = %s
+                    ORDER BY id DESC LIMIT 1
+                """, (d["id"],))
+                plano = cursor.fetchone()
+                if not plano or not plano.get("conteudo_html"):
+                    raise ValueError(f"Plano de Ensino ainda não foi gerado/vinculado à disciplina {d['nome']}.")
+                pdfs.append(_html_para_pdf(plano["conteudo_html"], base_url))
+                componentes.append({"id": plano["id"], "tipo": "plano_ensino", "disciplina_id": d["id"], "codigo": plano.get("codigo")})
+
+        if not pdfs:
+            raise ValueError("Nenhum documento pôde ser gerado.")
+
+        pdf_final = _mesclar_pdfs(pdfs)
+        hash_pdf = hashlib.sha256(pdf_final).hexdigest().upper()
+        codigo_pacote = f"PAC-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
+        nome_arquivo = f"SIGEU_documentos_{aluno['ra']}_{timestamp}.pdf"
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        cursor.execute("""
+            UPDATE solicitacoes_documentos_integrados
+            SET status='aguardando_aprovacao', mensagem_status=%s, codigo_pacote=%s,
+                pdf_previa=%s, pdf_final=NULL, nome_arquivo=%s, hash_pdf=%s,
+                componentes_json=%s, data_preparacao=%s
+            WHERE id=%s
+        """, (
+            "Prévia automática pronta para conferência do MEW.", codigo_pacote,
+            psycopg2.Binary(pdf_final), nome_arquivo, hash_pdf,
+            json.dumps(componentes, ensure_ascii=False), agora, solicitacao_id
+        ))
+        conn.commit()
+        return True, None
+    except Exception as e:
+        conn.rollback()
+        try:
+            cursor.execute("""
+                UPDATE solicitacoes_documentos_integrados
+                SET status='erro', mensagem_status=%s, pdf_previa=NULL
+                WHERE id=%s
+            """, (str(e), solicitacao_id))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        return False, str(e)
+    finally:
+        conn.close()
+
+
+@app.route("/solicitar-documentos-integrados-modal", methods=["GET"])
+def solicitar_documentos_integrados_modal():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return "Não autenticado", 401
+
+    tipo = request.args.get("tipo", "integrado")
+    nome = request.args.get("nome", "Documentos Acadêmicos")
+    opcoes = {
+        "integrado": ["historico", "conclusao", "plano_ensino"],
+        "historico": ["historico"],
+        "conclusao": ["conclusao"],
+        "plano_ensino": ["plano_ensino"],
+    }
+    if tipo not in opcoes:
+        return "Tipo de solicitação inválido", 400
+
+    disciplinas = _disciplinas_documentos_aluno(aluno_id)
+    elegiveis = [d for d in disciplinas if d.get("elegivel")]
+
+    itens = []
+    for d in disciplinas:
+        disabled = "" if d.get("elegivel") else "disabled"
+        cor = "#176b3a" if d.get("elegivel") else "#a12727"
+        itens.append(f"""
+        <label style='display:block;padding:11px;border-bottom:1px solid #eee;cursor:pointer'>
+          <input type='checkbox' class='disciplina-checkbox' value='{d['id']}' {disabled} style='margin-right:9px'>
+          <b>{escape(d['nome'])}</b> — {d['carga_horaria']}h
+          <div style='font-size:12px;color:{cor};margin:4px 0 0 26px'>{escape(d['motivo'])}</div>
+        </label>""")
+
+    tipos_json = json.dumps(opcoes[tipo], ensure_ascii=False)
+    return f"""
+    <div class='document-form'>
+      <input type='hidden' id='docTipo' value='{escape(tipo)}'>
+      <input type='hidden' id='docNome' value='{escape(nome)}'>
+      <input type='hidden' id='docTiposIntegrados' value='{escape(tipos_json)}'>
+      <div style='background:#eef6ff;border-left:4px solid #0a2c4e;padding:12px;margin-bottom:14px'>
+        <b>Regra automática:</b> somente disciplinas com no mínimo 20 dias, todos os capítulos/avaliações concluídos e avaliação final ou Projeto Final concluído, corrigido e com nota podem ser solicitadas.
+      </div>
+      <div class='form-group'><label><b>Selecione uma, várias ou todas as disciplinas elegíveis</b></label>
+        <div style='max-height:310px;overflow:auto;border:1px solid #ddd;border-radius:8px'>{''.join(itens) if itens else '<p style="padding:18px">Nenhuma disciplina matriculada.</p>'}</div>
+      </div>
+      <div style='margin-top:10px'><button type='button' onclick="document.querySelectorAll('.disciplina-checkbox:not(:disabled)').forEach(x=>x.checked=true)" class='btn btn-secondary'>Selecionar todas elegíveis ({len(elegiveis)})</button></div>
+      <div class='form-group' style='margin-top:16px'><label>Observação (opcional)</label><textarea id='docDetalhes' class='form-control' rows='3' placeholder='Observação para a Secretaria/MEW'></textarea></div>
+      <input type='hidden' id='docVias' value='1'>
+      <button type='button' class='btn btn-primary' style='width:100%;margin-top:10px' onclick='enviarSolicitacao()'>Enviar solicitação</button>
+    </div>"""
+
+
+@app.route("/solicitar-documentos-integrados", methods=["POST"])
+def solicitar_documentos_integrados():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success": False, "message": "Não autenticado"}), 401
+
+    init_documentos_integrados_db()
+    data = request.get_json(silent=True) or {}
+    tipo = data.get("tipo", "integrado")
+    ids = [int(x) for x in data.get("disciplinas_ids", []) if str(x).isdigit()]
+    detalhes = (data.get("detalhes") or "").strip()
+    opcoes = {
+        "integrado": ["historico", "conclusao", "plano_ensino"],
+        "historico": ["historico"],
+        "conclusao": ["conclusao"],
+        "plano_ensino": ["plano_ensino"],
+    }
+    if tipo not in opcoes or not ids:
+        return jsonify({"success": False, "message": "Selecione ao menos uma disciplina."}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        motivos = []
+        for did in ids:
+            status = _status_disciplina_documentos(aluno_id, did, cursor)
+            if not status.get("elegivel"):
+                motivos.append(f"{status.get('nome','Disciplina')}: {status.get('motivo')}")
+        if motivos:
+            conn.rollback()
+            return jsonify({"success": False, "message": " | ".join(motivos)}), 400
+
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+        cursor.execute("""
+            INSERT INTO solicitacoes_documentos_integrados
+            (aluno_id, tipo_solicitacao, tipos_documentos, disciplinas_ids, detalhes,
+             data_solicitacao, status, mensagem_status)
+            VALUES (%s,%s,%s,%s,%s,%s,'pendente','Aguardando geração da prévia e conferência do MEW.')
+            RETURNING id
+        """, (aluno_id, tipo, json.dumps(opcoes[tipo]), ",".join(map(str, ids)), detalhes, agora))
+        sid = cursor.fetchone()["id"]
+        conn.commit()
+        return jsonify({"success": True, "message": "Solicitação registrada. O MEW fará a conferência antes da liberação.", "id": sid})
+    finally:
+        conn.close()
+
+
+@app.route("/historico-documentos-integrados")
+def historico_documentos_integrados():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success": False, "message": "Não autenticado"}), 401
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM solicitacoes_documentos_integrados
+        WHERE aluno_id=%s ORDER BY id DESC
+    """, (aluno_id,))
+    rows = cursor.fetchall()
+    resultado = []
+    for row in rows:
+        r = dict(row)
+        ids = [int(x) for x in str(r.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+        if ids:
+            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id = ANY(%s)", (ids,))
+            rr = cursor.fetchone()
+            r["disciplinas_nomes"] = rr.get("nomes") if rr else ""
+        else:
+            r["disciplinas_nomes"] = ""
+        r["arquivo_url"] = f"/documentos-integrados/{r['id']}/pdf" if r.get("status") == "aprovado" and r.get("pdf_final") else None
+        resultado.append(r)
+    conn.close()
+    return jsonify({"success": True, "solicitacoes": resultado})
+
+
+@app.route("/meus-documentos-integrados-api")
+def meus_documentos_integrados_api():
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success": False, "documentos": []}), 401
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, tipo_solicitacao, codigo_pacote, nome_arquivo, data_aprovacao, hash_pdf,
+               disciplinas_ids, mensagem_status
+        FROM solicitacoes_documentos_integrados
+        WHERE aluno_id=%s AND status='aprovado' AND pdf_final IS NOT NULL
+        ORDER BY id DESC
+    """, (aluno_id,))
+    rows = cursor.fetchall()
+    docs = []
+    for row in rows:
+        ids = [int(x) for x in str(row.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+        nomes = ""
+        if ids:
+            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id=ANY(%s)", (ids,))
+            x = cursor.fetchone()
+            nomes = x.get("nomes") if x else ""
+        titulo = "Pacote Integrado: Histórico + Declaração + Plano" if row["tipo_solicitacao"] == "integrado" else {
+            "historico": "Histórico Escolar",
+            "conclusao": "Declaração de Conclusão",
+            "plano_ensino": "Plano de Ensino"
+        }.get(row["tipo_solicitacao"], "Documentos Acadêmicos")
+        docs.append({
+            "id": row["id"], "tipo": "pacote_integrado", "titulo": titulo,
+            "disciplina_nome": nomes, "data_envio": row.get("data_aprovacao") or "",
+            "mensagem": "Documento conferido e aprovado pela Secretaria/MEW.",
+            "status": "enviado", "url": f"/documentos-integrados/{row['id']}/pdf"
+        })
+    conn.close()
+    return jsonify({"success": True, "documentos": docs})
+
+
+@app.route("/documentos-integrados/<int:solicitacao_id>/pdf")
+def aluno_pdf_documentos_integrados(solicitacao_id):
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT pdf_final, nome_arquivo FROM solicitacoes_documentos_integrados
+        WHERE id=%s AND aluno_id=%s AND status='aprovado'
+    """, (solicitacao_id, aluno_id))
+    row = cursor.fetchone()
+    conn.close()
+    if not row or not row.get("pdf_final"):
+        return "Documento ainda não disponível.", 404
+    return send_file(BytesIO(bytes(row["pdf_final"])), mimetype="application/pdf", as_attachment=False,
+                     download_name=row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf")
+
+
+@app.route("/mew/documentos-integrados")
+def mew_documentos_integrados():
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra
+        FROM solicitacoes_documentos_integrados s
+        JOIN alunos a ON a.id=s.aluno_id
+        ORDER BY CASE s.status WHEN 'pendente' THEN 1 WHEN 'erro' THEN 2 WHEN 'aguardando_aprovacao' THEN 3 ELSE 4 END, s.id DESC
+    """)
+    rows = cursor.fetchall()
+    solicitacoes = []
+    for row in rows:
+        r = dict(row)
+        ids = [int(x) for x in str(r.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+        if ids:
+            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id=ANY(%s)", (ids,))
+            x = cursor.fetchone()
+            r["disciplinas_nomes"] = x.get("nomes") if x else ""
+        else:
+            r["disciplinas_nomes"] = ""
+        solicitacoes.append(r)
+    conn.close()
+    return render_template("mew/documentos_integrados.html", solicitacoes=solicitacoes)
+
+
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/conferir")
+def mew_conferir_documentos_integrados(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    init_documentos_integrados_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra
+        FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id
+        WHERE s.id=%s
+    """, (solicitacao_id,))
+    s = cursor.fetchone()
+    conn.close()
+    if not s:
+        return "Solicitação não encontrada", 404
+    if s.get("status") in ("pendente", "erro") or not s.get("pdf_previa"):
+        _gerar_previa_solicitacao_integrada(solicitacao_id)
+        conn = get_db_connection(); cursor = conn.cursor()
+        cursor.execute("""SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id WHERE s.id=%s""", (solicitacao_id,))
+        s = cursor.fetchone(); conn.close()
+    return render_template("mew/conferir_documentos_integrados.html", solicitacao=s)
+
+
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/pdf-previa")
+def mew_pdf_previa_integrada(solicitacao_id):
+    if not session.get("mew_admin"):
+        return "Não autorizado", 403
+    init_documentos_integrados_db()
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT pdf_previa, nome_arquivo FROM solicitacoes_documentos_integrados WHERE id=%s", (solicitacao_id,))
+    row = cursor.fetchone(); conn.close()
+    if not row or not row.get("pdf_previa"):
+        return "Prévia não disponível", 404
+    return send_file(BytesIO(bytes(row["pdf_previa"])), mimetype="application/pdf", as_attachment=False,
+                     download_name="PREVIA_" + (row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf"))
+
+
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/regerar", methods=["POST"])
+def mew_regerar_documentos_integrados(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    ok, erro = _gerar_previa_solicitacao_integrada(solicitacao_id)
+    if ok:
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?sucesso=Prévia+regenerada")
+    return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro={url_quote(erro or 'Erro')}")
+
+
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/aprovar", methods=["POST"])
+def mew_aprovar_documentos_integrados(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    init_documentos_integrados_db()
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT pdf_previa FROM solicitacoes_documentos_integrados WHERE id=%s", (solicitacao_id,))
+    row = cursor.fetchone()
+    if not row or not row.get("pdf_previa"):
+        conn.close()
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Gere+a+prévia+antes+de+aprovar")
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    pdf = bytes(row["pdf_previa"])
+    cursor.execute("""
+        UPDATE solicitacoes_documentos_integrados
+        SET pdf_final=%s, status='aprovado', data_aprovacao=%s,
+            mensagem_status='Conferido e aprovado pelo MEW. Disponível na plataforma do aluno.'
+        WHERE id=%s
+    """, (psycopg2.Binary(pdf), agora, solicitacao_id))
+    conn.commit(); conn.close()
+    return redirect("/mew/documentos-integrados?sucesso=Documento+aprovado+e+liberado+ao+aluno")
+
+
+@app.route("/mew/plano-ensino/<int:documento_id>/vincular", methods=["POST"])
+def mew_vincular_plano_disciplina(documento_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    init_documentos_integrados_db()
+    disciplina_id = request.form.get("disciplina_id", type=int)
+    if not disciplina_id:
+        return redirect("/mew/planos-ensino?erro=Selecione+uma+disciplina")
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("UPDATE documentos_autenticados SET disciplina_id=%s WHERE id=%s AND tipo='plano_ensino'", (disciplina_id, documento_id))
+    conn.commit(); conn.close()
+    return redirect("/mew/planos-ensino?sucesso=Plano+vinculado+à+disciplina")
+
+
+def url_quote(texto):
+    from urllib.parse import quote_plus
+    return quote_plus(str(texto))
+
+
+# --------------------------- TITAN EMAIL ---------------------------
+def _recibo_pagamento_html(aluno, valor, pagamento_id, data_pagamento, disciplinas):
+    lista = "".join(f"<li>{escape(x)}</li>" for x in disciplinas) or "<li>Serviços educacionais contratados</li>"
+    valor_txt = f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"""<!doctype html><html><head><meta charset='utf-8'><style>@page{{size:A4;margin:18mm}}body{{font-family:Arial;color:#18212b}}h1{{color:#0a2c4e}}.alerta{{background:#fff7db;border-left:4px solid #b8860b;padding:10px}}table{{width:100%;border-collapse:collapse}}td{{border-bottom:1px solid #ddd;padding:8px}}</style></head><body>
+    <h1>RECIBO ELETRÔNICO / COMPROVANTE DE PAGAMENTO</h1>
+    <p><b>SIGEU Educacional</b></p><div class='alerta'><b>Importante:</b> este recibo comprova o pagamento no sistema acadêmico e não substitui NFS-e ou outro documento fiscal oficial quando legalmente exigido.</div>
+    <table><tr><td>Aluno</td><td>{escape(aluno.get('nome',''))}</td></tr><tr><td>Matrícula/RA</td><td>{escape(aluno.get('ra',''))}</td></tr><tr><td>Valor</td><td>{valor_txt}</td></tr><tr><td>Pagamento</td><td>{escape(str(pagamento_id or ''))}</td></tr><tr><td>Data</td><td>{escape(data_pagamento or '')}</td></tr></table>
+    <h3>Serviços/disciplinas vinculados</h3><ul>{lista}</ul><p>Emitido automaticamente pelo SIGEU.</p></body></html>"""
+
+
+def enviar_boas_vindas_titan(aluno_id, referencia, pagamento_id=None):
+    """Envia e-mail apenas se as variáveis TITAN_* estiverem configuradas."""
+    init_documentos_integrados_db()
+    host = os.getenv("TITAN_SMTP_HOST", "smtp.titan.email").strip()
+    port = int(os.getenv("TITAN_SMTP_PORT", "465"))
+    usuario = os.getenv("TITAN_SMTP_USER", "").strip()
+    senha_smtp = os.getenv("TITAN_SMTP_PASSWORD", "")
+    from_name = os.getenv("TITAN_FROM_NAME", "SIGEU Educacional")
+    login_url = os.getenv("SIGEU_LOGIN_URL", "https://campusvirtualfacop.com.br/login")
+    if not usuario or not senha_smtp:
+        return False, "Titan SMTP ainda não configurado."
+
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT id FROM emails_transacionais WHERE referencia=%s", (referencia,))
+    if cursor.fetchone():
+        conn.close(); return True, "E-mail já enviado anteriormente."
+
+    cursor.execute("""
+        SELECT a.id,a.nome,a.email,a.ra,dp.cpf,
+               sf.valor_total
+        FROM alunos a
+        LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
+        LEFT JOIN situacao_financeira sf ON sf.id=(SELECT id FROM situacao_financeira WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1)
+        WHERE a.id=%s
+    """, (aluno_id,))
+    aluno = cursor.fetchone()
+    if not aluno or not aluno.get("email"):
+        conn.close(); return False, "Aluno sem e-mail cadastrado."
+
+    cursor.execute("""SELECT d.nome FROM disciplinas d JOIN aluno_disciplina ad ON ad.disciplina_id=d.id WHERE ad.aluno_id=%s ORDER BY d.nome""", (aluno_id,))
+    disciplinas = [r["nome"] for r in cursor.fetchall()]
+    conn.close()
+
+    data_pagamento = datetime.now().strftime("%d/%m/%Y %H:%M")
+    recibo_html = _recibo_pagamento_html(aluno, aluno.get("valor_total"), pagamento_id, data_pagamento, disciplinas)
+    recibo_pdf = HTML(string=recibo_html, base_url=request.host_url if request else None).write_pdf()
+
+    from email.message import EmailMessage
+    from email.utils import formataddr
+    import smtplib
+    msg = EmailMessage()
+    msg["Subject"] = f"Bem-vindo ao SIGEU Educacional | Matrícula {aluno['ra']}"
+    msg["From"] = formataddr((from_name, usuario))
+    msg["To"] = aluno["email"]
+    msg.set_content(f"Bem-vindo ao SIGEU. Matrícula: {aluno['ra']}. Senha inicial: seu CPF, somente números. Acesse: {login_url}")
+    corpo = f"""<html><body style='font-family:Arial;color:#1f2937'><h2>Bem-vindo ao SIGEU Educacional</h2><p>Olá, <b>{escape(aluno['nome'])}</b>.</p><p>Seu pagamento foi confirmado e sua matrícula está ativa.</p><div style='background:#f2f6fb;padding:16px;border-left:4px solid #0a2c4e'><b>Matrícula/RA:</b> {escape(aluno['ra'])}<br><b>Senha inicial:</b> seu CPF, somente números</div><p>Ao primeiro acesso, o sistema apresentará o contrato educacional para assinatura eletrônica. Após a assinatura, as disciplinas já vinculadas à matrícula ficarão disponíveis.</p><p><a href='{login_url}'>Acessar a Plataforma Acadêmica</a></p><p>Segue em anexo o recibo eletrônico/comprovante do pagamento. Ele não substitui NFS-e quando esta for legalmente exigida.</p><p>Atenciosamente,<br><b>SIGEU Educacional</b></p></body></html>"""
+    msg.add_alternative(corpo, subtype="html")
+    msg.add_attachment(recibo_pdf, maintype="application", subtype="pdf", filename=f"recibo_matricula_{aluno['ra']}.pdf")
+
+    try:
+        if port == 465:
+            with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+                smtp.login(usuario, senha_smtp); smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=30) as smtp:
+                smtp.ehlo(); smtp.starttls(); smtp.ehlo(); smtp.login(usuario, senha_smtp); smtp.send_message(msg)
+        conn = get_db_connection(); cursor = conn.cursor()
+        cursor.execute("""INSERT INTO emails_transacionais(aluno_id,tipo,referencia,destinatario,data_envio,status) VALUES(%s,'boas_vindas',%s,%s,%s,'enviado') ON CONFLICT (referencia) DO NOTHING""", (aluno_id, referencia, aluno["email"], datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+        conn.commit(); conn.close()
+        return True, "E-mail enviado."
+    except Exception as e:
+        print(f"Erro Titan SMTP: {e}")
+        return False, str(e)
+
+
+def _dados_contrato_render(contrato_id):
+    init_contratos_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            c.id AS contrato_id,
+            c.status AS contrato_status,
+            c.assinatura_base64,
+            c.foto_assinatura_base64,
+            c.ip_assinatura,
+            c.user_agent_assinatura,
+            c.aceite_contrato,
+            c.aceite_foto,
+            c.texto_aceite,
+            c.versao_contrato,
+            c.hash_assinado,
+            c.data_envio,
+            c.data_assinatura,
+            a.id,
+            a.nome,
+            a.ra,
+            a.email,
+            dp.cpf,
+            dp.rg,
+            dp.telefone,
+            dp.endereco,
+            dp.cidade,
+            dp.estado,
+            dp.cep,
+            dp.curso_referencia,
+            dp.data_nascimento,
+            sf.forma_pagamento,
+            sf.valor_total,
+            sf.parcelas_total,
+            sf.parcelas_pagas,
+            sf.status AS status_financeiro
+        FROM contratos_alunos c
+        JOIN alunos a ON a.id = c.aluno_id
+        LEFT JOIN dados_pessoais dp ON dp.aluno_id = a.id
+        LEFT JOIN situacao_financeira sf ON sf.id = (
+            SELECT sf2.id FROM situacao_financeira sf2
+            WHERE sf2.aluno_id = a.id
+            ORDER BY sf2.id DESC LIMIT 1
+        )
+        WHERE c.id = %s
+    """, (contrato_id,))
+    aluno = cursor.fetchone()
+
+    if not aluno:
+        conn.close()
+        return None
+
+    cursor.execute("""
+        SELECT d.nome,
+               COALESCE(d.carga_horaria, 80) AS carga_horaria,
+               addd.data_inicio,
+               addd.data_fim_previsto
+        FROM disciplinas d
+        JOIN aluno_disciplina ad ON ad.disciplina_id = d.id
+        LEFT JOIN aluno_disciplina_datas addd
+          ON addd.aluno_id = ad.aluno_id AND addd.disciplina_id = d.id
+        WHERE ad.aluno_id = %s
+        ORDER BY d.nome
+    """, (aluno["id"],))
+    disciplinas_db = cursor.fetchall()
+    conn.close()
+
+    disciplinas = [d["nome"] for d in disciplinas_db]
+    carga_horaria_total = sum(int(d["carga_horaria"] or 0) for d in disciplinas_db)
+
+    valor = float(aluno["valor_total"] or 0)
+    parcelas = int(aluno["parcelas_total"] or 1)
+    valor_parcela = valor / parcelas if parcelas > 0 else valor
+
+    cpf = re.sub(r"\D", "", aluno["cpf"] or "")
+    cpf_formatado = f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else (aluno["cpf"] or "")
+
+    cep = re.sub(r"\D", "", aluno["cep"] or "")
+    cep_formatado = f"{cep[:5]}-{cep[5:]}" if len(cep) == 8 else (aluno["cep"] or "")
+
+    formas_pagamento = {
+        "avista": "À vista",
+        "cartao": "Cartão",
+        "boleto_pix": "Boleto / PIX",
+        "mercadopago": "Mercado Pago - PIX / Cartão"
+    }
+    forma_pagamento = formas_pagamento.get(aluno["forma_pagamento"], aluno["forma_pagamento"] or "Não informado")
+
+    agora = agora_brasilia()
+    codigo_contrato = f"CT-{contrato_id:08d}-{aluno['ra'] or aluno['id']}"
+
+    hash_base = "|".join([
+        str(contrato_id), str(aluno["id"]), str(aluno["ra"] or ""), cpf,
+        str(aluno["data_envio"] or "")
+    ])
+    hash_pre_assinatura = hashlib.sha256(hash_base.encode("utf-8")).hexdigest().upper()
+    hash_contrato = aluno.get("hash_assinado") or hash_pre_assinatura
+
+    datas_validas = [d for d in disciplinas_db if d.get("data_inicio")]
+    data_inicio_txt = datas_validas[0]["data_inicio"] if datas_validas else ""
+    data_fim_txt = max((d.get("data_fim_previsto") or "" for d in disciplinas_db), default="")
+
+    ano_semestre = f"{agora.year}/{1 if agora.month <= 6 else 2}"
+    if data_inicio_txt:
+        try:
+            di = datetime.strptime(data_inicio_txt, "%d/%m/%Y")
+            ano_semestre = f"{di.year}/{1 if di.month <= 6 else 2}"
+        except Exception:
+            pass
+
+    meses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"]
+    data_extenso = f"{agora.day} de {meses[agora.month-1]} de {agora.year}"
+
+    return {
+        "contrato_id": contrato_id,
+        "aluno_id": aluno["id"],
+        "nome_contratante": aluno["nome"],
+        "nome_academico": aluno["nome"],
+        "cpf_formatado": cpf_formatado,
+        "rg": aluno["rg"] or "",
+        "email": aluno["email"] or "",
+        "telefone": aluno["telefone"] or "",
+        "endereco": aluno["endereco"] or "",
+        "bairro": "",
+        "cidade": aluno["cidade"] or "",
+        "uf": aluno["estado"] or "",
+        "cep_formatado": cep_formatado,
+        "ra": aluno["ra"] or "",
+        "curso": aluno["curso_referencia"] or "",
+        "disciplinas": disciplinas,
+        "carga_horaria": f"{carga_horaria_total} horas",
+        "valor_total": f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        "valor_parcelado": f"{valor_parcela:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        "forma_pagamento": forma_pagamento,
+        "tempo_minimo": "30 dias",
+        "tempo_maximo": data_fim_txt or "Conforme prazo acadêmico contratado",
+        "modalidade": "Ambiente Virtual de Aprendizagem / conforme a atividade contratada",
+        "ano_semestre": ano_semestre,
+        "codigo_contrato": codigo_contrato,
+        "hash_contrato": hash_contrato,
+        "hash_contrato_curto": hash_contrato[:16],
+        "hash_assinado": aluno.get("hash_assinado") or "",
+        "data_assinatura": aluno["data_assinatura"] or "PENDENTE DE ASSINATURA",
+        "timestamp_iso": (aluno["data_assinatura"] or aluno["data_envio"] or agora.strftime("%d/%m/%Y %H:%M:%S")),
+        "data_geracao": aluno["data_envio"] or agora.strftime("%d/%m/%Y %H:%M:%S"),
+        "data_extenso": data_extenso,
+        "numero_processo": f"SIGEU-{contrato_id:08d}",
+        "contrato_status": aluno["contrato_status"],
+        "assinado": aluno["contrato_status"] == "assinado",
+        "assinatura_base64": aluno["assinatura_base64"] or "",
+        "foto_assinatura_base64": aluno.get("foto_assinatura_base64") or "",
+        "ip_assinatura": aluno.get("ip_assinatura") or "",
+        "user_agent_assinatura": aluno.get("user_agent_assinatura") or "",
+        "aceite_contrato": bool(aluno.get("aceite_contrato")),
+        "aceite_foto": bool(aluno.get("aceite_foto")),
+        "texto_aceite": aluno.get("texto_aceite") or "",
+        "versao_contrato": aluno.get("versao_contrato") or VERSAO_CONTRATO
+    }
+
+
+@app.route("/contrato/registro/<int:contrato_id>")
+def visualizar_contrato_registro(contrato_id):
+    init_contratos_db()
+    dados = _dados_contrato_render(contrato_id)
+    if not dados:
+        return "Contrato não encontrado.", 404
+
+    if not session.get("mew_admin") and session.get("aluno_id") != dados["aluno_id"]:
+        return "Acesso não autorizado.", 403
+
+    return render_template("contrato_padrao.html", **dados)
+
+
+@app.route("/contrato/<int:aluno_id>")
+def visualizar_contrato_aluno(aluno_id):
+    if not session.get("mew_admin") and session.get("aluno_id") != aluno_id:
+        return "Acesso não autorizado.", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id FROM contratos_alunos
+        WHERE aluno_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (aluno_id,))
+    contrato = cursor.fetchone()
+    conn.close()
+
+    if not contrato:
+        return "Contrato não encontrado para este aluno.", 404
+
+    return redirect(url_for("visualizar_contrato_registro", contrato_id=contrato["id"]))
+
+
+
+def gerar_pdf_contrato_assinado(contrato_id, salvar=True):
+    """Renderiza o contrato assinado e devolve o PDF definitivo em bytes."""
+    dados = _dados_contrato_render(contrato_id)
+    if not dados:
+        raise ValueError("Contrato não encontrado.")
+    if not dados.get("assinado"):
+        raise ValueError("O contrato ainda não foi assinado.")
+
+    html_final = render_template("contrato_padrao.html", **dados)
+    pdf_bytes = HTML(string=html_final, base_url=request.url_root).write_pdf()
+
+    if salvar:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE contratos_alunos
+            SET pdf_assinado = %s,
+                arquivo_assinado_path = %s
+            WHERE id = %s
+        """, (
+            psycopg2.Binary(pdf_bytes),
+            f"/contrato/pdf/{contrato_id}",
+            contrato_id
+        ))
+        conn.commit()
+        conn.close()
+
+    return pdf_bytes, dados
+
+
+@app.route("/contrato/pdf/<int:contrato_id>")
+def contrato_pdf_assinado(contrato_id):
+    init_contratos_db()
+
+    dados = _dados_contrato_render(contrato_id)
+    if not dados:
+        return "Contrato não encontrado.", 404
+
+    if not session.get("mew_admin") and session.get("aluno_id") != dados["aluno_id"]:
+        return "Acesso não autorizado.", 403
+
+    if not dados.get("assinado"):
+        return "O contrato ainda não foi assinado.", 409
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT pdf_assinado FROM contratos_alunos WHERE id = %s", (contrato_id,))
+    registro = cursor.fetchone()
+    conn.close()
+
+    pdf_bytes = None
+    if registro and registro.get("pdf_assinado") is not None:
+        pdf_bytes = bytes(registro["pdf_assinado"])
+
+    if not pdf_bytes:
+        pdf_bytes, dados = gerar_pdf_contrato_assinado(contrato_id, salvar=True)
+
+    nome_seguro = re.sub(r"[^A-Za-z0-9_-]", "_", str(dados.get("ra") or contrato_id))
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"Contrato_SIGEU_{nome_seguro}.pdf"
+    )
+
 
 if __name__ == "__main__":
     # Inicializa o banco de dados PostgreSQL
     init_db()
     init_contratos_db()
     init_pagamentos_db()
+    init_documentos_integrados_db()
     
     # Só roda localmente
     app.run(debug=True)

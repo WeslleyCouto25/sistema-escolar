@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assinar Contrato | SIGEU Educacional</title>
+    <style>
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#080b10;color:#f9fafb}
+        .container{max-width:1050px;margin:auto;padding:26px 18px 60px}
+        h1{margin:0 0 14px;font-size:28px}
+        h2{margin-top:28px;font-size:20px}
+        .aviso,.juridico,.privacidade{background:#111827;border:1px solid #263244;padding:18px;border-radius:10px;margin:14px 0;line-height:1.6}
+        .juridico{background:#f8fafc;color:#111827;border-color:#cbd5e1;text-align:justify;font-size:14px}
+        .privacidade{background:#fff7ed;color:#431407;border-color:#fdba74;font-size:13px}
+        iframe{width:100%;height:720px;border:0;background:white;border-radius:10px;margin-top:12px}
+        .btn{padding:14px 22px;border:0;border-radius:8px;cursor:pointer;font-weight:700;margin-top:12px;display:inline-block;text-decoration:none;font-size:14px}
+        .principal{background:#16a34a;color:white}.secundario{background:#374151;color:white}.perigo{background:#dc2626;color:white}.camera{background:#2563eb;color:white}
+        #assinaturaArea{display:none;margin-top:28px}
+        .check{display:flex;gap:12px;align-items:flex-start;background:#fff;color:#111827;padding:15px;border-radius:9px;margin:12px 0;border:1px solid #d1d5db;line-height:1.45}
+        .check input{width:20px;height:20px;margin-top:2px;flex:0 0 auto}
+        .camera-box{background:#111827;border:1px solid #334155;border-radius:10px;padding:18px;margin:18px 0}
+        video,#fotoPreview{width:100%;max-width:560px;aspect-ratio:4/3;background:#000;border-radius:9px;object-fit:cover;display:block;margin:12px auto}
+        #fotoPreview{display:none}
+        .camera-acoes{text-align:center}
+        .fallback{margin-top:12px;padding:12px;background:#1f2937;border-radius:8px;font-size:13px}
+        canvas{background:#fff;border:3px solid #16a34a;border-radius:10px;width:100%;height:230px;touch-action:none;display:block;cursor:crosshair}
+        .assinatura-acoes{display:flex;gap:10px;flex-wrap:wrap}
+        .status-ok{color:#86efac;font-weight:700}.status-pendente{color:#fde68a;font-weight:700}
+        @media(max-width:700px){iframe{height:560px}.container{padding:18px 12px}h1{font-size:23px}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Assinatura do Contrato Educacional</h1>
+    <div class="aviso">
+        <strong>{{ contrato.nome }}</strong> • Matrícula/RA <strong>{{ contrato.ra }}</strong><br>
+        Seu contrato já está individualizado com seus dados, matrícula, disciplinas e condições de contratação. Leia integralmente o documento antes de prosseguir.
+    </div>
+
+    <iframe src="{{ contrato.pdf_path }}" title="Contrato educacional"></iframe>
+
+    <button class="btn principal" type="button" onclick="mostrarAssinatura()">LI O DOCUMENTO E QUERO PROSSEGUIR</button>
+    <a href="{{ url_for('logout') }}" class="btn secundario">SAIR</a>
+
+    <div id="assinaturaArea">
+        <h2>1. Declaração de leitura, ciência e aceite</h2>
+        <div class="juridico">{{ texto_aceite_contrato }}</div>
+        <label class="check">
+            <input type="checkbox" id="aceiteContrato">
+            <span><strong>Li integralmente e concordo com o Contrato de Prestação de Serviços Educacionais</strong>, reconheço a atuação do Grupo Educacional Unificado [UNIGEU] / SIGEU Educacional como instituição prestadora, ofertante e executora dos serviços educacionais contratados e da FACOP, Instituição de Ensino Superior devidamente credenciada e submetida à regulação e supervisão do Ministério da Educação (MEC), como Instituição Certificadora nos termos da parceria/convênio educacional, e reconheço como minha a assinatura eletrônica realizada neste ato.</span>
+        </label>
+
+        <h2>2. Registro fotográfico do ato</h2>
+        <div class="privacidade">{{ texto_aceite_foto }}</div>
+        <label class="check">
+            <input type="checkbox" id="aceiteFoto">
+            <span>Autorizo o registro fotográfico para compor exclusivamente as evidências desta celebração eletrônica, nos termos acima.</span>
+        </label>
+
+        <div class="camera-box">
+            <div id="cameraStatus" class="status-pendente">Câmera ainda não iniciada.</div>
+            <video id="video" autoplay playsinline muted></video>
+            <img id="fotoPreview" alt="Prévia da foto capturada">
+            <canvas id="fotoCanvas" style="display:none"></canvas>
+            <div class="camera-acoes">
+                <button type="button" class="btn camera" onclick="abrirCamera()">ABRIR CÂMERA</button>
+                <button type="button" class="btn principal" onclick="capturarFoto()">CAPTURAR FOTO</button>
+                <button type="button" class="btn secundario" onclick="refazerFoto()">REFAZER FOTO</button>
+            </div>
+            <div class="fallback">
+                Se o navegador não conseguir abrir a câmera, use o botão abaixo para tirar/selecionar uma foto diretamente no aparelho:<br>
+                <input type="file" id="fotoArquivo" accept="image/*" capture="user" onchange="usarFotoArquivo(this)" style="margin-top:10px;color:white">
+            </div>
+        </div>
+
+        <h2>3. Assinatura grafada</h2>
+        <p>Assine no quadro abaixo usando o mouse, caneta ou dedo.</p>
+        <canvas id="assinaturaCanvas"></canvas>
+
+        <form method="POST" id="formAssinatura" onsubmit="return prepararEnvio()">
+            <input type="hidden" name="assinatura" id="assinatura">
+            <input type="hidden" name="foto_assinatura" id="fotoAssinatura">
+            <input type="hidden" name="aceite_contrato" id="aceiteContratoHidden" value="0">
+            <input type="hidden" name="aceite_foto" id="aceiteFotoHidden" value="0">
+            <div class="assinatura-acoes">
+                <button type="button" class="btn perigo" onclick="limparAssinatura()">LIMPAR ASSINATURA</button>
+                <button type="submit" class="btn principal">CONFIRMAR E ASSINAR CONTRATO</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const assinaturaCanvas = document.getElementById('assinaturaCanvas');
+    const actx = assinaturaCanvas.getContext('2d');
+    let desenhando = false;
+    let assinou = false;
+    let streamCamera = null;
+    let fotoCapturada = '';
+
+    function mostrarAssinatura(){
+        document.getElementById('assinaturaArea').style.display='block';
+        setTimeout(ajustarAssinatura,100);
+        document.getElementById('assinaturaArea').scrollIntoView({behavior:'smooth'});
+    }
+
+    function ajustarAssinatura(){
+        const rect=assinaturaCanvas.getBoundingClientRect();
+        const ratio=window.devicePixelRatio || 1;
+        assinaturaCanvas.width=Math.max(1,Math.floor(rect.width*ratio));
+        assinaturaCanvas.height=Math.floor(230*ratio);
+        actx.setTransform(ratio,0,0,ratio,0,0);
+        actx.lineWidth=3;
+        actx.lineCap='round';
+        actx.lineJoin='round';
+        actx.strokeStyle='#000';
+        assinou=false;
+    }
+
+    function pos(e){
+        const r=assinaturaCanvas.getBoundingClientRect();
+        const p=e.touches ? e.touches[0] : e;
+        return {x:p.clientX-r.left,y:p.clientY-r.top};
+    }
+    function iniciar(e){e.preventDefault();desenhando=true;assinou=true;const p=pos(e);actx.beginPath();actx.moveTo(p.x,p.y)}
+    function mover(e){if(!desenhando)return;e.preventDefault();const p=pos(e);actx.lineTo(p.x,p.y);actx.stroke()}
+    function parar(e){if(e)e.preventDefault();desenhando=false}
+    assinaturaCanvas.addEventListener('mousedown',iniciar);
+    assinaturaCanvas.addEventListener('mousemove',mover);
+    assinaturaCanvas.addEventListener('mouseup',parar);
+    assinaturaCanvas.addEventListener('mouseleave',parar);
+    assinaturaCanvas.addEventListener('touchstart',iniciar,{passive:false});
+    assinaturaCanvas.addEventListener('touchmove',mover,{passive:false});
+    assinaturaCanvas.addEventListener('touchend',parar,{passive:false});
+    window.addEventListener('resize',()=>{if(document.getElementById('assinaturaArea').style.display==='block') ajustarAssinatura()});
+
+    function limparAssinatura(){
+        actx.clearRect(0,0,assinaturaCanvas.width,assinaturaCanvas.height);
+        assinou=false;
+    }
+
+    async function abrirCamera(){
+        if(!document.getElementById('aceiteFoto').checked){
+            alert('Marque primeiro a autorização do registro fotográfico.');
+            return;
+        }
+        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+            alert('Este navegador não disponibilizou acesso direto à câmera. Use o campo de foto alternativo.');
+            return;
+        }
+        try{
+            if(streamCamera) streamCamera.getTracks().forEach(t=>t.stop());
+            streamCamera=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+            const video=document.getElementById('video');
+            video.srcObject=streamCamera;
+            video.style.display='block';
+            document.getElementById('fotoPreview').style.display='none';
+            document.getElementById('cameraStatus').textContent='Câmera ativa. Posicione o rosto e capture a foto.';
+            document.getElementById('cameraStatus').className='status-ok';
+        }catch(e){
+            console.error(e);
+            document.getElementById('cameraStatus').textContent='Não foi possível acessar a câmera. Use a opção alternativa de foto.';
+            document.getElementById('cameraStatus').className='status-pendente';
+        }
+    }
+
+    function capturarFoto(){
+        const video=document.getElementById('video');
+        if(!streamCamera || !video.videoWidth){
+            alert('Abra a câmera primeiro.');
+            return;
+        }
+        const canvas=document.getElementById('fotoCanvas');
+        const maxW=720;
+        const proporcao=Math.min(1,maxW/video.videoWidth);
+        canvas.width=Math.round(video.videoWidth*proporcao);
+        canvas.height=Math.round(video.videoHeight*proporcao);
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        fotoCapturada=canvas.toDataURL('image/jpeg',0.82);
+        const preview=document.getElementById('fotoPreview');
+        preview.src=fotoCapturada;
+        preview.style.display='block';
+        video.style.display='none';
+        document.getElementById('cameraStatus').textContent='Foto capturada e pronta para o registro.';
+        document.getElementById('cameraStatus').className='status-ok';
+        streamCamera.getTracks().forEach(t=>t.stop());
+        streamCamera=null;
+    }
+
+    function refazerFoto(){
+        fotoCapturada='';
+        document.getElementById('fotoPreview').src='';
+        document.getElementById('fotoPreview').style.display='none';
+        document.getElementById('cameraStatus').textContent='Foto removida. Abra a câmera novamente ou escolha outra foto.';
+        document.getElementById('cameraStatus').className='status-pendente';
+    }
+
+    function usarFotoArquivo(input){
+        const file=input.files && input.files[0];
+        if(!file)return;
+        if(!file.type.startsWith('image/')){alert('Selecione uma imagem.');return}
+        const reader=new FileReader();
+        reader.onload=function(ev){
+            const img=new Image();
+            img.onload=function(){
+                const canvas=document.getElementById('fotoCanvas');
+                const maxW=720;
+                const proporcao=Math.min(1,maxW/img.width);
+                canvas.width=Math.round(img.width*proporcao);
+                canvas.height=Math.round(img.height*proporcao);
+                canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+                fotoCapturada=canvas.toDataURL('image/jpeg',0.82);
+                const preview=document.getElementById('fotoPreview');
+                preview.src=fotoCapturada;
+                preview.style.display='block';
+                document.getElementById('video').style.display='none';
+                document.getElementById('cameraStatus').textContent='Foto selecionada e pronta para o registro.';
+                document.getElementById('cameraStatus').className='status-ok';
+            };
+            img.src=ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function prepararEnvio(){
+        const ac=document.getElementById('aceiteContrato').checked;
+        const af=document.getElementById('aceiteFoto').checked;
+        if(!ac){alert('Você precisa marcar a declaração de leitura e aceite do contrato.');return false}
+        if(!af){alert('Você precisa marcar a autorização específica do registro fotográfico.');return false}
+        if(!fotoCapturada){alert('Capture ou selecione a fotografia antes de assinar.');return false}
+        if(!assinou){alert('Faça sua assinatura no quadro antes de finalizar.');return false}
+
+        document.getElementById('assinatura').value=assinaturaCanvas.toDataURL('image/png');
+        document.getElementById('fotoAssinatura').value=fotoCapturada;
+        document.getElementById('aceiteContratoHidden').value='1';
+        document.getElementById('aceiteFotoHidden').value='1';
+
+        if(streamCamera){streamCamera.getTracks().forEach(t=>t.stop());streamCamera=null}
+        return confirm('Confirmar a assinatura eletrônica deste contrato? Após a confirmação, o contrato será registrado como assinado.');
+    }
+</script>
+</body>
+</html>

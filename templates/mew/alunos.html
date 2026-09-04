@@ -308,24 +308,16 @@
                     <!-- ========= CONTRATO E COBRANÇA ========= -->
                     <h3 class="section-title">📄 Contrato e Cobrança Online</h3>
                     <div class="mp-box">
-                        <div class="mp-option">
-                            <input type="checkbox" id="gerarContrato" name="gerar_contrato" value="1" onchange="toggleContrato()">
-                            <div>
-                                <strong>Gerar contrato para este aluno</strong><br>
-                                <small>Os dados pessoais, curso, forma de pagamento e valor serão preenchidos automaticamente no contrato.</small>
-                            </div>
-                        </div>
-                        <div id="contratoCampos" class="mp-hidden">
-                            <label><strong>Regras e condições gerais do contrato</strong></label>
-                            <textarea class="contrato-textarea" name="regras_contrato" placeholder="Cole aqui o texto geral do contrato. Os dados do aluno serão colocados automaticamente acima."></textarea>
-                            <small>O contrato será disponibilizado ao aluno no fluxo de assinatura que já existe no sistema.</small>
+                        <div style="background:#ecfdf5;padding:12px;border-radius:7px;color:#166534;line-height:1.5;">
+                            <strong>✓ Contrato padrão automático</strong><br>
+                            Ao criar o aluno, o sistema gera automaticamente o contrato com matrícula/RA, dados pessoais, disciplinas, carga horária, valor e forma de pagamento. Não é necessário anexar ou escrever contrato manualmente.
                         </div>
 
                         <div class="mp-option" style="margin-top:16px;">
                             <input type="checkbox" id="gerarCobranca" name="gerar_cobranca" value="1" onchange="toggleCobrancaInfo()">
                             <div>
                                 <strong>Gerar checkout do Mercado Pago</strong><br>
-                                <small>O aluno será criado como <strong>NÃO PAGO</strong>. O status só muda para <strong>PAGO</strong> após confirmação real do Mercado Pago.</small>
+                                <small>O aluno será criado como <strong>NÃO PAGO</strong>. Após a aprovação real do pagamento, ele será direcionado para assinatura do contrato e, depois, terá acesso às disciplinas.</small>
                             </div>
                         </div>
                         <div id="cobrancaInfo" class="mp-hidden" style="background:#eff6ff;padding:12px;border-radius:7px;color:#1e3a8a;">
@@ -433,7 +425,7 @@
                                             <span class="mp-status mp-pago">PAGO</span>
                                         {% else %}
                                             <span class="mp-status mp-nao-pago">NÃO PAGO</span>
-                                            {% set checkout = aluno.pagamento_mp.sandbox_checkout_url or aluno.pagamento_mp.checkout_url %}
+                                            {% set checkout = aluno.pagamento_mp.checkout_url or aluno.pagamento_mp.sandbox_checkout_url %}
                                             {% if checkout %}<br><a href="{{ checkout }}" target="_blank" style="font-size:12px;">Abrir checkout</a>{% endif %}
                                         {% endif %}
                                     {% else %}
@@ -462,6 +454,11 @@
                                 <a href="/mew/editar-aluno/{{ aluno.id }}" class="btn btn-sm btn-primary" title="Editar Aluno">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                {% if aluno.contrato %}
+                                <a href="/contrato/registro/{{ aluno.contrato.id }}" class="btn btn-sm btn-secondary" target="_blank" title="Abrir contrato {{ aluno.contrato.status }}">
+                                    <i class="fas fa-file-signature"></i>
+                                </a>
+                                {% endif %}
                                 {% if aluno.valor_total and (not aluno.pagamento_mp or aluno.pagamento_mp.status != 'pago') %}
                                 <form method="post" action="/mew/gerar-cobranca/{{ aluno.id }}" style="display:inline; margin:0;" onsubmit="return confirm('Gerar uma nova cobrança do Mercado Pago para este aluno?');">
                                     <button type="submit" class="btn btn-sm btn-success" title="Gerar nova cobrança Mercado Pago"><i class="fas fa-credit-card"></i></button>
@@ -490,11 +487,6 @@
 </body>
 
 <script>
-function toggleContrato() {
-    const cb = document.getElementById('gerarContrato');
-    const box = document.getElementById('contratoCampos');
-    if (cb && box) box.style.display = cb.checked ? 'block' : 'none';
-}
 function toggleCobrancaInfo() {
     const cb = document.getElementById('gerarCobranca');
     const box = document.getElementById('cobrancaInfo');
