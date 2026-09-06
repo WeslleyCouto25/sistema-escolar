@@ -88,7 +88,7 @@
         .mp-banner { padding:16px 18px; border-radius:8px; margin:0 0 20px; }
         .mp-banner.ok { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
         .mp-banner.erro { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-        .mp-checkout-btn { display:inline-block; background:#009ee3; color:white !important; text-decoration:none; padding:10px 14px; border-radius:7px; font-weight:700; margin-top:8px; }
+        .mp-checkout-btn { display:inline-block; background:#343a40; color:white !important; text-decoration:none; padding:10px 14px; border-radius:7px; font-weight:700; margin-top:8px; }
         .contrato-textarea { min-height:220px; width:100%; resize:vertical; padding:12px; border:1px solid #d1d5db; border-radius:7px; font-family:Arial,sans-serif; line-height:1.5; box-sizing:border-box; }
     </style>
     <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
@@ -633,6 +633,13 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         {% endfor %}
                     </tbody>
                 </table>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding:12px;background:#f1f3f4;border:1px solid #c9d0d5;">
+                    <span><strong>{{ total_alunos }}</strong> aluno(s) • página {{ page }} de {{ total_pages }}</span>
+                    <div style="display:flex;gap:8px;">
+                        {% if page > 1 %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page-1, per_page=per_page) }}">← Anterior</a>{% endif %}
+                        {% if page < total_pages %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page+1, per_page=per_page) }}">Próxima →</a>{% endif %}
+                    </div>
+                </div>
                 {% else %}
                 <div style="text-align: center; padding: 40px; color: #666;">
                     <i class="fas fa-users" style="font-size: 48px; margin-bottom: 20px; color: #ddd;"></i>

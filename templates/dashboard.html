@@ -1191,7 +1191,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         <main class="content-area">
             <!-- SEÇÃO: DASHBOARD -->
             <div class="content-section active" id="dashboard-section">
-                <h1 class="page-title">📊 Visão Geral</h1>
+                <h1 class="page-title">Visão Geral Acadêmica</h1>
                 <p class="page-subtitle">Bem-vindo(a), {{ aluno_nome }}</p>
 
                 <div class="info-grid">
@@ -1238,7 +1238,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: MEUS DOCUMENTOS -->
             <div class="content-section" id="meus-documentos-section">
-                <h1 class="page-title">📄 Meus Documentos</h1>
+                <h1 class="page-title">Documentos Acadêmicos</h1>
                 <p class="page-subtitle">Documentos oficiais enviados pela instituição</p>
 
                 <div class="card" id="documentos-recebidos">
@@ -1263,15 +1263,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: DISCIPLINAS -->
             <div class="content-section" id="disciplinas-section">
-                <h1 class="page-title">📚 Minhas Disciplinas</h1>
+                <h1 class="page-title">Disciplinas Matriculadas</h1>
                 <p class="page-subtitle">Acompanhe seu progresso</p>
 
                 {% if disciplinas %}
                 <div class="cards-container">
                     {% for d in disciplinas %}
-                    {% set progresso = calcular_progresso(session.get('aluno_id'), d['id']) %}
-                    {% set total_capitulos = contar_capitulos(d['id']) %}
-                    {% set provas_feitas = contar_provas_realizadas(session.get('aluno_id'), d['id']) %}
+                    {% set progresso = d['progresso'] %}
+                    {% set total_capitulos = d['total_capitulos'] %}
+                    {% set provas_feitas = d['provas_realizadas'] %}
 
                     <div class="card">
                         <div class="card-header {% if progresso == 100 %}concluido{% endif %}">
@@ -1315,7 +1315,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             
 <!-- SEÇÃO: PRÁTICAS (DISCIPLINAS ALTERNATIVAS) -->
 <div class="content-section" id="praticas-section">
-    <h1 class="page-title">📋 Práticas</h1>
+    <h1 class="page-title">Avaliações e Práticas</h1>
     <p class="page-subtitle">Disciplinas práticas e alternativas</p>
 
     {% if disciplinas_alternativas %}
@@ -1365,7 +1365,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: NOTAS (mantida exatamente igual, apenas com classes CSS atualizadas) -->
             <div class="content-section" id="notas-section">
-                <h1 class="page-title">📊 Minhas Notas</h1>
+                <h1 class="page-title">Desempenho Acadêmico</h1>
                 <p class="page-subtitle">Acompanhe seu desempenho</p>
 
                 {% if notas %}
@@ -1406,7 +1406,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         {% for d in disciplinas %}
                         {% if d['id'] == disciplina_id %}
                         {% set disciplina_info.nome = d['nome'] %}
-                        {% set disciplina_info.total_capitulos = contar_capitulos(d['id']) %}
+                        {% set disciplina_info.total_capitulos = d['total_capitulos'] %}
                         {% endif %}
                         {% endfor %}
 
@@ -1488,7 +1488,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: DADOS PESSOAIS (mantida, apenas classes atualizadas) -->
             <div class="content-section" id="dados-pessoais-section">
-                <h1 class="page-title">👤 Meus Dados Pessoais</h1>
+                <h1 class="page-title">Dados Cadastrais</h1>
                 <p class="page-subtitle">Informações cadastrais</p>
                 <div class="card">
                     <div class="dados-aluno-card">
@@ -1549,7 +1549,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: FINANCEIRO (mantida) -->
             <div class="content-section" id="financeiro-section">
-                <h1 class="page-title">💰 Situação Financeira</h1>
+                <h1 class="page-title">Situação Financeira</h1>
                 <p class="page-subtitle">Informações de pagamento</p>
                 <div class="card">
                     {% if situacao_financeira %}
@@ -1606,7 +1606,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             <!-- SEÇÃO: SOLICITAÇÕES (mantida) -->
             {% if solicitacoes_material or solicitacoes_declaracoes %}
             <div class="content-section" id="solicitacoes-section">
-                <h1 class="page-title">📋 Minhas Solicitações</h1>
+                <h1 class="page-title">Minhas Solicitações</h1>
                 <p class="page-subtitle">Acompanhe seus pedidos</p>
                 <div class="card">
                     <!-- ... conteúdo existente mantido ... -->
@@ -1628,7 +1628,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             <!-- SEÇÃO: SOLICITAR DOCUMENTOS (mantida) -->
             <div class="content-section" id="solicitar-documentos-section">
-    <h1 class="page-title">📄 Solicitar Documentos</h1>
+    <h1 class="page-title">Solicitar Documentos Acadêmicos</h1>
     <p class="page-subtitle">Solicite documentos oficiais acadêmicos</p>
 
     <!-- BOTÕES DE SOLICITAÇÃO -->

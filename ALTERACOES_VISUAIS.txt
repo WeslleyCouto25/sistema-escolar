@@ -1,8 +1,0 @@
-SIGEU — PORTAL 07 DEFINITIVO
-
-Tema final: cinza institucional + preto + laranja discreto.
-Arquivo principal novo: static/css/portal07.css
-
-A revisão cobre dashboard do aluno, disciplinas, aulas, documentos, situação acadêmica, avaliações, MEW, logins, assinatura, contrato e página principal, com responsividade para desktop/tablet/celular.
-
-Leia VALIDACAO_PORTAL07_FINAL.txt para a validação completa e as exceções deliberadas.

@@ -347,7 +347,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             </h2>
 
             <div id="novaDisciplinaForm" style="display: none; margin-top: 20px;">
-                <form method="post">
+                <form method="post" enctype="multipart/form-data">
                     <label>Nome da disciplina</label>
                     <input type="text" name="nome_disciplina" required placeholder="Ex: Matemática Básica">
 
@@ -364,23 +364,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <label>PDF</label>
                         <input type="text" name="pdf_{{ i }}" required>
 
-                        <label>Questões (JSON)</label>
-                        <textarea name="questoes_{{ i }}" rows="7" required></textarea>
-
-                        <div class="json-example">
-                            <pre>[
-  {
-    "pergunta": "Pergunta",
-    "opcoes": {
-      "A": "Opção A",
-      "B": "Opção B",
-      "C": "Opção C",
-      "D": "Opção D"
-    },
-    "resposta_certa": "A"
-  }
-]</pre>
-                        </div>
+                        <label>Questões do capítulo</label>
+                        <small style="display:block;margin-bottom:8px;color:#586169;">Cole direto do Excel/Google Sheets em 6 colunas: <strong>Pergunta | A | B | C | D | Resposta</strong>. Uma questão por linha.</small>
+                        <textarea name="questoes_{{ i }}" rows="8" placeholder="Quanto é 2+2?&#9;3&#9;4&#9;5&#9;6&#9;B"></textarea>
+                        <label style="margin-top:10px;">Ou envie uma planilha .xlsx</label>
+                        <input type="file" name="questoes_xlsx_{{ i }}" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                     </fieldset>
                     {% endfor %}
 

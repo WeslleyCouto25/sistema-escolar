@@ -103,37 +103,6 @@
             color: white;
         }
         
-        .json-tabs {
-            margin-bottom: 20px;
-        }
-        
-        .json-tabs button {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-bottom: none;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        
-        .json-tabs button.active {
-            background: white;
-            border-color: #007bff;
-            color: #007bff;
-        }
-        
-        .json-content {
-            display: none;
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0 5px 5px 5px;
-            padding: 20px;
-        }
-        
-        .json-content.active {
-            display: block;
-        }
-        
         pre.json-output {
             background: #f8f9fa;
             padding: 15px;
@@ -441,79 +410,33 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 </form>
             </div>
 
-            <!-- SISTEMA DE IMPORTAR VIA JSON -->
-            <div class="form-questao" style="margin-top: 30px;">
-                <h3><i class="fas fa-file-import"></i> Importar Questões via JSON</h3>
-                <p>Cole um JSON completo com 30 questões no formato correto:</p>
-                
-                <!-- Tabs para diferentes formatos -->
-                <div class="json-tabs">
-                    <button class="active" onclick="showTab('tab-formato')">Formato</button>
-                    <button onclick="showTab('tab-exportar')">Exportar Atual</button>
-                </div>
-                
-                <!-- Formato JSON -->
-                <div id="tab-formato" class="json-content active">
-                    <form id="importarJsonForm" onsubmit="importarJson(event)">
-                        <div class="form-group">
-                            <label>JSON das Questões:</label>
-                            <textarea class="form-control" id="questoesJson" rows="10" 
-                                     placeholder='[
-  {
-    "pergunta": "Qual é a capital do Brasil?",
-    "opcao_a": "São Paulo",
-    "opcao_b": "Rio de Janeiro", 
-    "opcao_c": "Brasília",
-    "opcao_d": "Salvador",
-    "resposta_correta": "C"
-  },
-  // ... mais 29 questões
-]'></textarea>
-                            <small class="form-text text-muted">
-                                <strong>Formato:</strong> lista de objetos com: pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta
-                            </small>
-                        </div>
-                        
-                        <div class="form-row">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-upload"></i> Importar JSON
-                            </button>
-                            <button type="button" class="btn btn-secondary" onclick="gerarModeloVazio()">
-                                <i class="fas fa-file-code"></i> Gerar Modelo Vazio
-                            </button>
-                            <button type="button" class="btn btn-info" onclick="gerarModeloExemplo()">
-                                <i class="fas fa-eye"></i> Ver Exemplo
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                
-                <!-- Exportar JSON Atual -->
-                <div id="tab-exportar" class="json-content">
+            <!-- IMPORTAÇÃO SIMPLES: EXCEL / COLAR TABELA -->
+            <div class="import-section" style="margin-bottom:24px;">
+                <h3><i class="fas fa-table"></i> Importar várias questões</h3>
+                <p>Cole diretamente do Excel/Google Sheets em <strong>6 colunas</strong>: Pergunta | A | B | C | D | Resposta. Também pode enviar um arquivo <strong>.xlsx</strong>.</p>
+                <form id="formImportarTabela" enctype="multipart/form-data" onsubmit="importarTabela(event)">
                     <div class="form-group">
-                        <label>Exportar questões atuais como JSON:</label>
-                        <pre class="json-output" id="jsonExport"></pre>
+                        <label>Colar questões:</label>
+                        <textarea id="questoesTabela" name="questoes_tabela" rows="10" placeholder="Qual é a capital do Brasil?&#9;São Paulo&#9;Rio de Janeiro&#9;Brasília&#9;Salvador&#9;C"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ou enviar planilha .xlsx:</label>
+                        <input id="questoesXlsx" type="file" name="questoes_xlsx" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
                     </div>
                     <div class="form-row">
-                        <button type="button" class="btn btn-success" onclick="exportarQuestoesAtuais()">
-                            <i class="fas fa-download"></i> Carregar Questões Atuais
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="copiarJSON()">
-                            <i class="fas fa-copy"></i> Copiar para Área de Transferência
-                        </button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar questões</button>
+                        <a href="/mew/exportar-questoes-excel/{{ disciplina.id }}" class="btn btn-success"><i class="fas fa-file-excel"></i> Exportar Excel</a>
                     </div>
-                </div>
-                
-                <!-- Resultado da Importação -->
-                <div id="jsonResult" style="display: none; margin-top: 20px;"></div>
+                </form>
+                <div id="importResult" style="display:none;margin-top:20px;"></div>
             </div>
 
             <!-- Lista de questões existentes -->
             <h3 style="margin-bottom: 20px;">
                 <i class="fas fa-list"></i> Questões Cadastradas ({{ questoes|length }})
                 {% if questoes %}
-                <a href="javascript:void(0)" onclick="exportarQuestoesAtuais()" class="btn btn-sm btn-success" style="float: right;">
-                    <i class="fas fa-download"></i> Exportar como JSON
+                <a href="/mew/exportar-questoes-excel/{{ disciplina.id }}" class="btn btn-sm btn-success" style="float:right;">
+                    <i class="fas fa-file-excel"></i> Exportar Excel
                 </a>
                 {% endif %}
             </h3>
@@ -585,186 +508,30 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
     </div>
 
     <script>
-        // Funções para tabs
-        function showTab(tabId) {
-            // Esconder todas as tabs
-            document.querySelectorAll('.json-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Remover classe active de todos os botões
-            document.querySelectorAll('.json-tabs button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            // Mostrar tab selecionada
-            document.getElementById(tabId).classList.add('active');
-            
-            // Ativar botão clicado
-            event.target.classList.add('active');
-            
-            // Se for a tab de exportar, carregar automaticamente
-            if (tabId === 'tab-exportar') {
-                exportarQuestoesAtuais();
-            }
-        }
-        
-        // Importar via JSON
-        function importarJson(event) {
+        function importarTabela(event) {
             event.preventDefault();
-            
-            const jsonText = document.getElementById('questoesJson').value;
-            const disciplinaId = {{ disciplina.id }};
-            
-            if (!jsonText.trim()) {
-                alert('Por favor, cole um JSON válido');
-                return;
-            }
-            
-            // Validar JSON básico
-            try {
-                JSON.parse(jsonText);
-            } catch (e) {
-                alert('JSON inválido: ' + e.message);
-                return;
-            }
-            
-            // Enviar via AJAX
-            const formData = new FormData();
-            formData.append('questoes_json', jsonText);
-            
-            fetch(`/mew/importar-questoes-json/${disciplinaId}`, {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                const resultDiv = document.getElementById('jsonResult');
-                if (data.success) {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="fas fa-check-circle"></i> ${data.message}
-                            <p>Total: ${data.count} questões importadas</p>
-                            <a href="?sucesso=Questões+importadas" class="btn btn-sm btn-success">
-                                <i class="fas fa-redo"></i> Recarregar página
-                            </a>
-                        </div>
-                    `;
-                    // Recarregar a página após 2 segundos
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    resultDiv.innerHTML = `
-                        <div class="alert alert-danger">
-                            <i class="fas fa-exclamation-circle"></i> ${data.message}
-                        </div>
-                    `;
-                }
+            const form = document.getElementById('formImportarTabela');
+            const formData = new FormData(form);
+            const resultDiv = document.getElementById('importResult');
+            const texto = (document.getElementById('questoesTabela').value || '').trim();
+            const arquivo = document.getElementById('questoesXlsx').files[0];
+            if (!texto && !arquivo) {
                 resultDiv.style.display = 'block';
-            })
-            .catch(error => {
-                document.getElementById('jsonResult').innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-circle"></i> Erro ao importar: ${error}
-                    </div>
-                `;
-                document.getElementById('jsonResult').style.display = 'block';
-            });
-        }
-        
-        // Gerar modelo vazio
-        function gerarModeloVazio() {
-            const questoes = [];
-            for (let i = 1; i <= 30; i++) {
-                questoes.push({
-                    "pergunta": `Pergunta ${i} da prova final (${document.title})`,
-                    "opcao_a": "Alternativa A para esta questão",
-                    "opcao_b": "Alternativa B para esta questão",
-                    "opcao_c": "Alternativa C para esta questão",
-                    "opcao_d": "Alternativa D para esta questão",
-                    "resposta_correta": "A"
-                });
+                resultDiv.innerHTML = '<div class="alert alert-danger">Cole as 6 colunas da planilha ou escolha um arquivo .xlsx.</div>';
+                return;
             }
-            
-            document.getElementById('questoesJson').value = JSON.stringify(questoes, null, 2);
-            alert('Modelo vazio gerado! Preencha com suas 30 questões.');
+            fetch(`/mew/importar-questoes/{{ disciplina.id }}`, {method:'POST', body:formData})
+              .then(async r => ({ok:r.ok, data:await r.json()}))
+              .then(({ok,data}) => {
+                  resultDiv.style.display='block';
+                  resultDiv.innerHTML = `<div class="alert ${ok && data.success ? 'alert-success' : 'alert-danger'}">${data.message || 'Falha na importação.'}</div>`;
+                  if (ok && data.success) setTimeout(() => window.location.reload(), 800);
+              })
+              .catch(() => {
+                  resultDiv.style.display='block';
+                  resultDiv.innerHTML='<div class="alert alert-danger">Não foi possível importar a planilha.</div>';
+              });
         }
-        
-        // Gerar exemplo
-        function gerarModeloExemplo() {
-            const exemplo = [
-                {
-                    "pergunta": "Qual é a capital do Brasil?",
-                    "opcao_a": "São Paulo",
-                    "opcao_b": "Rio de Janeiro",
-                    "opcao_c": "Brasília",
-                    "opcao_d": "Salvador",
-                    "resposta_correta": "C"
-                },
-                {
-                    "pergunta": "Quantos estados tem o Brasil?",
-                    "opcao_a": "26",
-                    "opcao_b": "27",
-                    "opcao_c": "25",
-                    "opcao_d": "28",
-                    "resposta_correta": "B"
-                },
-                {
-                    "pergunta": "Qual oceano banha o litoral brasileiro?",
-                    "opcao_a": "Oceano Pacífico",
-                    "opcao_b": "Oceano Índico",
-                    "opcao_c": "Oceano Atlântico",
-                    "opcao_d": "Oceano Ártico",
-                    "resposta_correta": "C"
-                }
-            ];
-            
-            document.getElementById('questoesJson').value = JSON.stringify(exemplo, null, 2);
-            alert('Exemplo gerado! Veja o formato e complete com mais 27 questões.');
-        }
-        
-        // Exportar questões atuais
-        async function exportarQuestoesAtuais() {
-            try {
-                const response = await fetch(`/mew/exportar-questoes-json/{{ disciplina.id }}`);
-                const data = await response.json();
-                
-                if (data.questoes && data.questoes.length > 0) {
-                    const jsonExport = document.getElementById('jsonExport');
-                    jsonExport.textContent = JSON.stringify(data.questoes, null, 2);
-                } else {
-                    document.getElementById('jsonExport').textContent = '// Nenhuma questão encontrada para exportar';
-                }
-            } catch (error) {
-                console.error('Erro ao exportar:', error);
-                document.getElementById('jsonExport').textContent = '// Erro ao carregar questões';
-            }
-        }
-        
-        // Copiar JSON para área de transferência
-        function copiarJSON() {
-            const jsonText = document.getElementById('jsonExport').textContent;
-            
-            navigator.clipboard.writeText(jsonText)
-                .then(() => {
-                    alert('JSON copiado para a área de transferência!');
-                })
-                .catch(err => {
-                    console.error('Erro ao copiar:', err);
-                    alert('Erro ao copiar. Tente selecionar e copiar manualmente.');
-                });
-        }
-        
-        // Inicializar
-        document.addEventListener('DOMContentLoaded', function() {
-            // Verificar se há mensagem de sucesso na URL
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('sucesso')) {
-                const mensagem = urlParams.get('sucesso');
-                alert('Sucesso: ' + decodeURIComponent(mensagem));
-            }
-        });
     </script>
 </body>
 

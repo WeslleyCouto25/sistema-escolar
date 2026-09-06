@@ -1,4 +1,4 @@
-﻿from pydoc import html
+from pydoc import html
 import re
 from werkzeug.utils import secure_filename
 import json
@@ -25,12 +25,11 @@ from markupsafe import escape
 from pathlib import Path
 import hashlib
 import json
-import plano_ensino  
+import plano_ensino
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
-from weasyprint import HTML
-load_dotenv() 
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
@@ -39,22 +38,203 @@ from api_planos import planos_bp
 app.register_blueprint(planos_bp, url_prefix='/api')
 
 import os
+import tempfile
+import threading
 import psycopg2
-import psycopg2.extras
+from openpyxl import Workbook, load_workbook
+
+from db_pool import get_db_connection, pool_stats
+from perf_monitor import install_perf_monitor, current_rss_mb
+from pdf_tools import render_html_to_pdf_file, render_html_to_pdf_bytes, merge_pdf_files
+from r2_storage import (
+    R2NotConfigured, decode_data_url, delete_object, extension_for_mime,
+    guess_content_type, is_configured as r2_is_configured, make_key,
+    presigned_url as r2_presigned_url, upload_bytes as r2_upload_bytes,
+    upload_fileobj as r2_upload_fileobj, upload_path as r2_upload_path,
+)
+
+# Evita uploads ilimitados. O arquivo é transmitido para o R2 sem ser transformado em base64.
+app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+install_perf_monitor(app)
+
+# Bloqueio barato de scanners conhecidos antes de abrir conexão com o banco.
+_SCANNER_PATH_RE = re.compile(
+    r"(?:^|/)(?:\.env(?:\.|$)|\.git(?:/|$)|phpinfo(?:\.php)?$|wp-config(?:\.php)?|"
+    r"service-account\.json$|credentials\.json$|gcp-(?:key|credentials)\.json$|firebase-(?:key|adminsdk)\.json$|"
+    r"_profiler(?:/|$)|_ignition(?:/|$)|server-status(?:\.php)?$)", re.I
+)
+
+@app.before_request
+def bloquear_scanners_comuns():
+    caminho = request.path or "/"
+    if _SCANNER_PATH_RE.search(caminho):
+        return "Not Found", 404
 
 
-def get_db_connection():
-    """Conecta exclusivamente ao PostgreSQL."""
-    return psycopg2.connect(
-        os.environ.get("DATABASE_URL"),
-        sslmode="require",
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
+@app.errorhandler(413)
+def arquivo_grande_demais(_erro):
+    limite = int(os.getenv("MAX_UPLOAD_MB", "50"))
+    return f"Arquivo acima do limite permitido de {limite} MB.", 413
+
+
+@app.route("/mew/diagnostico-recursos")
+def mew_diagnostico_recursos():
+    """Diagnóstico somente leitura para memória, pool, R2 e tamanho do PostgreSQL."""
+    if not session.get("mew_admin"):
+        return jsonify({"error": "Não autorizado"}), 403
+
+    diagnostico = {
+        "rss_mb": current_rss_mb(),
+        "db_pool": pool_stats(),
+        "r2_configurado": r2_is_configured(),
+        "max_upload_mb": int(os.getenv("MAX_UPLOAD_MB", "50")),
+        "cache_aplicacao": "não configurado (sem Redis/Flask-Caching/cachetools)",
+    }
+    conn = get_db_connection(); cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT ROUND(pg_database_size(current_database()) / 1048576.0, 2) AS mb")
+        diagnostico["database_mb"] = float((cursor.fetchone() or {}).get("mb") or 0)
+        cursor.execute("""
+            SELECT relname AS tabela,
+                   ROUND(pg_total_relation_size(relid) / 1048576.0, 2) AS mb
+            FROM pg_catalog.pg_statio_user_tables
+            ORDER BY pg_total_relation_size(relid) DESC
+            LIMIT 12
+        """)
+        diagnostico["maiores_tabelas"] = [
+            {"tabela": r["tabela"], "mb": float(r.get("mb") or 0)} for r in cursor.fetchall()
+        ]
+        cursor.execute("""
+            SELECT
+              (SELECT COUNT(*) FROM contratos_alunos
+                 WHERE assinatura_base64 IS NOT NULL OR foto_assinatura_base64 IS NOT NULL OR pdf_assinado IS NOT NULL) AS contratos_legados,
+              (SELECT COUNT(*) FROM solicitacoes_documentos_integrados
+                 WHERE pdf_previa IS NOT NULL OR pdf_final IS NOT NULL) AS documentos_integrados_legados,
+              (SELECT COUNT(*) FROM projetos_finais
+                 WHERE arquivo_path IS NOT NULL OR arquivo_atividade_path IS NOT NULL) AS projetos_locais_legados
+        """)
+        legado = cursor.fetchone() or {}
+        diagnostico["armazenamento_legado_pendente"] = dict(legado)
+    except Exception as exc:
+        diagnostico["database_diagnostico_erro"] = str(exc)
+    finally:
+        conn.close()
+    return jsonify(diagnostico)
+
+
+def _normalizar_resposta_correta(valor):
+    texto = str(valor or "").strip().upper()
+    mapa = {"1": "A", "2": "B", "3": "C", "4": "D"}
+    texto = mapa.get(texto, texto)
+    if texto.startswith("A"):
+        return "A"
+    if texto.startswith("B"):
+        return "B"
+    if texto.startswith("C"):
+        return "C"
+    if texto.startswith("D"):
+        return "D"
+    raise ValueError(f"Resposta correta inválida: {valor!r}. Use A, B, C ou D.")
+
+
+def _questao_interna(pergunta, a, b, c, d, resposta):
+    pergunta = str(pergunta or "").strip()
+    opcoes = [str(x or "").strip() for x in (a, b, c, d)]
+    if not pergunta or not all(opcoes):
+        raise ValueError("Cada questão precisa de pergunta e das quatro alternativas A, B, C e D.")
+    return {
+        "pergunta": pergunta,
+        "opcoes": {"A": opcoes[0], "B": opcoes[1], "C": opcoes[2], "D": opcoes[3]},
+        "resposta_certa": _normalizar_resposta_correta(resposta),
+    }
+
+
+def parse_questoes_texto(texto):
+    """Aceita JSON antigo ou linhas coladas do Excel/Sheets em 6 colunas."""
+    texto = (texto or "").strip()
+    if not texto:
+        return []
+    # Compatibilidade: conteúdos antigos em JSON continuam funcionando.
+    if texto[:1] in "[{":
+        dados = json.loads(texto)
+        if isinstance(dados, dict):
+            dados = dados.get("questoes", [])
+        if not isinstance(dados, list):
+            raise ValueError("O conteúdo JSON precisa ser uma lista de questões.")
+        saida = []
+        for q in dados:
+            op = q.get("opcoes") if isinstance(q, dict) else None
+            if isinstance(op, dict):
+                saida.append(_questao_interna(q.get("pergunta"), op.get("A"), op.get("B"), op.get("C"), op.get("D"), q.get("resposta_certa") or q.get("resposta_correta")))
+            elif isinstance(q, dict):
+                saida.append(_questao_interna(q.get("pergunta"), q.get("opcao_a"), q.get("opcao_b"), q.get("opcao_c"), q.get("opcao_d"), q.get("resposta_correta") or q.get("resposta_certa")))
+        return saida
+
+    linhas = [l for l in texto.replace("\r\n", "\n").replace("\r", "\n").split("\n") if l.strip()]
+    saida = []
+    for n, linha in enumerate(linhas, 1):
+        partes = linha.split("\t")
+        if len(partes) < 6 and ";" in linha:
+            partes = [x.strip() for x in linha.split(";")]
+        if len(partes) < 6:
+            raise ValueError(f"Linha {n}: cole 6 colunas: Pergunta | A | B | C | D | Resposta.")
+        if n == 1 and str(partes[0]).strip().lower() in {"pergunta", "questão", "questao"}:
+            continue
+        saida.append(_questao_interna(*partes[:6]))
+    return saida
+
+
+def questoes_xlsx_upload(arquivo):
+    if not arquivo or not getattr(arquivo, "filename", ""):
+        return []
+    wb = load_workbook(arquivo.stream, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        saida = []
+        for n, row in enumerate(ws.iter_rows(values_only=True), 1):
+            vals = list(row[:6])
+            if not any(v not in (None, "") for v in vals):
+                continue
+            if len(vals) < 6:
+                vals += [None] * (6-len(vals))
+            if n == 1 and str(vals[0] or "").strip().lower() in {"pergunta", "questão", "questao"}:
+                continue
+            saida.append(_questao_interna(*vals[:6]))
+        return saida
+    finally:
+        wb.close()
+
+
+def questoes_para_tabela(questoes_json):
+    try:
+        dados = json.loads(questoes_json or "[]")
+    except Exception:
+        return ""
+    linhas = []
+    for q in dados if isinstance(dados, list) else []:
+        op = q.get("opcoes") or {}
+        vals = [q.get("pergunta", ""), op.get("A", ""), op.get("B", ""), op.get("C", ""), op.get("D", ""), q.get("resposta_certa") or q.get("resposta_correta") or ""]
+        linhas.append("\t".join(str(v).replace("\t", " ").replace("\n", " ") for v in vals))
+    return "\n".join(linhas)
+
+
+def _hash_e_rebobinar(fileobj):
+    h = hashlib.sha256()
+    try:
+        fileobj.seek(0)
+    except Exception:
+        pass
+    while True:
+        bloco = fileobj.read(1024 * 1024)
+        if not bloco:
+            break
+        h.update(bloco)
+    fileobj.seek(0)
+    return h.hexdigest()
 
 
 def init_pagamentos_db():
     """Garante a tabela de cobranças do Mercado Pago no PostgreSQL."""
-    init_contratos_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -91,7 +271,6 @@ def get_mercadopago_sdk():
 
 
 def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_id=None, base_url=None):
-    init_pagamentos_db()
     valor = round(float(valor_total), 2)
     external_reference = f"SIGEU-ALUNO-{aluno_id}-{int(time.time())}-{secrets.token_hex(3)}"
     base_url = (base_url or "https://campusvirtualfacop.com.br").rstrip("/")
@@ -153,7 +332,6 @@ def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_i
 
 def criar_contrato_aluno(aluno_id):
     """Cria apenas o registro do contrato padrão; o conteúdo vem de templates/contrato_padrao.html."""
-    init_contratos_db()
     data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
 
     conn = get_db_connection()
@@ -325,7 +503,7 @@ def init_db():
             FOREIGN KEY (aluno_id) REFERENCES alunos(id)
         )
     """)
-    
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS aluno_disciplina_datas (
             id SERIAL PRIMARY KEY,
@@ -339,7 +517,7 @@ def init_db():
             UNIQUE(aluno_id, disciplina_id)
         )
     """)
-    
+
     # Tabela para controlar liberação da prova final por disciplina
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS liberacao_final (
@@ -396,7 +574,7 @@ def init_db():
             FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id)
         )
     """)
-    
+
     # Tabela para Projeto Final
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS projetos_finais (
@@ -517,11 +695,11 @@ def gerar_qrcode_base64(dados):
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
-        
+
         buffered = BytesIO()
         img.save(buffered, format="PNG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
+
         return f"data:image/png;base64,{img_base64}"
     except Exception as e:
         print(f"Erro ao gerar QR Code: {e}")
@@ -535,7 +713,7 @@ def gerar_qrcode_simples_texto(dados):
         qr = qrcode.QRCode()
         qr.add_data(dados)
         qr.make()
-        
+
         # Gerar versão em ASCII
         qr_ascii = qr.print_ascii(invert=True)
         return qr_ascii
@@ -578,8 +756,8 @@ def extrair_metadados_qrcode(qr_data):
         return {"dados": qr_data}
     except:
         return {"dados": qr_data}
-    
-    
+
+
 def gerar_ra():
     """Gera um RA de 8 dígitos aleatório"""
     return str(random.randint(10000000, 99999999))
@@ -587,51 +765,51 @@ def gerar_ra():
 
 def gerar_codigos_autenticacao():
     """Gera todos os códigos aleatórios simples para autenticação"""
-    
+
     # Código simples (6 letras/números)
     letras_numeros = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     codigo_simples = ''.join(random.choice(letras_numeros) for _ in range(6))
-    
+
     # Código de barras (apenas números)
     codigo_barras = ''.join(random.choice("0123456789") for _ in range(12))
-    
+
     # Número hash grande (apenas para visual)
     numero_hash = ''.join(random.choice("0123456789ABCDEF") for _ in range(64))
-    
+
     # Data/hora atual
     data_hora = datetime.now().strftime("%d/%m/%Y às %H:%M:%S")
-    
+
     return {
         'codigo_simples': codigo_simples,
         'codigo_barras_simples': codigo_barras,
         'numero_hash': numero_hash,
         'data_hora_completa': data_hora
     }
-    
+
 def verificar_disciplina_concluida(aluno_id, disciplina_id):
     """Verifica se o aluno completou todos os capítulos da disciplina"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Verificar se já fez todas as 4 provas dos capítulos
     cursor.execute("""
-        SELECT COUNT(*) as total_provas_feitas 
-        FROM notas 
+        SELECT COUNT(*) as total_provas_feitas
+        FROM notas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     total_provas = cursor.fetchone()["total_provas_feitas"] or 0
-    
+
     # Verificar se já fez a prova final
     cursor.execute("""
-        SELECT id FROM notas_finais 
+        SELECT id FROM notas_finais
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     fez_final = cursor.fetchone() is not None
-    
+
     conn.close()
-    
+
     # Disciplina está concluída se:
     # 1. Fez todas as 4 provas dos capítulos E
     # 2. Já fez a prova final
@@ -647,19 +825,19 @@ def calcular_data_liberacao_final(aluno_id, disciplina_id):
     """Calcula a data de liberação da prova final (3 dias após a última prova)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar data da última prova feita
     cursor.execute("""
-        SELECT MAX(data_realizacao) as ultima_data 
-        FROM notas_finais 
+        SELECT MAX(data_realizacao) as ultima_data
+        FROM notas_finais
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     resultado = cursor.fetchone()
     ultima_data = resultado["ultima_data"] if resultado and resultado["ultima_data"] else None
-    
+
     conn.close()
-    
+
     if ultima_data:
         from datetime import datetime, timedelta
         try:
@@ -670,7 +848,7 @@ def calcular_data_liberacao_final(aluno_id, disciplina_id):
             return liberacao_dt.strftime("%d/%m/%Y %H:%M")
         except:
             return None
-    
+
     return None
 
 def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disciplina, ano_manual=None):
@@ -678,20 +856,20 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
     Gera HTML da declaração de conclusão de disciplina
     """
     from datetime import datetime
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar dados adicionais do aluno
     cursor.execute("""
-        SELECT nome_pai, nome_mae, naturalidade, nacionalidade, 
+        SELECT nome_pai, nome_mae, naturalidade, nacionalidade,
                data_nascimento, sexo, estado_civil, curso_referencia
-        FROM dados_pessoais 
+        FROM dados_pessoais
         WHERE aluno_id = %s
     """, (aluno_id,))
-    
+
     dados_adicionais = cursor.fetchone()
-    
+
     # Buscar informações específicas da disciplina (nota final, período)
     cursor.execute("""
         SELECT nf.media_final, nf.status, nf.data_realizacao,
@@ -700,27 +878,27 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
         LEFT JOIN aluno_disciplina_datas addd ON nf.aluno_id = addd.aluno_id AND nf.disciplina_id = addd.disciplina_id
         WHERE nf.aluno_id = %s AND nf.disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     info_final = cursor.fetchone()
-    
+
     conn.close()
-    
+
     # Dados do aluno
     nome_aluno = dados_aluno.get('nome', '')
     ra_aluno = dados_aluno.get('ra', '')
     cpf_aluno = dados_aluno.get('cpf_formatado', '')
-    
+
     # Dados da disciplina
     nome_disciplina = dados_disciplina.get('nome', '')
     classe_nome_disciplina = 'disciplina-nome longo' if len(nome_disciplina) > 40 else 'disciplina-nome'
     carga_horaria = dados_disciplina.get('carga', 80)
-    
+
     # Determinar nota e status
     nota_final = "N/I"
     status = "Aprovado"
     data_conclusao = datetime.now().strftime("%d/%m/%Y")
     periodo = ""
-    
+
     if info_final:
         if info_final['media_final']:
             nota_final = f"{float(info_final['media_final']):.2f}"
@@ -728,7 +906,7 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
             status = "Aprovado" if info_final['status'] == 'aprovado' else "Reprovado"
         if info_final['data_realizacao']:
             data_conclusao = info_final['data_realizacao'].split(' ')[0] if ' ' in info_final['data_realizacao'] else info_final['data_realizacao']
-        
+
         # Determinar período (semestre/ano)
         if info_final['data_inicio']:
             try:
@@ -741,7 +919,7 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
                 periodo = f"ano {datetime.now().year}"
         else:
             periodo = f"ano {datetime.now().year}"
-    
+
     # Data atual
     data_atual = datetime.now().strftime("%d de %B de %Y")
     # Mapeamento de meses em português
@@ -753,10 +931,10 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
     }
     for eng, pt in meses_pt.items():
         data_atual = data_atual.replace(eng, pt)
-    
+
     # Ano para o documento
     ano_documento = ano_manual if ano_manual else datetime.now().year
-    
+
     # HTML CORRIGIDO - MUDEI AQUI PARA USAR {{ qrcode_base64 }}
     html = '''<!DOCTYPE html>
 <html>
@@ -879,7 +1057,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: 
+    background-image:
         repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
         repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
     pointer-events: none;
@@ -1427,7 +1605,7 @@ body {
     body {
         background: #fff;
     }
-    
+
     .folha {
         box-shadow: none;
         margin: 0;
@@ -1444,29 +1622,29 @@ body {
     <div class="cantoneira top-right"></div>
     <div class="cantoneira bottom-left"></div>
     <div class="cantoneira bottom-right"></div>
-    
+
     <!-- MICROTEXTOS DE BORDA -->
     <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educ - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | F142485-1/-Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-    
+
     <!-- MARCAS D'ÁGUA -->
     <div class="marca-dagua-principal">FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
     <div class="marca-dagua-pattern"></div>
-    
+
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
     <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-    
+
     <!-- FAIXA IDENTIFICADORA -->
     <div class="faixa-identificadora"></div>
-    
+
     <!-- NÚMERO DE CONTROLE -->
     <div class="numero-controle-box">DOC-''' + ra_aluno + '''-''' + periodo + '''-''' + nota_final + '''</div>
-    
+
     <!-- CABEÇALHO -->
     <div class="cabecalho">
         <div class="logo-area">
@@ -1484,22 +1662,22 @@ body {
             FCP-SiGEu<br>e-SIGEU-GTP-2026
         </div>
     </div>
-    
+
     <!-- TÍTULO -->
     <div class="titulo-documento">
         <div class="titulo-principal">Declaração</div>
         <div class="titulo-sub">Conclusão de Disciplina Isolada</div>
     </div>
-    
+
     <!-- TEXTO DE ABERTURA -->
     <div class="texto-abertura">
-        A <span class="destaque">FACULDADE DO CENTRO OESTE PAULISTA (FACOP)</span>, 
-        instituição de ensino superior devidamente credenciada pelo Ministério da Educação, 
-        no âmbito do Convênio Educacional <span class="destaque">FACOP/SiGEu – Grupo Educacional Unificado LTDA</span>, 
-        inscrita no CNPJ sob o nº 04.344.730/0001-60, 
+        A <span class="destaque">FACULDADE DO CENTRO OESTE PAULISTA (FACOP)</span>,
+        instituição de ensino superior devidamente credenciada pelo Ministério da Educação,
+        no âmbito do Convênio Educacional <span class="destaque">FACOP/SiGEu – Grupo Educacional Unificado LTDA</span>,
+        inscrita no CNPJ sob o nº 04.344.730/0001-60,
         <strong>DECLARA</strong> para os devidos fins de direito que:
     </div>
-    
+
     <!-- BOX DE IDENTIFICAÇÃO DO ALUNO -->
     <div class="box-identificacao">
         <div class="box-identificacao-header">Dados do Discente</div>
@@ -1518,7 +1696,7 @@ body {
             </div>
         </div>
     </div>
-    
+
     <!-- BOX DE DADOS DA DISCIPLINA -->
     <div class="box-disciplina">
         <div class="''' + classe_nome_disciplina + '''">''' + nome_disciplina + '''</div>
@@ -1537,20 +1715,20 @@ body {
             </div>
         </div>
     </div>
-    
+
     <!-- TEXTO DECLARATÓRIO -->
     <div class="texto-declaratorio1">
-        Concluiu com <strong>aproveitamento</strong> a disciplina acima referenciada, 
-        com resultado final <span class="destaque">''' + status + '''</span> e nota 
-        <span class="destaque">''' + nota_final + ''' </span>(média), atendendo integralmente aos critérios 
-        de avaliação estabelecidos no Regimento Geral da Instituição e na legislação 
+        Concluiu com <strong>aproveitamento</strong> a disciplina acima referenciada,
+        com resultado final <span class="destaque">''' + status + '''</span> e nota
+        <span class="destaque">''' + nota_final + ''' </span>(média), atendendo integralmente aos critérios
+        de avaliação estabelecidos no Regimento Geral da Instituição e na legislação
         educacional vigente (Lei nº 9.394/1996 - LDBEN e alterações subsequentes).
     </div>
-    
+
     <div class="texto-declaratorio2">
-        A frequência e o aproveitamento encontram-se devidamente registrados nos sistemas 
-        acadêmicos da instituição, podendo esta declaração ser utilizada para fins de 
-        comprovação de conclusão de componente curricular, aproveitamento de estudos 
+        A frequência e o aproveitamento encontram-se devidamente registrados nos sistemas
+        acadêmicos da instituição, podendo esta declaração ser utilizada para fins de
+        comprovação de conclusão de componente curricular, aproveitamento de estudos
         ou quaisquer outros fins que se fizerem necessários, conforme determinação legal.
     </div>
 
@@ -1560,12 +1738,12 @@ body {
         ELETRONICAMENTE<br>
         ''' + data_atual + '''
     </div>
-    
+
     <!-- DATA E LOCAL -->
     <div class="data-local">
         São Paulo – SP, ''' + data_atual + '''.
     </div>
-    
+
     <!-- QR CODE - AGORA USA O TEMPLATE COM {{ qrcode_base64 }} -->
     <div class="qr-code-box">
     <div class="qr-code-label">Validação Digital</div>
@@ -1586,7 +1764,7 @@ body {
         </svg>
     </div>
 </div>
-    
+
     <!-- RODAPÉ TÉCNICO -->
     <div class="rodape-tecnico">
         <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06, 14.063/20 e nº 9.394/96 e nº 5.154/2004.<br>
@@ -1596,12 +1774,12 @@ body {
 </div>
 </body>
 </html>'''
-    
+
     # 👇 NOVO CÓDIGO - substitui TODO o bloco antigo
     codigo_autenticacao = f"{ra_aluno}-{disciplina_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     dados_qr = f"https://campusvirtualfacop.com.br/validar-documento/DECL-{codigo_autenticacao}"
     qrcode_base64 = gerar_qrcode_base64(dados_qr)
-    
+
     from flask import render_template_string
     return render_template_string(html, qrcode_base64=qrcode_base64)
 
@@ -1609,33 +1787,33 @@ body {
 def verificar_acesso_disciplina(aluno_id, disciplina_id):
     """Verifica se o aluno pode acessar a disciplina baseado na data"""
     from datetime import datetime
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT data_inicio, data_fim_previsto 
-        FROM aluno_disciplina_datas 
+        SELECT data_inicio, data_fim_previsto
+        FROM aluno_disciplina_datas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     data_info = cursor.fetchone()
     conn.close()
-    
+
     if not data_info:
         return False, "Disciplina não encontrada ou não matriculada"
-    
+
     # Converter data string para objeto datetime
     try:
         data_inicio = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
         hoje = datetime.now()
-        
+
         if hoje < data_inicio:
             data_formatada = data_inicio.strftime("%d/%m/%Y")
             data_fim = datetime.strptime(data_info['data_fim_previsto'], "%d/%m/%Y")
             data_fim_formatada = data_fim.strftime("%d/%m/%Y")
             return False, f"Suas aulas iniciarão apenas em {data_formatada} com término máximo previsto para {data_fim_formatada}"
-        
+
         return True, "Acesso permitido"
     except ValueError:
         return False, "Erro na data de início"
@@ -1714,277 +1892,146 @@ def logout():
 
 @app.route("/dashboard")
 def dashboard():
-    init_documentos_integrados_db()
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
+        dados_pessoais = cursor.fetchone()
+        cursor.execute("SELECT * FROM situacao_financeira WHERE aluno_id = %s ORDER BY id DESC LIMIT 1", (aluno_id,))
+        situacao_financeira = cursor.fetchone()
 
-    # Buscar dados pessoais do aluno
-    cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
-    dados_pessoais = cursor.fetchone()
-    
-    # Buscar situação financeira
-    cursor.execute("SELECT * FROM situacao_financeira WHERE aluno_id = %s ORDER BY id DESC LIMIT 1", (aluno_id,))
-    situacao_financeira = cursor.fetchone()
-    
-    # Buscar disciplinas do aluno
-    cursor.execute("""
-        SELECT d.id, d.nome
-        FROM disciplinas d
-        JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = %s
-    """, (aluno_id,))
-    disciplinas = cursor.fetchall()
-
-    # Buscar notas
-    cursor.execute("""
-        SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
-        FROM notas n
-        JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = %s
-        ORDER BY n.disciplina_id, n.capitulo
-    """, (aluno_id,))
-    notas = cursor.fetchall()
-
-    # Buscar solicitações de material
-    cursor.execute("""
-        SELECT sm.*, d.nome AS disciplina_nome
-        FROM solicitacoes_material sm
-        LEFT JOIN disciplinas d ON sm.disciplina_id = d.id
-        WHERE sm.aluno_id = %s
-        ORDER BY sm.data_solicitacao DESC
-    """, (aluno_id,))
-    solicitacoes_material = cursor.fetchall()
-
-    # Buscar solicitações de declarações
-    cursor.execute("""
-        SELECT *
-        FROM solicitacoes_declaracoes
-        WHERE aluno_id = %s
-        ORDER BY data_solicitacao DESC
-    """, (aluno_id,))
-    solicitacoes_declaracoes = cursor.fetchall()
-
-    # Calcular totais
-    cursor.execute("SELECT COUNT(*) as total FROM notas WHERE aluno_id = %s", (aluno_id,))
-    total_provas = cursor.fetchone()["total"]
-    
-    cursor.execute("SELECT AVG(nota) as media FROM notas WHERE aluno_id = %s", (aluno_id,))
-    media_result = cursor.fetchone()
-    media = media_result["media"] if media_result["media"] else 0
-    media_geral = round(media, 2)
-
-    # Contar material pendente
-    cursor.execute("""
-        SELECT COUNT(*) as pendente 
-        FROM solicitacoes_material 
-        WHERE aluno_id = %s AND entregue = 0
-    """, (aluno_id,))
-    material_pendente_result = cursor.fetchone()
-    material_pendente = material_pendente_result["pendente"] if material_pendente_result else 0
-
-    # Contar declarações pendentes
-    cursor.execute("""
-        SELECT COUNT(*) as pendente 
-        FROM solicitacoes_declaracoes 
-        WHERE aluno_id = %s AND entregue = 0
-    """, (aluno_id,))
-    declaracoes_pendentes_result = cursor.fetchone()
-    declaracoes_pendentes = declaracoes_pendentes_result["pendente"] if declaracoes_pendentes_result else 0
-
-    # Buscar documentos não visualizados
-    cursor.execute("""
-        SELECT COUNT(*) as total 
-        FROM documentos_enviados 
-        WHERE aluno_id = %s AND status = 'enviado'
-    """, (aluno_id,))
-    nao_visualizados = cursor.fetchone()["total"] or 0
-
-    # ========== DISCIPLINAS ALTERNATIVAS ==========
-    # Buscar disciplinas alternativas do aluno
-    cursor.execute("""
-        SELECT da.*, 
-               (SELECT COUNT(*) FROM anexos_disciplina_alternativa 
-                WHERE aluno_id = %s AND disciplina_id = da.id) as total_anexos,
-               (SELECT AVG(nota) FROM anexos_disciplina_alternativa 
-                WHERE aluno_id = %s AND disciplina_id = da.id AND nota IS NOT NULL) as media_nota
-        FROM disciplinas_alternativas da
-        JOIN aluno_disciplina_alternativa ada ON da.id = ada.disciplina_id
-        WHERE ada.aluno_id = %s AND da.ativa = 1
-    """, (aluno_id, aluno_id, aluno_id))
-    
-    disciplinas_alternativas_raw = cursor.fetchall()
-    
-    # Converter para lista de dicionários e calcular progresso
-    disciplinas_alternativas = []
-    for da in disciplinas_alternativas_raw:
-        da_dict = dict(da)
-        media_nota = da_dict.get('media_nota') or 0
-        da_dict['progresso'] = min(100, int(media_nota * 10)) if media_nota else 0
-        disciplinas_alternativas.append(da_dict)
-    # ========== FIM DISCIPLINAS ALTERNATIVAS ==========
-    
-    conn.close()
-
-    # Funções para template
-    def calcular_progresso(aluno_id, disciplina_id):
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Contar capítulos totais da disciplina
-            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
-            total_result = cursor.fetchone()
-            total_capitulos = total_result["total"] if total_result else 0
-            
-            if total_capitulos == 0:
-                conn.close()
-                return 0
-            
-            # Contar provas realizadas (capítulos com nota)
-            cursor.execute("""
-                SELECT COUNT(DISTINCT capitulo) as feitas 
-                FROM notas 
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
-            provas_result = cursor.fetchone()
-            provas_feitas = provas_result["feitas"] if provas_result else 0
-            
-            # Calcular porcentagem
-            progresso = (provas_feitas / total_capitulos) * 100 if total_capitulos > 0 else 0
-            
-            # Verificar se tem nota da prova final
-            cursor.execute("""
-                SELECT nota_final 
-                FROM notas_finais 
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
-            nota_final_result = cursor.fetchone()
-            nota_final = nota_final_result[0] if nota_final_result else None
-            
-            conn.close()
-            
-            # Se já fez prova final, progresso é 100%
-            if nota_final is not None:
-                return 100
-            
-            # Arredondar para múltiplos de 25 para mostrar progresso visual
-            progresso_arredondado = round(progresso)
-            if progresso_arredondado == 100:
-                return 100
-            elif progresso_arredondado >= 75:
-                return 75
-            elif progresso_arredondado >= 50:
-                return 50
-            elif progresso_arredondado >= 25:
-                return 25
+        # Uma única consulta calcula progresso/capítulos/provas de todas as disciplinas.
+        cursor.execute("""
+            SELECT d.id, d.nome,
+                   COUNT(DISTINCT c.id) AS total_capitulos,
+                   COUNT(DISTINCT n.capitulo) AS provas_realizadas,
+                   nf.nota_final
+            FROM disciplinas d
+            JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
+            LEFT JOIN capitulos c ON c.disciplina_id = d.id
+            LEFT JOIN notas n ON n.aluno_id = ad.aluno_id AND n.disciplina_id = d.id
+            LEFT JOIN notas_finais nf ON nf.aluno_id = ad.aluno_id AND nf.disciplina_id = d.id
+            WHERE ad.aluno_id = %s
+            GROUP BY d.id, d.nome, nf.nota_final
+            ORDER BY d.nome
+        """, (aluno_id,))
+        disciplinas = []
+        for row in cursor.fetchall():
+            d = dict(row)
+            total = int(d.get("total_capitulos") or 0)
+            feitas = int(d.get("provas_realizadas") or 0)
+            if d.get("nota_final") is not None:
+                progresso = 100
+            elif total <= 0:
+                progresso = 0
             else:
-                return 0 if progresso_arredondado == 0 else 25
-            
-        except Exception as e:
-            print(f"Erro ao calcular progresso: {e}")
-            return 0
+                bruto = round((feitas / total) * 100)
+                progresso = 100 if bruto >= 100 else 75 if bruto >= 75 else 50 if bruto >= 50 else 25 if bruto > 0 else 0
+            d["progresso"] = progresso
+            disciplinas.append(d)
 
-    def contar_capitulos(disciplina_id):
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) as total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
-            total_result = cursor.fetchone()
-            total = total_result["total"] if total_result else 0
-            conn.close()
-            return total
-        except Exception as e:
-            print(f"Erro ao contar capítulos: {e}")
-            return 0
-
-    def contar_provas_realizadas(aluno_id, disciplina_id):
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(DISTINCT capitulo) as total 
-                FROM notas 
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
-            total_result = cursor.fetchone()
-            total = total_result["total"] if total_result else 0
-            conn.close()
-            return total
-        except Exception as e:
-            print(f"Erro ao contar provas: {e}")
-            return 0
+        cursor.execute("""
+            SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
+            FROM notas n JOIN disciplinas d ON n.disciplina_id = d.id
+            WHERE n.aluno_id = %s ORDER BY n.disciplina_id, n.capitulo
+        """, (aluno_id,))
+        notas = cursor.fetchall()
+        cursor.execute("""
+            SELECT sm.*, d.nome AS disciplina_nome FROM solicitacoes_material sm
+            LEFT JOIN disciplinas d ON sm.disciplina_id = d.id
+            WHERE sm.aluno_id = %s ORDER BY sm.data_solicitacao DESC
+        """, (aluno_id,))
+        solicitacoes_material = cursor.fetchall()
+        cursor.execute("SELECT * FROM solicitacoes_declaracoes WHERE aluno_id = %s ORDER BY data_solicitacao DESC", (aluno_id,))
+        solicitacoes_declaracoes = cursor.fetchall()
+        cursor.execute("SELECT COUNT(*) AS total, COALESCE(AVG(nota),0) AS media FROM notas WHERE aluno_id=%s", (aluno_id,))
+        resumo = cursor.fetchone() or {}
+        total_provas = resumo.get("total") or 0
+        media_geral = round(float(resumo.get("media") or 0), 2)
+        cursor.execute("SELECT COUNT(*) AS pendente FROM solicitacoes_material WHERE aluno_id=%s AND entregue=0", (aluno_id,))
+        material_pendente = (cursor.fetchone() or {}).get("pendente") or 0
+        cursor.execute("SELECT COUNT(*) AS pendente FROM solicitacoes_declaracoes WHERE aluno_id=%s AND entregue=0", (aluno_id,))
+        declaracoes_pendentes = (cursor.fetchone() or {}).get("pendente") or 0
+        cursor.execute("SELECT COUNT(*) AS total FROM documentos_enviados WHERE aluno_id=%s AND status='enviado'", (aluno_id,))
+        nao_visualizados = (cursor.fetchone() or {}).get("total") or 0
+        cursor.execute("""
+            SELECT da.*,
+                   COUNT(ada2.id) AS total_anexos,
+                   AVG(ada2.nota) FILTER (WHERE ada2.nota IS NOT NULL) AS media_nota
+            FROM disciplinas_alternativas da
+            JOIN aluno_disciplina_alternativa rel ON da.id=rel.disciplina_id AND rel.aluno_id=%s
+            LEFT JOIN anexos_disciplina_alternativa ada2 ON ada2.aluno_id=%s AND ada2.disciplina_id=da.id
+            WHERE da.ativa=1
+            GROUP BY da.id
+            ORDER BY da.nome
+        """, (aluno_id, aluno_id))
+        disciplinas_alternativas=[]
+        for row in cursor.fetchall():
+            d=dict(row); media=float(d.get('media_nota') or 0); d['progresso']=min(100,int(media*10)) if media else 0; disciplinas_alternativas.append(d)
+    finally:
+        conn.close()
 
     return render_template(
-        "dashboard.html",
-        aluno_nome=session.get("aluno_nome"),
-        aluno_ra=session.get("aluno_ra"),
-        aluno_email=session.get("aluno_email"),
-        dados_pessoais=dados_pessoais,
-        situacao_financeira=situacao_financeira,
-        disciplinas=disciplinas,
-        disciplinas_alternativas=disciplinas_alternativas,  # NOVO PARÂMETRO
-        notas=notas,
-        solicitacoes_material=solicitacoes_material,
-        solicitacoes_declaracoes=solicitacoes_declaracoes,
-        total_provas_realizadas=total_provas,
-        media_geral=media_geral,
-        material_pendente=material_pendente,
-        declaracoes_pendentes=declaracoes_pendentes,
-        calcular_progresso=calcular_progresso,
-        contar_capitulos=contar_capitulos,
-        contar_provas_realizadas=contar_provas_realizadas,
+        "dashboard.html", aluno_nome=session.get("aluno_nome"), aluno_ra=session.get("aluno_ra"),
+        aluno_email=session.get("aluno_email"), dados_pessoais=dados_pessoais,
+        situacao_financeira=situacao_financeira, disciplinas=disciplinas,
+        disciplinas_alternativas=disciplinas_alternativas, notas=notas,
+        solicitacoes_material=solicitacoes_material, solicitacoes_declaracoes=solicitacoes_declaracoes,
+        total_provas_realizadas=total_provas, media_geral=media_geral,
+        material_pendente=material_pendente, declaracoes_pendentes=declaracoes_pendentes,
         nao_visualizados=nao_visualizados
     )
+
 
 @app.route("/mew/notas/capitulos/<int:aluno_id>/<int:disciplina_id>")
 def mew_notas_capitulos(aluno_id, disciplina_id):
     """Gerenciar notas dos capítulos e prova final de um aluno em uma disciplina"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar informações do aluno
     cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-    
+
     if not aluno:
         conn.close()
         return "Aluno não encontrado", 404
-    
+
     # Buscar informações da disciplina
     cursor.execute("SELECT id, nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     if not disciplina:
         conn.close()
         return "Disciplina não encontrada", 404
-    
+
     # Buscar notas existentes dos capítulos
     cursor.execute("""
-        SELECT id, capitulo, nota 
-        FROM notas 
+        SELECT id, capitulo, nota
+        FROM notas
         WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY capitulo
     """, (aluno_id, disciplina_id))
     notas_capitulos = cursor.fetchall()
-    
+
     # Buscar nota da prova final
     cursor.execute("""
-        SELECT nota_final 
-        FROM notas_finais 
+        SELECT nota_final
+        FROM notas_finais
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     nota_final_row = cursor.fetchone()
-    nota_final = nota_final_row[0] if nota_final_row else None
-    
+    nota_final = nota_final_row.get("nota_final") if nota_final_row else None
+
     conn.close()
-    
+
     return render_template(
         "mew/notas_capitulos.html",
         aluno=aluno,
@@ -1992,21 +2039,21 @@ def mew_notas_capitulos(aluno_id, disciplina_id):
         notas_capitulos=notas_capitulos,
         nota_final=nota_final
     )
-    
+
 
 @app.route("/mew/questoes-final/<int:disciplina_id>", methods=["GET", "POST"])
 def mew_questoes_final(disciplina_id):
     """Cadastrar questões da prova final - VERSÃO CORRIGIDA"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar disciplina
     cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     if request.method == "POST":
         pergunta = request.form.get("pergunta")
         opcao_a = request.form.get("opcao_a")
@@ -2014,30 +2061,30 @@ def mew_questoes_final(disciplina_id):
         opcao_c = request.form.get("opcao_c")
         opcao_d = request.form.get("opcao_d")
         resposta_correta = request.form.get("resposta_correta")
-        
+
         if not all([pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta]):
             conn.close()
             return redirect(f"/mew/questoes-final/{disciplina_id}?erro=Dados+incompletos")
-        
+
         # Inserir questão
         cursor.execute("""
-            INSERT INTO questoes_finais 
+            INSERT INTO questoes_finais
             (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta))
-        
+
         conn.commit()
         conn.close()
         return redirect(f"/mew/questoes-final/{disciplina_id}?sucesso=Questão+adicionada")
-    
+
     # GET: Listar questões existentes
     cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     questoes = cursor.fetchall()
-    
+
     total_questoes = len(questoes)
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/questoes_final.html",
         disciplina=disciplina,
@@ -2050,129 +2097,129 @@ def deletar_questao(questao_id):
     """Deleta uma questão da prova final"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar disciplina_id antes de deletar para redirecionar
     cursor.execute("SELECT disciplina_id FROM questoes_finais WHERE id = %s", (questao_id,))
     questao = cursor.fetchone()
     disciplina_id = questao["disciplina_id"] if questao else None
-    
+
     cursor.execute("DELETE FROM questoes_finais WHERE id = %s", (questao_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     if disciplina_id:
         return redirect(f"/mew/questoes-final/{disciplina_id}?sucesso=Questão+removida")
     else:
         return redirect("/mew/avaliacao-final?erro=Questão+não+encontrada")
-    
+
 @app.route("/mew/verificar-questoes/<int:disciplina_id>")
 def verificar_questoes(disciplina_id):
     """Retorna quantas questões uma disciplina tem"""
     if not session.get("mew_admin"):
         return jsonify({"error": "Não autorizado"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     resultado = cursor.fetchone()
     total = resultado["total"] if resultado else 0
-    
+
     conn.close()
-    
+
     return jsonify({
         "disciplina_id": disciplina_id,
         "total": total,
         "pronta": total >= 30
     })
-    
+
 @app.route("/mew/salvar-nota-final", methods=["POST"])
 def mew_salvar_nota_final():
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     try:
         data = request.json
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         nota_final = data['nota_final'] if data['nota_final'] else None
-        
+
         cursor.execute("""
-            INSERT INTO notas_finais 
+            INSERT INTO notas_finais
             (aluno_id, disciplina_id, nota_final, data_avaliacao)
             VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
                 nota_final = EXCLUDED.nota_final,
                 data_avaliacao = EXCLUDED.data_avaliacao
         """, (data['aluno_id'], data['disciplina_id'], nota_final))
-        
+
         conn.commit()
         conn.close()
         return jsonify({"success": True, "message": "Nota final salva com sucesso!"})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
-    
+
+
 @app.route("/disciplina/<int:disciplina_id>")
 def disciplina(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     # VERIFICAR SE DISCIPLINA ESTÁ CONCLUÍDA
     concluida, status = verificar_disciplina_concluida(aluno_id, disciplina_id)
-    
+
     if concluida and status == "concluida_com_final":
-        return render_template("disciplina_concluida.html", 
+        return render_template("disciplina_concluida.html",
                              mensagem="✅ Disciplina Concluída!",
                              detalhes="Esta disciplina já foi totalmente concluída, incluindo a avaliação final.",
                              disciplina_id=disciplina_id)
-    
+
     if concluida and status == "aguardando_final":
         # Calcular data de liberação da prova final
         data_liberacao = calcular_data_liberacao_final(aluno_id, disciplina_id)
-        
+
         if data_liberacao:
             detalhes = f"Você completou todos os 4 capítulos. A prova final estará disponível em {data_liberacao}."
         else:
             detalhes = "Você completou todos os 4 capítulos. A prova final estará disponível em até 3 dias úteis."
-        
-        return render_template("disciplina_concluida.html", 
+
+        return render_template("disciplina_concluida.html",
                              mensagem="📚 Disciplina com Capítulos Concluídos!",
                              detalhes=detalhes,
                              disciplina_id=disciplina_id,
                              data_liberacao=data_liberacao)
-    
+
     # Resto da função continua igual...
     # Verificar datas de liberação dos capítulos
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar data de início da disciplina para este aluno
     cursor.execute("""
-        SELECT data_inicio FROM aluno_disciplina_datas 
+        SELECT data_inicio FROM aluno_disciplina_datas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     data_info = cursor.fetchone()
-    
+
     if not data_info or not data_info['data_inicio']:
         conn.close()
-        return render_template("acesso_bloqueado.html", 
+        return render_template("acesso_bloqueado.html",
                              mensagem="Disciplina não configurada")
-    
+
     # Calcular dias desde o início
     from datetime import datetime
     try:
         data_inicio = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
         hoje = datetime.now()
         dias_desde_inicio = (hoje - data_inicio).days
-        
+
         # Determinar capítulos liberados
         capitulos_liberados = 0
         if dias_desde_inicio >= 12:
@@ -2185,11 +2232,11 @@ def disciplina(disciplina_id):
             capitulos_liberados = 1
     except:
         capitulos_liberados = 0
-    
+
     # Buscar disciplina e capítulos
     cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     cursor.execute("""
         SELECT c.id, c.titulo, c.video_url, c.pdf_url, p.id AS prova_id
         FROM capitulos c
@@ -2198,9 +2245,9 @@ def disciplina(disciplina_id):
         ORDER BY c.id
     """, (disciplina_id,))
     capitulos = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "disciplina.html",
         disciplina=disciplina,
@@ -2218,12 +2265,12 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
     # Verificar se já fez esta prova
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT n.id FROM notas n
         WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
-    
+
     if cursor.fetchone():
         conn.close()
         return '''
@@ -2233,26 +2280,26 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
             <title>Prova já realizada</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .warning-box {{ 
-                    background: #fff3cd; 
-                    color: #856404; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .warning-box {{
+                    background: #fff3cd;
+                    color: #856404;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 600px;
                     border: 1px solid #ffeaa7;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin: 10px;
                 }}
-                .btn-secondary {{ 
-                    background: #6c757d; 
+                .btn-secondary {{
+                    background: #6c757d;
                 }}
             </style>
         </head>
@@ -2270,27 +2317,27 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
         </body>
         </html>
         '''.format(disciplina_id, capitulo_numero, disciplina_id)
-    
+
     # Obter informações do aluno
     cursor.execute("SELECT nome FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-    
+
     # Obter informações da disciplina e capítulo
     cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     cursor.execute("""
-        SELECT c.titulo, p.questoes_json 
+        SELECT c.titulo, p.questoes_json
         FROM capitulos c
         LEFT JOIN provas p ON p.capitulo_id = c.id
         WHERE c.disciplina_id = %s
         ORDER BY c.id
         LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
-    
+
     capitulo = cursor.fetchone()
     conn.close()
-    
+
     if not capitulo or not aluno or not disciplina:
         return '''
         <!DOCTYPE html>
@@ -2299,22 +2346,22 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
             <title>Informações não encontradas</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .error-box {{ 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {{
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 500px;
                     border: 1px solid #f5c6cb;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }}
             </style>
@@ -2328,10 +2375,10 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
         </body>
         </html>
         '''
-    
+
     # Contar questões
     questoes = json.loads(capitulo["questoes_json"]) if capitulo["questoes_json"] else []
-    
+
     return render_template(
         "instrucoes_prova.html",
         aluno_nome=aluno["nome"],
@@ -2353,12 +2400,12 @@ def prova(disciplina_id, capitulo_numero):
     # Verificar se já fez esta prova
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT n.id FROM notas n
         WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
-    
+
     if cursor.fetchone():
         conn.close()
         return '''
@@ -2368,22 +2415,22 @@ def prova(disciplina_id, capitulo_numero):
             <title>Prova já realizada</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .info-box {{ 
-                    background: #d1ecf1; 
-                    color: #0c5460; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .info-box {{
+                    background: #eceff1;
+                    color: #4a5157;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 600px;
-                    border: 1px solid #bee5eb;
+                    border: 1px solid #c9d0d5;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin: 10px;
                 }}
             </style>
@@ -2403,7 +2450,7 @@ def prova(disciplina_id, capitulo_numero):
         </body>
         </html>
         '''.format(disciplina_id, capitulo_numero, disciplina_id, capitulo_numero)
-    
+
     # Obter informações do capítulo
     cursor.execute("""
         SELECT c.id, c.titulo
@@ -2423,22 +2470,22 @@ def prova(disciplina_id, capitulo_numero):
             <title>Capítulo não encontrado</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .error-box {{ 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {{
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 500px;
                     border: 1px solid #f5c6cb;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }}
             </style>
@@ -2472,22 +2519,22 @@ def prova(disciplina_id, capitulo_numero):
             <title>Prova não encontrada</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .error-box {{ 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {{
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 500px;
                     border: 1px solid #f5c6cb;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }}
             </style>
@@ -2503,20 +2550,20 @@ def prova(disciplina_id, capitulo_numero):
         '''.format(disciplina_id)
 
     questoes = json.loads(prova["questoes_json"])
-    
+
     if request.method == "POST":
         acertos = 0
         resultados = []
-        
+
         for i, q in enumerate(questoes, start=1):
             resposta_aluno = request.form.get(f"resposta_{i}")
             resposta_correta = str(q["resposta_certa"]).strip().upper()
             resposta_aluno = resposta_aluno.strip().upper() if resposta_aluno else ""
             acertou = resposta_aluno == resposta_correta
-            
+
             if acertou:
                 acertos += 1
-            
+
             resultados.append({
                 "pergunta": q["pergunta"],
                 "opcoes": q["opcoes"],
@@ -2524,9 +2571,9 @@ def prova(disciplina_id, capitulo_numero):
                 "resposta_aluno": resposta_aluno,
                 "acertou": acertou
             })
-        
+
         nota = round(10 * (acertos / len(questoes)))
-        
+
         # Salvar nota no banco (SEM tempo)
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -2536,7 +2583,7 @@ def prova(disciplina_id, capitulo_numero):
         """, (aluno_id, disciplina_id, capitulo_numero, nota))
         conn.commit()
         conn.close()
-        
+
         # Guardar resultados na sessão para mostrar depois
         session['ultimos_resultados'] = json.dumps({
             'resultados': resultados,
@@ -2544,11 +2591,11 @@ def prova(disciplina_id, capitulo_numero):
             'acertos': acertos,
             'total': len(questoes)
         })
-        
-        return redirect(url_for("resultado_prova", 
-                               disciplina_id=disciplina_id, 
+
+        return redirect(url_for("resultado_prova",
+                               disciplina_id=disciplina_id,
                                capitulo_numero=capitulo_numero))
-    
+
     # GET: Mostrar a prova
     return render_template(
         "miniprova.html",
@@ -2564,9 +2611,9 @@ def verificar_acesso(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"acesso_permitido": False, "mensagem": "Não autenticado"})
-    
+
     acesso_permitido, mensagem = verificar_acesso_disciplina(aluno_id, disciplina_id)
-    
+
     return jsonify({
         "acesso_permitido": acesso_permitido,
         "mensagem": mensagem
@@ -2578,52 +2625,52 @@ def verificar_conclusao(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"error": "Não autenticado"})
-    
+
     concluida, status = verificar_disciplina_concluida(aluno_id, disciplina_id)
-    
+
     data_liberacao = None
     if status == "aguardando_final":
         data_liberacao = calcular_data_liberacao_final(aluno_id, disciplina_id)
-    
+
     return jsonify({
         "concluida": concluida,
         "status": status,
         "disciplina_id": disciplina_id,
         "data_liberacao": data_liberacao
     })
-    
+
 @app.route("/resultado/<int:disciplina_id>/<int:capitulo_numero>")
 def resultado_prova(disciplina_id, capitulo_numero):
     """Página de resultados após a prova"""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     # Verificar se tem resultados na sessão
     resultados_sessao = session.get('ultimos_resultados')
-    
+
     if resultados_sessao:
         dados = json.loads(resultados_sessao)
         session.pop('ultimos_resultados', None)
-        
+
         # Buscar informações do aluno e disciplina
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
-            SELECT a.nome AS aluno_nome, d.nome AS disciplina_nome, 
-                   (SELECT titulo FROM capitulos WHERE disciplina_id = %s 
+            SELECT a.nome AS aluno_nome, d.nome AS disciplina_nome,
+                   (SELECT titulo FROM capitulos WHERE disciplina_id = %s
                     ORDER BY id LIMIT 1 OFFSET %s) AS capitulo_titulo
             FROM alunos a, disciplinas d
             WHERE a.id = %s AND d.id = %s
         """, (disciplina_id, capitulo_numero - 1, aluno_id, disciplina_id))
-        
+
         info = cursor.fetchone()
         conn.close()
-        
+
         if info and info["capitulo_titulo"]:
             percentual = round((dados['acertos'] / dados['total']) * 100)
-            
+
             return render_template(
                 "resultado_prova.html",
                 aluno_nome=info["aluno_nome"],
@@ -2637,23 +2684,23 @@ def resultado_prova(disciplina_id, capitulo_numero):
                 percentual=percentual,
                 resultados=dados['resultados']
             )
-    
+
     # Se não tiver resultados na sessão, buscar do banco
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar nota
     cursor.execute("""
-        SELECT n.nota, a.nome AS aluno_nome, 
+        SELECT n.nota, a.nome AS aluno_nome,
                d.nome AS disciplina_nome
         FROM notas n
         JOIN alunos a ON n.aluno_id = a.id
         JOIN disciplinas d ON n.disciplina_id = d.id
         WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
     """, (aluno_id, disciplina_id, capitulo_numero))
-    
+
     nota_info = cursor.fetchone()
-    
+
     if not nota_info:
         conn.close()
         return '''
@@ -2663,22 +2710,22 @@ def resultado_prova(disciplina_id, capitulo_numero):
             <title>Resultado não encontrado</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .info-box {{ 
-                    background: #d1ecf1; 
-                    color: #0c5460; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .info-box {{
+                    background: #eceff1;
+                    color: #4a5157;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 600px;
-                    border: 1px solid #bee5eb;
+                    border: 1px solid #c9d0d5;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin: 10px;
                 }}
             </style>
@@ -2696,17 +2743,17 @@ def resultado_prova(disciplina_id, capitulo_numero):
         </body>
         </html>
         '''.format(disciplina_id, capitulo_numero, disciplina_id)
-    
+
     # Buscar título do capítulo
     cursor.execute("""
-        SELECT titulo FROM capitulos 
-        WHERE disciplina_id = %s 
-        ORDER BY id 
+        SELECT titulo FROM capitulos
+        WHERE disciplina_id = %s
+        ORDER BY id
         LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
-    
+
     capitulo = cursor.fetchone()
-    
+
     # Buscar questões para calcular acertos
     cursor.execute("""
         SELECT p.questoes_json
@@ -2716,10 +2763,10 @@ def resultado_prova(disciplina_id, capitulo_numero):
         ORDER BY c.id
         LIMIT 1 OFFSET %s
     """, (disciplina_id, capitulo_numero - 1))
-    
+
     prova = cursor.fetchone()
     conn.close()
-    
+
     if not prova:
         return '''
         <!DOCTYPE html>
@@ -2728,22 +2775,22 @@ def resultado_prova(disciplina_id, capitulo_numero):
             <title>Prova não encontrada</title>
             <style>
                 body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                .error-box {{ 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {{
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 500px;
                     border: 1px solid #f5c6cb;
                 }}
-                .btn {{ 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {{
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }}
             </style>
@@ -2757,12 +2804,12 @@ def resultado_prova(disciplina_id, capitulo_numero):
         </body>
         </html>
         '''
-    
+
     questoes = json.loads(prova["questoes_json"])
     total_questoes = len(questoes)
     acertos = round((nota_info["nota"] / 10) * total_questoes)
     percentual = round((acertos / total_questoes) * 100)
-    
+
     # Não temos detalhes das respostas se veio do banco
     resultados_simples = []
     for q in questoes:
@@ -2773,7 +2820,7 @@ def resultado_prova(disciplina_id, capitulo_numero):
             "resposta_aluno": "?",  # Não sabemos a resposta do aluno
             "acertou": None  # Não sabemos se acertou
         })
-    
+
     return render_template(
         "resultado_prova.html",
         aluno_nome=nota_info["aluno_nome"],
@@ -2794,10 +2841,10 @@ def solicitar_material_modal():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT d.id, d.nome
         FROM disciplinas d
@@ -2806,7 +2853,7 @@ def solicitar_material_modal():
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
     conn.close()
-    
+
     html = '''
     <div class="declaration-form">
         <div class="form-group">
@@ -2814,10 +2861,10 @@ def solicitar_material_modal():
             <select class="form-control" id="materialDisciplina">
                 <option value="">Selecione uma disciplina</option>
     '''
-    
+
     for d in disciplinas:
         html += f'<option value="{d["id"]}">{d["nome"]}</option>'
-    
+
     html += '''
             </select>
         </div>
@@ -2839,7 +2886,7 @@ def solicitar_material_modal():
         </p>
     </div>
     '''
-    
+
     return html
 
 
@@ -2848,15 +2895,15 @@ def solicitar_material():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"})
-    
+
     data = request.json
     disciplina_id = data.get("disciplina_id")
     tipo_material = data.get("tipo_material")
     observacoes = data.get("observacoes", "")
-    
+
     if not disciplina_id or not tipo_material:
         return jsonify({"success": False, "message": "Dados incompletos"})
-    
+
     # Determinar nome do material
     material_nome = ""
     if tipo_material == "livro":
@@ -2865,30 +2912,30 @@ def solicitar_material():
         material_nome = "Apostila"
     elif tipo_material == "ambos":
         material_nome = "Livro + Apostila"
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar nome da disciplina
     cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
     disciplina_nome = disciplina["nome"] if disciplina else ""
-    
+
     # Inserir solicitação
     data_solicitacao = datetime.now().strftime("%d/%m/%Y %H:%M")
-    
+
     detalhes_material = f"{material_nome} - {disciplina_nome}"
     if observacoes:
         detalhes_material += f" ({observacoes})"
-    
+
     cursor.execute("""
         INSERT INTO solicitacoes_material (aluno_id, disciplina_id, material, data_solicitacao)
         VALUES (%s, %s, %s, %s)
     """, (aluno_id, disciplina_id, detalhes_material, data_solicitacao))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True, "message": "Solicitação registrada"})
 
 
@@ -2922,7 +2969,7 @@ def solicitar_declaracao_modal():
         </p>
     </div>
     '''
-    
+
     return html
 
 
@@ -2931,16 +2978,16 @@ def solicitar_declaracao():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"})
-    
+
     data = request.json
     tipo = data.get("tipo")
     tipo_nome = data.get("tipo_nome", "")
     vias = data.get("vias", "1")
     observacoes = data.get("observacoes", "")
-    
+
     if not tipo:
         return jsonify({"success": False, "message": "Tipo não especificado"})
-    
+
     # Determinar nome da declaração
     if not tipo_nome:
         if tipo == "matricula":
@@ -2949,27 +2996,27 @@ def solicitar_declaracao():
             tipo_nome = "Histórico Parcial"
         else:
             tipo_nome = "Declaração"
-    
+
     detalhes = f"{tipo_nome}"
     if vias != "1":
         detalhes += f" - {vias} vias"
-    
+
     if observacoes:
         detalhes += f" ({observacoes})"
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Inserir solicitação
     data_solicitacao = datetime.now().strftime("%d/%m/%Y %H:%M")
     cursor.execute("""
         INSERT INTO solicitacoes_declaracoes (aluno_id, tipo, detalhes, data_solicitacao)
         VALUES (%s, %s, %s, %s)
     """, (aluno_id, tipo, detalhes, data_solicitacao))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True, "message": "Solicitação registrada"})
 
 
@@ -2990,7 +3037,7 @@ def mew_login():
         if email != admin_email:
             flash("Email incorreto", "error")
             return render_template("mew/login.html")
-        
+
         # SEGUNDO: verifica se a senha bate com o hash
         if admin_password_hash and check_password_hash(admin_password_hash, senha):
             session["mew_admin"] = True
@@ -3013,36 +3060,40 @@ def mew_login():
             return redirect("/mew/dashboard")
 
     return render_template("mew/login.html")'''
-    
+
 
 @app.route("/mew/dashboard")
 def mew_dashboard():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
 
-    init_documentos_integrados_db()
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) AS total FROM alunos")
-    total_alunos = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM disciplinas")
-    total_disciplinas = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_material WHERE entregue = 0")
-    material_pendente = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_declaracoes WHERE entregue = 0")
-    declaracoes_pendente = cursor.fetchone()["total"]
-    total_solicitacoes_pendentes = material_pendente + declaracoes_pendente
-    cursor.execute("SELECT COUNT(*) AS total FROM notas")
-    total_provas = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos WHERE status = 'pendente'")
-    documentos_pendente = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos_integrados WHERE status IN ('pendente','erro','aguardando_aprovacao')")
-    integrados_pendente = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados WHERE tipo='plano_ensino'")
-    total_planos = cursor.fetchone()["total"]
-    cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados")
-    total_documentos = cursor.fetchone()["total"]
+    cursor.execute("""
+        SELECT
+          (SELECT COUNT(*) FROM alunos) AS total_alunos,
+          (SELECT COUNT(*) FROM disciplinas) AS total_disciplinas,
+          (SELECT COUNT(*) FROM solicitacoes_material WHERE entregue=0) AS material_pendente,
+          (SELECT COUNT(*) FROM solicitacoes_declaracoes WHERE entregue=0) AS declaracoes_pendente,
+          (SELECT COUNT(*) FROM notas) AS total_provas,
+          (SELECT COUNT(*) FROM solicitacoes_documentos WHERE status='pendente') AS documentos_pendente,
+          (SELECT COUNT(*) FROM solicitacoes_documentos_integrados
+             WHERE status IN ('pendente','erro','aguardando_aprovacao')) AS integrados_pendente,
+          (SELECT COUNT(*) FROM documentos_autenticados WHERE tipo='plano_ensino') AS total_planos,
+          (SELECT COUNT(*) FROM documentos_autenticados) AS total_documentos
+    """)
+    resumo = cursor.fetchone() or {}
     conn.close()
+    total_alunos = resumo.get("total_alunos") or 0
+    total_disciplinas = resumo.get("total_disciplinas") or 0
+    material_pendente = resumo.get("material_pendente") or 0
+    declaracoes_pendente = resumo.get("declaracoes_pendente") or 0
+    total_solicitacoes_pendentes = material_pendente + declaracoes_pendente
+    total_provas = resumo.get("total_provas") or 0
+    documentos_pendente = resumo.get("documentos_pendente") or 0
+    integrados_pendente = resumo.get("integrados_pendente") or 0
+    total_planos = resumo.get("total_planos") or 0
+    total_documentos = resumo.get("total_documentos") or 0
 
     return render_template(
         "mew/dashboard.html",
@@ -3059,8 +3110,6 @@ def mew_alunos():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
 
-    init_contratos_db()
-    init_pagamentos_db()
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -3228,93 +3277,94 @@ def mew_alunos():
 
         return redirect("/mew/alunos?sucesso=Aluno+cadastrado+com+sucesso")
 
-    cursor.execute("SELECT * FROM alunos ORDER BY nome")
-    alunos = cursor.fetchall()
-    alunos_completo = []
+    # GET: listagem paginada e sem carregar PDFs/fotos/assinaturas do banco.
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    per_page = min(100, max(10, request.args.get("per_page", 50, type=int) or 50))
+    offset = (page - 1) * per_page
+    cursor.execute("SELECT COUNT(*) AS total FROM alunos")
+    total_alunos = int((cursor.fetchone() or {}).get("total") or 0)
 
-    for aluno in alunos:
-        cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno["id"],))
-        dados_pessoais = cursor.fetchone()
-
-        cursor.execute("""
-            SELECT * FROM situacao_financeira
-            WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
-        """, (aluno["id"],))
-        situacao_financeira = cursor.fetchone()
-
-        cursor.execute("SELECT COUNT(*) as total FROM aluno_disciplina WHERE aluno_id = %s", (aluno["id"],))
-        count = cursor.fetchone()
-
-        cursor.execute("""
-            SELECT ad.disciplina_id, d.nome, addd.data_inicio, addd.data_fim_previsto
+    cursor.execute("""
+        SELECT a.id, a.nome, a.email, a.ra,
+               dp.cpf, dp.telefone, dp.nome_pai, dp.nome_mae, dp.data_nascimento,
+               dp.sexo, dp.naturalidade, dp.nacionalidade, dp.estado_civil, dp.email_alternativo,
+               sf.forma_pagamento, sf.status AS status_financeiro, sf.valor_total,
+               sf.parcelas_total, sf.parcelas_pagas,
+               COALESCE(ds.total_disciplinas, 0) AS total_disciplinas,
+               COALESCE(ds.disciplinas_datas, '[]'::json) AS disciplinas_datas,
+               mp.id AS mp_id, mp.status AS mp_status, mp.checkout_url AS mp_checkout_url,
+               mp.sandbox_checkout_url AS mp_sandbox_checkout_url,
+               c.id AS contrato_id, c.status AS contrato_status, c.data_envio AS contrato_data_envio
+        FROM alunos a
+        LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
+        LEFT JOIN LATERAL (
+            SELECT forma_pagamento, status, valor_total, parcelas_total, parcelas_pagas
+            FROM situacao_financeira WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
+        ) sf ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS total_disciplinas,
+                   json_agg(json_build_object(
+                       'disciplina_id', ad.disciplina_id, 'nome', d.nome,
+                       'data_inicio', dd.data_inicio, 'data_fim_previsto', dd.data_fim_previsto
+                   ) ORDER BY d.nome) AS disciplinas_datas
             FROM aluno_disciplina ad
-            LEFT JOIN aluno_disciplina_datas addd
-              ON ad.aluno_id = addd.aluno_id AND ad.disciplina_id = addd.disciplina_id
-            LEFT JOIN disciplinas d ON ad.disciplina_id = d.id
-            WHERE ad.aluno_id = %s
-        """, (aluno["id"],))
-        disciplinas_aluno = cursor.fetchall()
-
-        cursor.execute("""
-            SELECT * FROM pagamentos_mercadopago
-            WHERE aluno_id = %s
-            ORDER BY CASE WHEN status = 'pago' THEN 0 ELSE 1 END, id DESC
-            LIMIT 1
-        """, (aluno["id"],))
-        pagamento_mp = cursor.fetchone()
-
-        cursor.execute("""
-            SELECT * FROM contratos_alunos
-            WHERE aluno_id = %s ORDER BY id DESC LIMIT 1
-        """, (aluno["id"],))
-        contrato = cursor.fetchone()
-
+            LEFT JOIN disciplinas d ON d.id=ad.disciplina_id
+            LEFT JOIN aluno_disciplina_datas dd ON dd.aluno_id=ad.aluno_id AND dd.disciplina_id=ad.disciplina_id
+            WHERE ad.aluno_id=a.id
+        ) ds ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT id, status, checkout_url, sandbox_checkout_url
+            FROM pagamentos_mercadopago WHERE aluno_id=a.id
+            ORDER BY CASE WHEN status='pago' THEN 0 ELSE 1 END, id DESC LIMIT 1
+        ) mp ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT id, status, data_envio FROM contratos_alunos
+            WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
+        ) c ON TRUE
+        ORDER BY a.nome
+        LIMIT %s OFFSET %s
+    """, (per_page, offset))
+    alunos_completo=[]
+    for row in cursor.fetchall():
+        r=dict(row)
+        pagamento_mp = None if not r.get('mp_id') else {
+            'id': r.get('mp_id'), 'status': r.get('mp_status'),
+            'checkout_url': r.get('mp_checkout_url'), 'sandbox_checkout_url': r.get('mp_sandbox_checkout_url')
+        }
+        contrato = None if not r.get('contrato_id') else {
+            'id': r.get('contrato_id'), 'status': r.get('contrato_status'), 'data_envio': r.get('contrato_data_envio')
+        }
         alunos_completo.append({
-            "id": aluno["id"], "nome": aluno["nome"], "email": aluno["email"], "ra": aluno["ra"],
-            "cpf": dados_pessoais["cpf"] if dados_pessoais else "",
-            "telefone": dados_pessoais["telefone"] if dados_pessoais else "",
-            "forma_pagamento": situacao_financeira["forma_pagamento"] if situacao_financeira else "",
-            "status_financeiro": situacao_financeira["status"] if situacao_financeira else "",
-            "valor_total": situacao_financeira["valor_total"] if situacao_financeira else 0,
-            "parcelas_total": situacao_financeira["parcelas_total"] if situacao_financeira else 0,
-            "parcelas_pagas": situacao_financeira["parcelas_pagas"] if situacao_financeira else 0,
-            "total_disciplinas": count["total"] if count else 0,
-            "disciplinas_datas": disciplinas_aluno,
-            "nome_pai": dados_pessoais["nome_pai"] if dados_pessoais else "",
-            "nome_mae": dados_pessoais["nome_mae"] if dados_pessoais else "",
-            "data_nascimento": dados_pessoais["data_nascimento"] if dados_pessoais else "",
-            "sexo": dados_pessoais["sexo"] if dados_pessoais else "",
-            "naturalidade": dados_pessoais["naturalidade"] if dados_pessoais else "",
-            "nacionalidade": dados_pessoais["nacionalidade"] if dados_pessoais else "",
-            "estado_civil": dados_pessoais["estado_civil"] if dados_pessoais else "",
-            "email_alternativo": dados_pessoais["email_alternativo"] if dados_pessoais else "",
-            "pagamento_mp": pagamento_mp,
-            "contrato": contrato
+            'id': r.get('id'), 'nome': r.get('nome'), 'email': r.get('email'), 'ra': r.get('ra'),
+            'cpf': r.get('cpf') or '', 'telefone': r.get('telefone') or '',
+            'forma_pagamento': r.get('forma_pagamento') or '', 'status_financeiro': r.get('status_financeiro') or '',
+            'valor_total': r.get('valor_total') or 0, 'parcelas_total': r.get('parcelas_total') or 0,
+            'parcelas_pagas': r.get('parcelas_pagas') or 0, 'total_disciplinas': r.get('total_disciplinas') or 0,
+            'disciplinas_datas': r.get('disciplinas_datas') or [], 'nome_pai': r.get('nome_pai') or '',
+            'nome_mae': r.get('nome_mae') or '', 'data_nascimento': r.get('data_nascimento') or '',
+            'sexo': r.get('sexo') or '', 'naturalidade': r.get('naturalidade') or '',
+            'nacionalidade': r.get('nacionalidade') or '', 'estado_civil': r.get('estado_civil') or '',
+            'email_alternativo': r.get('email_alternativo') or '', 'pagamento_mp': pagamento_mp, 'contrato': contrato
         })
 
     cobranca_criada = None
     cobranca_id = request.args.get("cobranca_id")
     if cobranca_id and cobranca_id.isdigit():
-        cursor.execute("SELECT * FROM pagamentos_mercadopago WHERE id = %s", (int(cobranca_id),))
+        cursor.execute("SELECT id, aluno_id, status, checkout_url, sandbox_checkout_url, external_reference FROM pagamentos_mercadopago WHERE id=%s", (int(cobranca_id),))
         cobranca_criada = cursor.fetchone()
-
     conn.close()
+    total_pages = max(1, (total_alunos + per_page - 1) // per_page)
     return render_template(
-        "mew/alunos.html",
-        disciplinas=disciplinas,
-        alunos=alunos_completo,
-        cobranca_criada=cobranca_criada,
-        erro_mp=request.args.get("erro_mp"),
-        sucesso=request.args.get("sucesso")
+        "mew/alunos.html", disciplinas=disciplinas, alunos=alunos_completo,
+        cobranca_criada=cobranca_criada, erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
+        page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages
     )
-
 
 @app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
 def mew_gerar_cobranca_aluno(aluno_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
 
-    init_pagamentos_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -3359,7 +3409,6 @@ def mew_gerar_cobranca_aluno(aluno_id):
 
 @app.route("/webhook/mercadopago", methods=["POST"])
 def webhook_mercadopago():
-    init_pagamentos_db()
     dados = request.get_json(silent=True) or {}
     tipo = dados.get("type") or request.args.get("type")
     payment_id = (dados.get("data") or {}).get("id") or request.args.get("data.id") or request.args.get("id")
@@ -3494,135 +3543,77 @@ def pagamento_mercadopago_falha():
 def mew_disciplinas():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
+    conn=get_db_connection(); cursor=conn.cursor()
     if request.method == "POST":
-        # 1. Criar a disciplina
-        nome_disciplina = request.form.get("nome_disciplina")
-        cursor.execute("INSERT INTO disciplinas (nome) VALUES (%s) RETURNING id", (nome_disciplina,))
-        disciplina_id = cursor.fetchone()["id"]
-
-        # 2. Criar os 4 capítulos com seus materiais e provas
-        for i in range(1, 5):
-            titulo = request.form.get(f"titulo_{i}")
-            video_url = request.form.get(f"video_{i}")
-            pdf_url = request.form.get(f"pdf_{i}")
-            questoes_json = request.form.get(f"questoes_{i}")
-
-            # Validar JSON das questões
-            try:
-                json.loads(questoes_json)  # Valida se é JSON válido
-            except json.JSONDecodeError:
-                # Se JSON inválido, criar um padrão
-                questoes_json = json.dumps([
-                    {
-                        "pergunta": f"Pergunta padrão do capítulo {i}",
-                        "opcoes": {"A": "Opção A", "B": "Opção B", "C": "Opção C", "D": "Opção D"},
-                        "resposta_certa": "A"
-                    }
-                ])
-
-            # Inserir capítulo
-            cursor.execute("""
-                INSERT INTO capitulos (disciplina_id, titulo, video_url, pdf_url)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id
-            """, (disciplina_id, titulo, video_url, pdf_url))
-            
-            capitulo_id = cursor.fetchone()["id"]
-
-            # Inserir prova com as questões
-            cursor.execute("""
-                INSERT INTO provas (capitulo_id, questoes_json)
-                VALUES (%s, %s)
-            """, (capitulo_id, questoes_json))
-
-        conn.commit()
-        conn.close()
-        return redirect("/mew/disciplinas")
-
-    # GET: Mostrar disciplinas existentes
-    cursor.execute("SELECT * FROM disciplinas ORDER BY id")
-    disciplinas = cursor.fetchall()
-    conn.close()
-
+        nome_disciplina=(request.form.get("nome_disciplina") or "").strip()
+        if not nome_disciplina:
+            conn.close(); return "Nome da disciplina é obrigatório.", 400
+        try:
+            cursor.execute("INSERT INTO disciplinas (nome) VALUES (%s) RETURNING id", (nome_disciplina,))
+            disciplina_id=cursor.fetchone()["id"]
+            for i in range(1,5):
+                titulo=request.form.get(f"titulo_{i}")
+                video_url=request.form.get(f"video_{i}")
+                pdf_url=request.form.get(f"pdf_{i}")
+                arq=request.files.get(f"questoes_xlsx_{i}")
+                try:
+                    questoes=questoes_xlsx_upload(arq) if arq and arq.filename else parse_questoes_texto(request.form.get(f"questoes_{i}"))
+                except Exception as e:
+                    raise ValueError(f"Capítulo {i}: {e}")
+                if not questoes:
+                    raise ValueError(f"Capítulo {i}: informe pelo menos uma questão ou envie uma planilha .xlsx.")
+                questoes_json=json.dumps(questoes, ensure_ascii=False)
+                cursor.execute("INSERT INTO capitulos (disciplina_id,titulo,video_url,pdf_url) VALUES (%s,%s,%s,%s) RETURNING id",(disciplina_id,titulo,video_url,pdf_url))
+                capitulo_id=cursor.fetchone()["id"]
+                cursor.execute("INSERT INTO provas (capitulo_id,questoes_json) VALUES (%s,%s)",(capitulo_id,questoes_json))
+            conn.commit()
+        except Exception as e:
+            conn.rollback(); conn.close(); return f"Não foi possível criar a disciplina: {escape(str(e))}", 400
+        conn.close(); return redirect("/mew/disciplinas")
+    cursor.execute("SELECT id,nome,carga_horaria FROM disciplinas ORDER BY id")
+    disciplinas=cursor.fetchall(); conn.close()
     return render_template("mew/disciplinas.html", disciplinas=disciplinas)
+
 
 @app.route("/mew/editar-disciplina/<int:disciplina_id>", methods=["GET", "POST"])
 def mew_editar_disciplina(disciplina_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-
+    conn=get_db_connection(); cursor=conn.cursor()
     if request.method == "POST":
-        # Atualizar nome da disciplina
-        nome = request.form.get("nome_disciplina")
-        cursor.execute("UPDATE disciplinas SET nome = %s WHERE id = %s", (nome, disciplina_id))   
-
-        # Atualizar capítulos
-        cursor.execute("SELECT id FROM capitulos WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
-        capitulos = cursor.fetchall()
-
-
-        for i, cap in enumerate(capitulos, start=1):
-            titulo = request.form.get(f"titulo_{i}")
-            video = request.form.get(f"video_{i}")
-            pdf = request.form.get(f"pdf_{i}")
-            questoes = request.form.get(f"questoes_{i}")
-
-            # valida JSON
-            try:
-                json.loads(questoes)
-            except Exception as e:
-                print(f"[MEW][Editar Disciplina] JSON inválido | Disciplina {disciplina_id} | Capítulo {cap['id']} | Erro: {e}")
-                continue
-
-            cursor.execute("""
-                UPDATE capitulos
-                SET titulo = %s, video_url = %s, pdf_url = %s
-                WHERE id = %s
-            """, (titulo, video, pdf, cap["id"]))
-
-            cursor.execute("UPDATE provas SET questoes_json = %s WHERE capitulo_id = %s",
-            (questoes, cap["id"]))
-
-        conn.commit()
-        conn.close()
-        return redirect("/mew/disciplinas")
-
-    # GET
-    cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
-    disciplina = cursor.fetchone()
-
-    cursor.execute("""
-        SELECT c.*, p.questoes_json
-        FROM capitulos c
-        LEFT JOIN provas p ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = %s
-        ORDER BY c.id
-    """, (disciplina_id,))
-
-
-    capitulos = cursor.fetchall()
+        try:
+            cursor.execute("UPDATE disciplinas SET nome=%s WHERE id=%s",((request.form.get("nome_disciplina") or "").strip(),disciplina_id))
+            cursor.execute("SELECT id FROM capitulos WHERE disciplina_id=%s ORDER BY id",(disciplina_id,))
+            capitulos=cursor.fetchall()
+            for i,cap in enumerate(capitulos,start=1):
+                titulo=request.form.get(f"titulo_{i}"); video=request.form.get(f"video_{i}"); pdf=request.form.get(f"pdf_{i}")
+                arq=request.files.get(f"questoes_xlsx_{i}")
+                questoes=questoes_xlsx_upload(arq) if arq and arq.filename else parse_questoes_texto(request.form.get(f"questoes_{i}"))
+                if not questoes:
+                    raise ValueError(f"Capítulo {i}: informe pelo menos uma questão.")
+                cursor.execute("UPDATE capitulos SET titulo=%s,video_url=%s,pdf_url=%s WHERE id=%s",(titulo,video,pdf,cap["id"]))
+                cursor.execute("UPDATE provas SET questoes_json=%s WHERE capitulo_id=%s",(json.dumps(questoes,ensure_ascii=False),cap["id"]))
+            conn.commit()
+        except Exception as e:
+            conn.rollback(); conn.close(); return f"Não foi possível salvar: {escape(str(e))}", 400
+        conn.close(); return redirect("/mew/disciplinas")
+    cursor.execute("SELECT * FROM disciplinas WHERE id=%s",(disciplina_id,)); disciplina=cursor.fetchone()
+    cursor.execute("SELECT c.*,p.questoes_json FROM capitulos c LEFT JOIN provas p ON p.capitulo_id=c.id WHERE c.disciplina_id=%s ORDER BY c.id",(disciplina_id,))
+    capitulos=[]
+    for row in cursor.fetchall():
+        r=dict(row); r["questoes_tabela"]=questoes_para_tabela(r.get("questoes_json")); capitulos.append(r)
     conn.close()
+    return render_template("mew/editar_disciplina.html",disciplina=disciplina,capitulos=capitulos)
 
-    return render_template("mew/editar_disciplina.html",
-                            disciplina=disciplina,
-                            capitulos=capitulos)
 
 @app.route("/mew/solicitacoes")
 def mew_solicitacoes():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar solicitações de material
     cursor.execute("""
         SELECT sm.*, a.nome as aluno_nome, d.nome as disciplina_nome
@@ -3632,7 +3623,7 @@ def mew_solicitacoes():
         ORDER BY sm.data_solicitacao DESC
     """)
     solicitacoes_material = cursor.fetchall()
-    
+
     # Buscar solicitações de declarações
     cursor.execute("""
         SELECT sd.*, a.nome as aluno_nome
@@ -3641,37 +3632,23 @@ def mew_solicitacoes():
         ORDER BY sd.data_solicitacao DESC
     """)
     solicitacoes_declaracoes = cursor.fetchall()
-    
+
     # Buscar solicitações de documentos
     cursor.execute("""
-        SELECT sd.*, a.nome as aluno_nome, a.email as aluno_email
+        SELECT sd.*, a.nome as aluno_nome, a.email as aluno_email,
+               COALESCE((
+                   SELECT STRING_AGG(d.nome, ',' ORDER BY d.nome)
+                   FROM disciplinas d
+                   WHERE d.id = ANY(string_to_array(NULLIF(sd.disciplinas_ids,''), ',')::int[])
+               ), '') AS disciplinas_nomes
         FROM solicitacoes_documentos sd
         JOIN alunos a ON sd.aluno_id = a.id
         ORDER BY sd.data_solicitacao DESC
     """)
     solicitacoes_documentos = cursor.fetchall()
-    
-    # Para cada documento, buscar disciplinas
-    for s in solicitacoes_documentos:
-        disciplinas_ids = s['disciplinas_ids']
-        if disciplinas_ids:
-            ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
-            if ids_list:
-                placeholders = ','.join(['%s'] * len(ids_list))
-                cursor.execute(f"""
-                    SELECT STRING_AGG(nome, ',') as nomes
-                    FROM disciplinas 
-                    WHERE id IN ({placeholders})
-                """, ids_list)
-                result = cursor.fetchone()
-                s['disciplinas_nomes'] = result['nomes'] if result and result['nomes'] else ''
-            else:
-                s['disciplinas_nomes'] = ''
-        else:
-            s['disciplinas_nomes'] = ''
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/solicitacoes.html",
         solicitacoes_material=solicitacoes_material,
@@ -3683,26 +3660,26 @@ def mew_solicitacoes():
 def mew_marcar_entregue(tipo, id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if tipo == "material":
         cursor.execute("""
-            UPDATE solicitacoes_material 
-            SET entregue = 1 
+            UPDATE solicitacoes_material
+            SET entregue = 1
             WHERE id = %s
         """, (id,))
     elif tipo == "declaracao":
         cursor.execute("""
-            UPDATE solicitacoes_declaracoes 
-            SET entregue = 1 
+            UPDATE solicitacoes_declaracoes
+            SET entregue = 1
             WHERE id = %s
         """, (id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/solicitacoes")
 
 
@@ -3710,18 +3687,18 @@ def mew_marcar_entregue(tipo, id):
 def mew_deletar_solicitacao(tipo, id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if tipo == "material":
         cursor.execute("DELETE FROM solicitacoes_material WHERE id = %s", (id,))
     elif tipo == "declaracao":
         cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE id = %s", (id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/solicitacoes")
 
 @app.route("/mew/logout")
@@ -3733,13 +3710,13 @@ def mew_logout():
 def mew_editar_aluno(aluno_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     from datetime import datetime, timedelta
-    
+
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         if request.method == "POST":
             # Dados básicos
             nome = request.form.get("nome")
@@ -3754,7 +3731,7 @@ def mew_editar_aluno(aluno_id):
             cep = request.form.get("cep")
             curso_referencia = request.form.get("curso_referencia")
             prazo_dias = int(request.form.get("prazo_dias", 60))
-            
+
             # === NOVOS CAMPOS DE DADOS PESSOAIS ===
             nome_pai = request.form.get("nome_pai", "")
             nome_mae = request.form.get("nome_mae", "")
@@ -3765,30 +3742,30 @@ def mew_editar_aluno(aluno_id):
             estado_civil = request.form.get("estado_civil", "")
             email_alternativo = request.form.get("email_alternativo", "")
             # ======================================
-            
+
             # Atualizar tabela alunos
             if senha:
                 cursor.execute("""
-                    UPDATE alunos 
+                    UPDATE alunos
                     SET nome = %s, email = %s, senha = %s
                     WHERE id = %s
                 """, (nome, email, generate_password_hash(str(senha)), aluno_id))
             else:
                 cursor.execute("""
-                    UPDATE alunos 
+                    UPDATE alunos
                     SET nome = %s, email = %s
                     WHERE id = %s
                 """, (nome, email, aluno_id))
-            
+
             # Verificar se já existem dados pessoais
             cursor.execute("SELECT id FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
             dados_existentes = cursor.fetchone()
-            
+
             if dados_existentes:
                 # Atualizar dados existentes (COM TODOS OS CAMPOS)
                 cursor.execute("""
-                    UPDATE dados_pessoais 
-                    SET cpf = %s, rg = %s, telefone = %s, endereco = %s, 
+                    UPDATE dados_pessoais
+                    SET cpf = %s, rg = %s, telefone = %s, endereco = %s,
                         cidade = %s, estado = %s, cep = %s, curso_referencia = %s,
                         nome_pai = %s, nome_mae = %s, naturalidade = %s, nacionalidade = %s,
                         data_nascimento = %s, sexo = %s, estado_civil = %s, email_alternativo = %s
@@ -3799,7 +3776,7 @@ def mew_editar_aluno(aluno_id):
             else:
                 # Inserir novos dados (COM TODOS OS CAMPOS)
                 cursor.execute("""
-                    INSERT INTO dados_pessoais 
+                    INSERT INTO dados_pessoais
                     (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
                      curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
                      data_nascimento, sexo, estado_civil, email_alternativo)
@@ -3807,20 +3784,20 @@ def mew_editar_aluno(aluno_id):
                 """, (aluno_id, cpf, rg, telefone, endereco, cidade, estado, cep,
                       curso_referencia, nome_pai, nome_mae, naturalidade, nacionalidade,
                       data_nascimento, sexo, estado_civil, email_alternativo))
-            
+
             # ===== ATUALIZAR SITUAÇÃO FINANCEIRA =====
             forma_pagamento = request.form.get("forma_pagamento")
             valor_total = request.form.get("valor_total")
             status_financeiro = request.form.get("status_financeiro")
             parcelas_pagas = request.form.get("parcelas_pagas", "1")
-            
+
             if forma_pagamento and valor_total:
                 try:
                     valor_total_float = float(valor_total.replace(",", "."))
                 except ValueError:
                     conn.close()
                     return "Valor total inválido.", 400
-                
+
                 # Determinar parcelas totais
                 if forma_pagamento == "boleto_pix":
                     parcelas_total = 2
@@ -3833,79 +3810,79 @@ def mew_editar_aluno(aluno_id):
                     parcelas_total = 1
                     if not status_financeiro:
                         status_financeiro = "pago"
-                
+
                 # Verificar se já existe situação financeira
                 cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
                 situacao_existente = cursor.fetchone()
-                
+
                 if situacao_existente:
                     # Atualizar
                     cursor.execute("""
-                        UPDATE situacao_financeira 
-                        SET forma_pagamento = %s, status = %s, 
-                            parcelas_total = %s, parcelas_pagas = %s, 
+                        UPDATE situacao_financeira
+                        SET forma_pagamento = %s, status = %s,
+                            parcelas_total = %s, parcelas_pagas = %s,
                             valor_total = %s
                         WHERE aluno_id = %s
-                    """, (forma_pagamento, status_financeiro, 
-                          parcelas_total, parcelas_pagas, 
+                    """, (forma_pagamento, status_financeiro,
+                          parcelas_total, parcelas_pagas,
                           valor_total_float, aluno_id))
                 else:
                     # Inserir
                     cursor.execute("""
-                        INSERT INTO situacao_financeira 
-                        (aluno_id, forma_pagamento, status, 
+                        INSERT INTO situacao_financeira
+                        (aluno_id, forma_pagamento, status,
                          parcelas_total, parcelas_pagas, valor_total)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     """, (aluno_id, forma_pagamento, status_financeiro,
                           parcelas_total, parcelas_pagas, valor_total_float))
-            
+
             # Gerenciar disciplinas
             if request.form.get("gerenciar_disciplinas"):
                 disciplinas_selecionadas = request.form.getlist("disciplinas")
-                
+
                 # Buscar disciplinas atuais
                 cursor.execute("SELECT disciplina_id FROM aluno_disciplina WHERE aluno_id = %s", (aluno_id,))
                 disciplinas_atuais = [str(row['disciplina_id']) for row in cursor.fetchall()]
-                
+
                 # Remover disciplinas desmarcadas
                 for d_id in disciplinas_atuais:
                     if d_id not in disciplinas_selecionadas:
                         try:
-                            cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s", 
+                            cursor.execute("DELETE FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s",
                                           (aluno_id, d_id))
-                            cursor.execute("DELETE FROM aluno_disciplina_datas WHERE aluno_id = %s AND disciplina_id = %s", 
+                            cursor.execute("DELETE FROM aluno_disciplina_datas WHERE aluno_id = %s AND disciplina_id = %s",
                                           (aluno_id, d_id))
                         except:
                             pass  # Ignorar erros em exclusões
-                
+
                 # Adicionar/atualizar disciplinas selecionadas
                 for d_id in disciplinas_selecionadas:
                     # Verificar se já existe matrícula
-                    cursor.execute("SELECT id FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s", 
+                    cursor.execute("SELECT id FROM aluno_disciplina WHERE aluno_id = %s AND disciplina_id = %s",
                                   (aluno_id, d_id))
                     existe = cursor.fetchone()
-                    
+
                     if not existe:
                         # Adicionar nova matrícula
                         cursor.execute("""
                             INSERT INTO aluno_disciplina (aluno_id, disciplina_id)
                             VALUES (%s, %s)
                         """, (aluno_id, d_id))
-                    
+
                     # Obter data específica para esta disciplina
                     data_inicio_key = f"data_inicio_{d_id}"
                     data_inicio = request.form.get(data_inicio_key)
-                    
+
                     if data_inicio:
                         try:
                             data_inicio_obj = datetime.strptime(data_inicio, "%Y-%m-%d")
                             data_fim_obj = data_inicio_obj + timedelta(days=prazo_dias)
                             data_fim = data_fim_obj.strftime("%d/%m/%Y")
-                            
+
                             data_inicio_formatada = data_inicio_obj.strftime("%d/%m/%Y")
-                            
+
                             cursor.execute("""
-                                INSERT INTO aluno_disciplina_datas 
+                                INSERT INTO aluno_disciplina_datas
                                 (aluno_id, disciplina_id, data_inicio, data_fim_previsto)
                                 VALUES (%s, %s, %s, %s)
                                 ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
@@ -3915,11 +3892,11 @@ def mew_editar_aluno(aluno_id):
                             """, (aluno_id, d_id, data_inicio_formatada, data_fim))
                         except Exception as e:
                             print(f"Erro ao processar data da disciplina {d_id}: {e}")
-            
+
             conn.commit()
             conn.close()
             return redirect("/mew/alunos")
-        
+
     except Exception as e:
         if 'conn' in locals():
             try:
@@ -3927,35 +3904,35 @@ def mew_editar_aluno(aluno_id):
             except:
                 pass
         return f"Erro ao processar: {str(e)}", 500
-    
+
     # GET: Buscar dados do aluno para edição
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT * FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
-        
+
         if not aluno:
             conn.close()
             return "Aluno não encontrado", 404
-        
+
         cursor.execute("SELECT * FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
         dados_pessoais = cursor.fetchone()
-        
+
         # Buscar situação financeira
         cursor.execute("""
-            SELECT * FROM situacao_financeira 
-            WHERE aluno_id = %s 
-            ORDER BY id DESC 
+            SELECT * FROM situacao_financeira
+            WHERE aluno_id = %s
+            ORDER BY id DESC
             LIMIT 1
         """, (aluno_id,))
         situacao_financeira = cursor.fetchone()
-        
+
         # Buscar todas as disciplinas disponíveis
         cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
         disciplinas = cursor.fetchall()
-        
+
         # Buscar disciplinas atuais do aluno com suas datas
         cursor.execute("""
             SELECT ad.disciplina_id, d.nome, addd.data_inicio, addd.data_fim_previsto
@@ -3965,7 +3942,7 @@ def mew_editar_aluno(aluno_id):
             WHERE ad.aluno_id = %s
         """, (aluno_id,))
         disciplinas_aluno = cursor.fetchall()
-        
+
         # Criar dicionário para fácil acesso às datas por disciplina
         datas_disciplinas = {}
         for d in disciplinas_aluno:
@@ -3975,9 +3952,9 @@ def mew_editar_aluno(aluno_id):
                     datas_disciplinas[str(d['disciplina_id'])] = data_obj.strftime("%Y-%m-%d")
                 except:
                     datas_disciplinas[str(d['disciplina_id'])] = ""
-        
+
         conn.close()
-        
+
         return render_template(
             "mew/editar_aluno.html",
             aluno=aluno,
@@ -3988,7 +3965,7 @@ def mew_editar_aluno(aluno_id):
             datas_disciplinas=datas_disciplinas,
             prazo_dias_aluno=60
         )
-        
+
     except Exception as e:
         if 'conn' in locals():
             try:
@@ -3996,16 +3973,16 @@ def mew_editar_aluno(aluno_id):
             except:
                 pass
         return f"Erro ao carregar dados: {str(e)}", 500
-    
-    
+
+
 @app.route("/mew/deletar-aluno/<int:aluno_id>")
 def mew_deletar_aluno(aluno_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Deletar em cascata (começando pelas tabelas dependentes)
     cursor.execute("DELETE FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
     cursor.execute("DELETE FROM dados_pessoais WHERE aluno_id = %s", (aluno_id,))
@@ -4014,10 +3991,10 @@ def mew_deletar_aluno(aluno_id):
     cursor.execute("DELETE FROM solicitacoes_material WHERE aluno_id = %s", (aluno_id,))
     cursor.execute("DELETE FROM solicitacoes_declaracoes WHERE aluno_id = %s", (aluno_id,))
     cursor.execute("DELETE FROM alunos WHERE id = %s", (aluno_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/alunos")
 
 @app.route("/solicitar-documentos-modal", methods=["GET"])
@@ -4025,13 +4002,13 @@ def solicitar_documentos_modal():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return "Não autenticado", 401
-    
+
     tipo = request.args.get("tipo")
     nome = request.args.get("nome")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT d.id, d.nome
         FROM disciplinas d
@@ -4039,15 +4016,15 @@ def solicitar_documentos_modal():
         WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
-    
+
     disciplinas = cursor.fetchall()
     conn.close()
-    
+
     html = f'''
     <div class="document-form">
         <input type="hidden" id="docTipo" value="{tipo}">
         <input type="hidden" id="docNome" value="{nome}">
-        
+
         <div class="form-group">
             <label><i class="fas fa-book"></i> Selecione as Disciplinas</label>
             <p style="font-size: 14px; color: var(--gray-600); margin-bottom: 10px;">
@@ -4055,7 +4032,7 @@ def solicitar_documentos_modal():
             </p>
             <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px;">
     '''
-    
+
     if disciplinas:
         for d in disciplinas:
             html += f'''
@@ -4073,17 +4050,17 @@ def solicitar_documentos_modal():
             <p>Você não está matriculado em nenhuma disciplina.</p>
         </div>
         '''
-    
+
     html += '''
             </div>
         </div>
-        
+
         <div class="form-group" style="margin-top: 20px;">
             <label><i class="fas fa-pencil-alt"></i> Detalhes da Solicitação</label>
-            <textarea class="form-control" id="docDetalhes" rows="4" 
+            <textarea class="form-control" id="docDetalhes" rows="4"
                       placeholder="Descreva os detalhes da sua solicitação..."></textarea>
         </div>
-        
+
         <div class="form-group" style="margin-top: 15px;">
             <label><i class="fas fa-copy"></i> Quantidade de Vias</label>
             <select class="form-control" id="docVias">
@@ -4092,14 +4069,14 @@ def solicitar_documentos_modal():
                 <option value="3">3 vias</option>
             </select>
         </div>
-        
+
         <p style="font-size: 13px; color: var(--gray-600); margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-            <i class="fas fa-info-circle" style="color: var(--success);"></i> 
+            <i class="fas fa-info-circle" style="color: var(--success);"></i>
             Sua solicitação será processada em até 5 dias úteis.
         </p>
     </div>
     '''
-    
+
     return html
 
 @app.route("/solicitar-documento", methods=["POST"])
@@ -4108,173 +4085,126 @@ def solicitar_documento():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"})
-    
+
     data = request.json
     tipo = data.get("tipo")
     nome = data.get("nome")
     disciplinas_ids = data.get("disciplinas_ids", [])
     detalhes = data.get("detalhes", "")
     vias = data.get("vias", "1")
-    
+
     if not tipo or not disciplinas_ids:
         return jsonify({"success": False, "message": "Dados incompletos"})
-    
+
     # Formatar detalhes com vias
     detalhes_formatado = detalhes
     if vias != "1":
         detalhes_formatado += f" ({vias} vias)"
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Inserir solicitação
     data_solicitacao = datetime.now().strftime("%d/%m/%Y %H:%M")
     disciplinas_str = ",".join(map(str, disciplinas_ids))
-    
+
     cursor.execute("""
-        INSERT INTO solicitacoes_documentos 
+        INSERT INTO solicitacoes_documentos
         (aluno_id, tipo_documento, disciplinas_ids, detalhes, data_solicitacao)
         VALUES (%s, %s, %s, %s, %s)
     """, (aluno_id, tipo, disciplinas_str, detalhes_formatado, data_solicitacao))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True, "message": "Solicitação registrada com sucesso!"})
 
 @app.route("/historico-documentos")
 def historico_documentos():
-    """Retorna o histórico de solicitações de documentos do aluno"""
+    """Retorna histórico do aluno sem uma consulta adicional por solicitação."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"})
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
+    conn = get_db_connection(); cursor = conn.cursor()
     cursor.execute("""
-        SELECT sd.*
+        SELECT sd.*,
+               COALESCE((
+                   SELECT STRING_AGG(d.nome, ',' ORDER BY d.nome)
+                   FROM disciplinas d
+                   WHERE d.id = ANY(string_to_array(NULLIF(sd.disciplinas_ids,''), ',')::int[])
+               ), 'N/A') AS disciplinas_nomes
         FROM solicitacoes_documentos sd
         WHERE sd.aluno_id = %s
         ORDER BY sd.data_solicitacao DESC
+        LIMIT 300
     """, (aluno_id,))
-    
-    solicitacoes_raw = cursor.fetchall()
-    
-    # Converter para lista de dicionários
-    resultado = []
-    for s in solicitacoes_raw:
-        s_dict = dict(s)
-        
-        # Buscar nomes das disciplinas
-        disciplinas_ids = s_dict['disciplinas_ids']
-        if disciplinas_ids:
-            # Converter string de IDs em lista
-            ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
-            if ids_list:
-                # Buscar nomes das disciplinas
-                placeholders = ','.join(['%s'] * len(ids_list))
-                cursor.execute(f"""
-                    SELECT STRING_AGG(nome, ',') as nomes
-                    FROM disciplinas 
-                    WHERE id IN ({placeholders})
-                """, ids_list)
-                result = cursor.fetchone()
-                s_dict['disciplinas_nomes'] = result['nomes'] if result and result['nomes'] else 'N/A'
-            else:
-                s_dict['disciplinas_nomes'] = 'N/A'
-        else:
-            s_dict['disciplinas_nomes'] = 'N/A'
-        
-        resultado.append(s_dict)
-    
+    resultado = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    
     return jsonify({"success": True, "solicitacoes": resultado})
 
 @app.route("/mew/solicitacoes-documentos")
 def mew_solicitacoes_documentos():
-    """Painel MEW para gerenciar solicitações de documentos"""
+    """Painel MEW paginado e sem N+1 para nomes das disciplinas."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Buscar solicitações de documentos
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    per_page = 50
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos")
+    total = int((cursor.fetchone() or {}).get("total") or 0)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
     cursor.execute("""
-        SELECT sd.*, a.nome as aluno_nome, a.email as aluno_email
+        SELECT sd.*, a.nome as aluno_nome, a.email as aluno_email,
+               COALESCE((
+                   SELECT STRING_AGG(d.nome, ',' ORDER BY d.nome)
+                   FROM disciplinas d
+                   WHERE d.id = ANY(string_to_array(NULLIF(sd.disciplinas_ids,''), ',')::int[])
+               ), '') AS disciplinas_nomes
         FROM solicitacoes_documentos sd
         JOIN alunos a ON sd.aluno_id = a.id
-        ORDER BY 
-            CASE sd.status 
+        ORDER BY
+            CASE sd.status
                 WHEN 'pendente' THEN 1
                 WHEN 'processando' THEN 2
                 WHEN 'concluido' THEN 3
                 ELSE 4
             END,
             sd.data_solicitacao DESC
-    """)
-    
-    solicitacoes_raw = cursor.fetchall()
-    
-    # Converter para lista de dicionários
-    solicitacoes = []
-    for s in solicitacoes_raw:
-        # Converter registro para dicionário
-        s_dict = dict(s)
-        
-        # Buscar nomes das disciplinas
-        disciplinas_ids = s_dict['disciplinas_ids']
-        if disciplinas_ids:
-            # Converter string de IDs em lista
-            ids_list = [int(id.strip()) for id in disciplinas_ids.split(',') if id.strip()]
-            if ids_list:
-                # Buscar nomes das disciplinas
-                placeholders = ','.join(['%s'] * len(ids_list))
-                cursor.execute(f"""
-                    SELECT STRING_AGG(nome, ',') as nomes
-                    FROM disciplinas 
-                    WHERE id IN ({placeholders})
-                """, ids_list)
-                result = cursor.fetchone()
-                s_dict['disciplinas_nomes'] = result['nomes'] if result and result['nomes'] else ''
-            else:
-                s_dict['disciplinas_nomes'] = ''
-        else:
-            s_dict['disciplinas_nomes'] = ''
-        
-        solicitacoes.append(s_dict)
-    
+        LIMIT %s OFFSET %s
+    """, (per_page, offset))
+    solicitacoes = cursor.fetchall()
     conn.close()
-    
-    return render_template("mew/solicitacoes_documentos.html", solicitacoes=solicitacoes)
+    return render_template("mew/solicitacoes_documentos.html", solicitacoes=solicitacoes,
+                           page=page, total_pages=total_pages, total_solicitacoes=total)
 
 @app.route("/mew/responder-documento/<int:id>", methods=["POST"])
 def mew_responder_documento(id):
     """MEW responde à solicitação de documento"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     data = request.json
     resposta = data.get("resposta", "")
     status = data.get("status", "concluido")
     arquivo_url = data.get("arquivo_url", "")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     data_resposta = datetime.now().strftime("%d/%m/%Y %H:%M")
-    
+
     cursor.execute("""
-        UPDATE solicitacoes_documentos 
+        UPDATE solicitacoes_documentos
         SET status = %s, resposta = %s, arquivo_url = %s, data_resposta = %s
         WHERE id = %s
     """, (status, resposta, arquivo_url, data_resposta, id))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True, "message": "Resposta registrada"})
 
 @app.route("/mew/deletar-solicitacao-doc/<int:id>")
@@ -4282,15 +4212,15 @@ def mew_deletar_solicitacao_doc(id):
     """MEW deleta solicitação de documento"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("DELETE FROM solicitacoes_documentos WHERE id = %s", (id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/solicitacoes-documentos")
 
 # ==========================
@@ -4303,14 +4233,14 @@ def avaliacao_final():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar disciplinas do aluno que têm prova final liberada PARA ELE
     cursor.execute("""
         SELECT d.id, d.nome, lf.data_liberacao,
-               (SELECT COUNT(*) FROM notas_finais nf 
+               (SELECT COUNT(*) FROM notas_finais nf
                 WHERE nf.aluno_id = %s AND nf.disciplina_id = d.id) as ja_realizada,
                (SELECT COUNT(*) FROM questoes_finais qf WHERE qf.disciplina_id = d.id) as total_questoes
         FROM disciplinas d
@@ -4320,9 +4250,9 @@ def avaliacao_final():
         AND lf.liberada = 1
         AND CAST(lf.data_liberacao AS DATE) <= CURRENT_DATE
     """, (aluno_id, aluno_id, aluno_id))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     # Buscar resultados anteriores
     cursor.execute("""
         SELECT nf.*, d.nome as disciplina_nome
@@ -4331,11 +4261,11 @@ def avaliacao_final():
         WHERE nf.aluno_id = %s
         ORDER BY nf.data_realizacao DESC
     """, (aluno_id,))
-    
+
     resultados = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "avaliacao_final.html",
         disciplinas=disciplinas,
@@ -4349,71 +4279,71 @@ def mew_deletar_disciplina(disciplina_id):
     """Deleta uma disciplina e remove todas as associações"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         # Deletar em ordem correta (começando pelas tabelas dependentes)
         # 1. Notas finais relacionadas à disciplina
         cursor.execute("DELETE FROM notas_finais WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 2. Questões finais
         cursor.execute("DELETE FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 3. Provas finais
         cursor.execute("DELETE FROM provas_finais WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 4. Liberações finais
         cursor.execute("DELETE FROM liberacao_final WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 5. Notas dos alunos
         cursor.execute("DELETE FROM notas WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 6. Solicitações de material
         cursor.execute("DELETE FROM solicitacoes_material WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 7. Solicitações de documentos
-        cursor.execute("DELETE FROM solicitacoes_documentos WHERE disciplinas_ids LIKE %s", 
+        cursor.execute("DELETE FROM solicitacoes_documentos WHERE disciplinas_ids LIKE %s",
                       (f'%{disciplina_id}%',))
-        
+
         # 8. Datas das disciplinas dos alunos
         cursor.execute("DELETE FROM aluno_disciplina_datas WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 9. Associações aluno-disciplina
         cursor.execute("DELETE FROM aluno_disciplina WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 10. Provas dos capítulos (primeiro deletar provas)
         cursor.execute("""
-            DELETE FROM provas 
+            DELETE FROM provas
             WHERE capitulo_id IN (
                 SELECT id FROM capitulos WHERE disciplina_id = %s
             )
         """, (disciplina_id,))
-        
+
         # 11. Capítulos
         cursor.execute("DELETE FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
-        
+
         # 12. Finalmente, a disciplina
         cursor.execute("DELETE FROM disciplinas WHERE id = %s", (disciplina_id,))
-        
+
         conn.commit()
         conn.close()
-        
+
         return redirect("/mew/disciplinas?sucesso=Disciplina+deletada+com+sucesso")
-        
+
     except Exception as e:
         conn.close()
         return f"Erro ao deletar disciplina: {str(e)}", 500
-    
-    
+
+
 @app.route("/avaliacao-final/prova/<int:disciplina_id>")
 def prova_final(disciplina_id):
     """Página da prova final com 30 questões"""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     # Verificar se já fez esta prova
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -4430,8 +4360,8 @@ def prova_final(disciplina_id):
     if cursor.fetchone():
         conn.close()
         return redirect("/projeto-final?erro=Esta+disciplina+está+em+modalidade+Projeto+Final")
-    
-    cursor.execute("SELECT id FROM notas_finais WHERE aluno_id = %s AND disciplina_id = %s", 
+
+    cursor.execute("SELECT id FROM notas_finais WHERE aluno_id = %s AND disciplina_id = %s",
                    (aluno_id, disciplina_id))
     if cursor.fetchone():
         conn.close()
@@ -4442,22 +4372,22 @@ def prova_final(disciplina_id):
             <title>Prova já realizada</title>
             <style>
                 body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                .info-box { 
-                    background: #d1ecf1; 
-                    color: #0c5460; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .info-box {
+                    background: #eceff1;
+                    color: #4a5157;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 600px;
-                    border: 1px solid #bee5eb;
+                    border: 1px solid #c9d0d5;
                 }
-                .btn { 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin: 10px;
                 }
             </style>
@@ -4472,17 +4402,17 @@ def prova_final(disciplina_id):
         </body>
         </html>
         '''
-    
+
     # Buscar questões da prova final
     cursor.execute("""
-        SELECT * FROM questoes_finais 
-        WHERE disciplina_id = %s 
-        ORDER BY RANDOM() 
+        SELECT * FROM questoes_finais
+        WHERE disciplina_id = %s
+        ORDER BY RANDOM()
         LIMIT 30
     """, (disciplina_id,))
-    
+
     questoes = cursor.fetchall()
-    
+
     if len(questoes) < 30:
         conn.close()
         return '''
@@ -4492,22 +4422,22 @@ def prova_final(disciplina_id):
             <title>Prova não disponível</title>
             <style>
                 body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                .error-box { 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 20px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 500px;
                     border: 1px solid #f5c6cb;
                 }
-                .btn { 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }
             </style>
@@ -4521,13 +4451,13 @@ def prova_final(disciplina_id):
         </body>
         </html>
         '''
-    
+
     # Buscar informações da disciplina
     cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     conn.close()
-    
+
     return render_template(
         "prova_final.html",
         disciplina=disciplina,
@@ -4542,7 +4472,7 @@ def correcao_final(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -4558,11 +4488,11 @@ def correcao_final(disciplina_id):
     if cursor.fetchone():
         conn.close()
         return redirect("/projeto-final?erro=Esta+disciplina+está+em+modalidade+Projeto+Final")
-    
+
     # Buscar questões
     cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     todas_questoes = cursor.fetchall()
-    
+
     # Contar acertos
     acertos = 0
     for questao in todas_questoes:
@@ -4571,37 +4501,37 @@ def correcao_final(disciplina_id):
         if resposta_aluno is not None:
             if resposta_aluno.strip().upper() == str(questao["resposta_correta"]).strip().upper():
                 acertos += 1
-    
+
     # Calcular nota da prova final (0-10)
     nota_final = round((acertos / 30) * 10, 2)
-    
+
     # Calcular média das 4 provas da disciplina
     cursor.execute("""
-        SELECT AVG(nota) as media_disciplina 
-        FROM notas 
+        SELECT AVG(nota) as media_disciplina
+        FROM notas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     result = cursor.fetchone()
     media_disciplina = result["media_disciplina"] if result and result["media_disciplina"] else 0
-    
+
     # Calcular média final: (nota_final + media_disciplina) / 2
     media_final = round((nota_final + media_disciplina) / 2, 2)
-    
+
     # Determinar status
     status = "aprovado" if media_final >= 7.0 else "reprovado"
-    
+
     # Salvar resultado
     data_realizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
     cursor.execute("""
-        INSERT INTO notas_finais 
+        INSERT INTO notas_finais
         (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao))
-    
+
     conn.commit()
     conn.close()
-    
+
     # Guardar resultado na sessão para mostrar
     session['resultado_final'] = {
         'disciplina_id': disciplina_id,
@@ -4612,7 +4542,7 @@ def correcao_final(disciplina_id):
         'acertos': acertos,
         'total': 30
     }
-    
+
     return redirect(f"/avaliacao-final/resultado/{disciplina_id}")
 
 @app.route("/avaliacao-final/resultado/<int:disciplina_id>")
@@ -4621,29 +4551,29 @@ def resultado_final(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     resultado = session.get('resultado_final', {})
-    
+
     if not resultado or resultado.get('disciplina_id') != disciplina_id:
         # Buscar do banco se não tiver na sessão
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT nf.*, d.nome as disciplina_nome
             FROM notas_finais nf
             JOIN disciplinas d ON nf.disciplina_id = d.id
             WHERE nf.aluno_id = %s AND nf.disciplina_id = %s
         """, (aluno_id, disciplina_id))
-        
+
         resultado_db = cursor.fetchone()
         conn.close()
-        
+
         if not resultado_db:
             return redirect("/avaliacao-final")
-        
+
         resultado = dict(resultado_db)
-    
+
     return render_template(
         "resultado_final.html",
         resultado=resultado,
@@ -4660,34 +4590,34 @@ def mew_avaliacao_final():
     """Painel do gestor para gerenciar avaliações finais - AGORA POR ALUNO"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     from datetime import datetime, date  # Adicione esta importação
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Contar alunos com acesso à prova final
     cursor.execute("SELECT COUNT(DISTINCT aluno_id) as total_alunos FROM liberacao_final WHERE liberada = 1")
     total_alunos_acesso = cursor.fetchone()["total_alunos"] or 0
-    
+
     # Contar provas realizadas
     cursor.execute("SELECT COUNT(*) as total FROM notas_finais")
     total_provas = cursor.fetchone()["total"] or 0
-    
+
     # Contar aprovados/reprovados
     cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE status = 'aprovado'")
     total_aprovados = cursor.fetchone()["total"] or 0
     cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE status = 'reprovado'")
     total_reprovados = cursor.fetchone()["total"] or 0
-    
+
     # Buscar todas as disciplinas para o formulário
     cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
-    
+
     # Buscar todos os alunos para o formulário
     cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
     alunos = cursor.fetchall()
-    
+
     # Buscar liberações existentes (agora por aluno)
     cursor.execute("""
         SELECT lf.*, a.nome as aluno_nome, a.ra, d.nome as disciplina_nome,
@@ -4698,7 +4628,7 @@ def mew_avaliacao_final():
         ORDER BY lf.data_liberacao DESC
     """)
     liberacoes = cursor.fetchall()
-    
+
     # Buscar resultados dos alunos
     cursor.execute("""
         SELECT nf.*, a.nome as aluno_nome, a.ra, d.nome as disciplina_nome
@@ -4708,9 +4638,9 @@ def mew_avaliacao_final():
         ORDER BY nf.data_realizacao DESC
     """)
     resultados = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/avaliacao_final.html",
         total_alunos_acesso=total_alunos_acesso,
@@ -4723,20 +4653,20 @@ def mew_avaliacao_final():
         resultados=resultados,
         date=date  # Adicione esta linha para passar o objeto date para o template
     )
-    
+
 @app.route("/mew/liberar-prova-final-aluno", methods=["POST"])
 def liberar_prova_final_aluno():
     """Libera a prova final para um ALUNO ESPECÍFICO em uma disciplina"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     aluno_id = request.form.get("aluno_id")
     disciplina_id = request.form.get("disciplina_id")
     data_liberacao = request.form.get("data_liberacao")
-    
+
     if not all([aluno_id, disciplina_id, data_liberacao]):
         return redirect("/mew/avaliacao-final?erro=Dados+incompletos")
-    
+
     # Verificar se existem 30 questões para esta disciplina
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -4753,23 +4683,23 @@ def liberar_prova_final_aluno():
     if cursor.fetchone():
         conn.close()
         return redirect("/mew/avaliacao-final?erro=Projeto+Final+já+está+liberado+para+este+aluno+e+disciplina")
-    
+
     cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     total_questoes = cursor.fetchone()["total"] or 0
-    
+
     if total_questoes < 30:
         conn.close()
         return redirect(f"/mew/avaliacao-final?erro=Disciplina+precisa+de+30+questões+({total_questoes}/30)")
-    
+
     # Verificar se já existe liberação para este aluno nesta disciplina
-    cursor.execute("SELECT id FROM liberacao_final WHERE aluno_id = %s AND disciplina_id = %s", 
+    cursor.execute("SELECT id FROM liberacao_final WHERE aluno_id = %s AND disciplina_id = %s",
                   (aluno_id, disciplina_id))
-    
+
     if cursor.fetchone():
         # Atualizar data e liberar
         cursor.execute("""
-            UPDATE liberacao_final 
-            SET data_liberacao = %s, liberada = 1 
+            UPDATE liberacao_final
+            SET data_liberacao = %s, liberada = 1
             WHERE aluno_id = %s AND disciplina_id = %s
         """, (data_liberacao, aluno_id, disciplina_id))
     else:
@@ -4778,10 +4708,10 @@ def liberar_prova_final_aluno():
             INSERT INTO liberacao_final (aluno_id, disciplina_id, data_liberacao, liberada)
             VALUES (%s, %s, %s, 1)
         """, (aluno_id, disciplina_id, data_liberacao))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/avaliacao-final?sucesso=Prova+liberada+para+o+aluno")
 
 @app.route("/mew/remover-liberacao/<int:liberacao_id>")
@@ -4789,15 +4719,15 @@ def remover_liberacao(liberacao_id):
     """Remove a liberação de uma prova final"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("DELETE FROM liberacao_final WHERE id = %s", (liberacao_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/avaliacao-final?sucesso=Liberação+removida")
 
 @app.route("/mew/visualizar-prova-final/<int:disciplina_id>")
@@ -4805,23 +4735,23 @@ def visualizar_prova_final(disciplina_id):
     """Visualiza todas as 30 questões da prova final"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar disciplina
     cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     # Buscar TODAS as questões (sem limite)
     cursor.execute("SELECT * FROM questoes_finais WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     questoes = cursor.fetchall()
-    
+
     # Contar questões
     total_questoes = len(questoes)
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/visualizar_prova_final.html",
         disciplina=disciplina,
@@ -4829,133 +4759,85 @@ def visualizar_prova_final(disciplina_id):
         total_questoes=total_questoes
     )
 
+@app.route("/mew/importar-questoes/<int:disciplina_id>", methods=["POST"])
 @app.route("/mew/importar-questoes-json/<int:disciplina_id>", methods=["POST"])
 def importar_questoes_json(disciplina_id):
-    """Importa questões da prova final via JSON - VERSÃO CORRIGIDA"""
+    """Importa pela interface normal (Excel/Sheets/XLSX); mantém JSON apenas por compatibilidade antiga."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
-    
+        return jsonify({"success":False,"message":"Não autorizado"}),403
     try:
-        # Obter o JSON enviado
-        json_data = request.form.get("questoes_json")
-        
-        if not json_data:
-            return jsonify({"success": False, "message": "JSON vazio"})
-        
-        # Parse do JSON
-        questoes = json.loads(json_data)
-        
-        # Validar formato
-        if not isinstance(questoes, list):
-            return jsonify({"success": False, "message": "Formato inválido. Deve ser uma lista."})
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        count = 0
-        for q in questoes:
-            # FORMATO 1: Com opcoes como dicionário
-            if 'opcoes' in q and isinstance(q['opcoes'], dict):
-                try:
-                    cursor.execute("""
-                        INSERT INTO questoes_finais 
-                        (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        disciplina_id,
-                        q['pergunta'],
-                        q['opcoes'].get('A', ''),
-                        q['opcoes'].get('B', ''),
-                        q['opcoes'].get('C', ''),
-                        q['opcoes'].get('D', ''),
-                        q.get('resposta_certa', '')  # Note: resposta_certa (com 'a' no final)
-                    ))
-                    count += 1
-                except Exception as e:
-                    print(f"Erro ao inserir questão: {e}")
-                    continue
-                    
-            # FORMATO 2: Com opcao_a, opcao_b, etc diretamente
-            elif all(k in q for k in ['opcao_a', 'opcao_b', 'opcao_c', 'opcao_d']):
-                try:
-                    cursor.execute("""
-                        INSERT INTO questoes_finais 
-                        (disciplina_id, pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        disciplina_id,
-                        q['pergunta'],
-                        q['opcao_a'],
-                        q['opcao_b'],
-                        q['opcao_c'],
-                        q['opcao_d'],
-                        q.get('resposta_correta', q.get('resposta_certa', ''))
-                    ))
-                    count += 1
-                except Exception as e:
-                    print(f"Erro ao inserir questão: {e}")
-                    continue
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "message": f"{count} questões importadas com sucesso!",
-            "count": count
-        })
-        
-    except json.JSONDecodeError as e:
-        return jsonify({"success": False, "message": f"JSON inválido: {str(e)}"})
+        arquivo=request.files.get("questoes_xlsx")
+        if arquivo and arquivo.filename:
+            questoes=questoes_xlsx_upload(arquivo)
+        else:
+            texto=request.form.get("questoes_tabela") or request.form.get("questoes_json") or ""
+            questoes=parse_questoes_texto(texto)
+        if not questoes:
+            return jsonify({"success":False,"message":"Nenhuma questão encontrada."}),400
+        conn=get_db_connection(); cursor=conn.cursor()
+        try:
+            for q in questoes:
+                op=q["opcoes"]
+                cursor.execute("""INSERT INTO questoes_finais
+                    (disciplina_id,pergunta,opcao_a,opcao_b,opcao_c,opcao_d,resposta_correta)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (disciplina_id,q["pergunta"],op["A"],op["B"],op["C"],op["D"],q["resposta_certa"]))
+            conn.commit()
+        except Exception:
+            conn.rollback(); raise
+        finally:
+            conn.close()
+        return jsonify({"success":True,"message":f"{len(questoes)} questões importadas com sucesso!","count":len(questoes)})
     except Exception as e:
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+        return jsonify({"success":False,"message":str(e)}),400
+
+
 @app.route("/mew/exportar-questoes-json/<int:disciplina_id>")
 def exportar_questoes_json(disciplina_id):
-    """Exporta questões como JSON"""
+    """Mantido para integrações antigas; a interface normal usa Excel."""
     if not session.get("mew_admin"):
-        return jsonify({"error": "Não autorizado"})
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT pergunta, opcao_a, opcao_b, opcao_c, opcao_d, resposta_correta
-        FROM questoes_finais 
-        WHERE disciplina_id = %s
-        ORDER BY id
-    """, (disciplina_id,))
-    
-    questoes = []
-    for row in cursor.fetchall():
-        questoes.append(dict(row))
-    
-    conn.close()
-    
-    return jsonify({
-        "disciplina_id": disciplina_id,
-        "total_questoes": len(questoes),
-        "questoes": questoes
-    })
-    
+        return jsonify({"error":"Não autorizado"}),403
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT pergunta,opcao_a,opcao_b,opcao_c,opcao_d,resposta_correta FROM questoes_finais WHERE disciplina_id=%s ORDER BY id",(disciplina_id,))
+    questoes=[dict(x) for x in cursor.fetchall()]; conn.close()
+    return jsonify({"disciplina_id":disciplina_id,"total_questoes":len(questoes),"questoes":questoes})
+
+
+@app.route("/mew/exportar-questoes-excel/<int:disciplina_id>")
+def exportar_questoes_excel(disciplina_id):
+    if not session.get("mew_admin"):
+        return "Não autorizado",403
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT d.nome FROM disciplinas d WHERE id=%s",(disciplina_id,)); disc=cursor.fetchone()
+    cursor.execute("SELECT pergunta,opcao_a,opcao_b,opcao_c,opcao_d,resposta_correta FROM questoes_finais WHERE disciplina_id=%s ORDER BY id",(disciplina_id,))
+    rows=cursor.fetchall(); conn.close()
+    wb=Workbook(); ws=wb.active; ws.title="Questões"
+    ws.append(["Pergunta","A","B","C","D","Resposta"])
+    for r in rows:
+        ws.append([r["pergunta"],r["opcao_a"],r["opcao_b"],r["opcao_c"],r["opcao_d"],r["resposta_correta"]])
+    out=BytesIO(); wb.save(out); out.seek(0)
+    nome=secure_filename((disc or {}).get("nome") or f"disciplina-{disciplina_id}") or f"disciplina-{disciplina_id}"
+    return send_file(out,as_attachment=True,download_name=f"questoes-{nome}.xlsx",mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @app.route("/situacao-academica")
 def situacao_academica():
     """Página com situação acadêmica completa do aluno"""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar dados do aluno
     cursor.execute("SELECT nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-    
+
     if not aluno:
         flash("Aluno não encontrado.", "error")
         return redirect(url_for("dashboard"))
-    
+
     # Buscar disciplinas do aluno
     cursor.execute("""
         SELECT d.id, d.nome
@@ -4965,7 +4847,7 @@ def situacao_academica():
         ORDER BY d.nome
     """, (aluno_id,))
     disciplinas = cursor.fetchall()
-    
+
     # Buscar notas dos capítulos
     cursor.execute("""
         SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
@@ -4975,7 +4857,7 @@ def situacao_academica():
         ORDER BY n.disciplina_id, n.capitulo
     """, (aluno_id,))
     notas_capitulos = cursor.fetchall()
-    
+
     # Buscar notas finais
     cursor.execute("""
         SELECT nf.*, d.nome as disciplina_nome
@@ -4985,30 +4867,30 @@ def situacao_academica():
         ORDER BY d.nome
     """, (aluno_id,))
     notas_finais = cursor.fetchall()
-    
+
     # Calcular situação de cada disciplina
     situacao_disciplinas = []
-    
+
     for d in disciplinas:
         disciplina_id = d['id']
         disciplina_nome = d['nome']
-        
+
         # Buscar notas dos capítulos desta disciplina
         notas_disc = [n for n in notas_capitulos if n['disciplina_id'] == disciplina_id]
-        
+
         # Buscar nota final desta disciplina
         nota_final = next((nf for nf in notas_finais if nf['disciplina_id'] == disciplina_id), None)
-        
+
         # Calcular média dos capítulos
         media_capitulos = 0
         if notas_disc:
             media_capitulos = sum(n['nota'] for n in notas_disc) / len(notas_disc)
-        
+
         # Calcular situação
         status = "cursando"
         media_final = None
         situacao = "Cursando"
-        
+
         if nota_final:
             media_final = nota_final['media_final']
             status = nota_final['status']
@@ -5020,7 +4902,7 @@ def situacao_academica():
         elif len(notas_disc) > 0:  # Algumas provas feitas
             situacao = "Em andamento"
             status = "cursando"
-        
+
         situacao_disciplinas.append({
             'id': disciplina_id,
             'nome': disciplina_nome,
@@ -5033,20 +4915,20 @@ def situacao_academica():
             'capitulos_feitos': len(notas_disc),
             'capitulos_total': 4
         })
-    
+
     # Calcular estatísticas gerais
     total_disciplinas = len(situacao_disciplinas)
     disciplinas_aprovadas = len([d for d in situacao_disciplinas if d['situacao'] == "Aprovado"])
     disciplinas_reprovadas = len([d for d in situacao_disciplinas if d['situacao'] == "Reprovado"])
     disciplinas_cursando = len([d for d in situacao_disciplinas if d['situacao'] == "Em andamento"])
     disciplinas_aguardando_final = len([d for d in situacao_disciplinas if d['situacao'] == "Aguardando final"])
-    
+
     # Calcular média geral (considerando apenas disciplinas com nota final)
     disciplinas_com_final = [d for d in situacao_disciplinas if d['media_final'] is not None]
     media_geral = sum(d['media_final'] for d in disciplinas_com_final) / len(disciplinas_com_final) if disciplinas_com_final else 0
-    
+
     conn.close()
-    
+
     return render_template(
         "situacao_academica.html",
         aluno_nome=aluno['nome'],
@@ -5070,24 +4952,24 @@ def ver_resultado_validacao(codigo):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Buscar documento pelo código
         cursor.execute("""
             SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento
-            FROM documentos_autenticados 
+            FROM documentos_autenticados
             WHERE codigo = %s
         """, (codigo.upper(),))
-        
+
         documento = cursor.fetchone()
         conn.close()
-        
+
         if documento:
             doc_dict = dict(documento)
-            
+
             # Verificar validade
             from datetime import datetime
             hoje = datetime.now()
-            
+
             if doc_dict.get('data_validade'):
                 try:
                     data_validade = datetime.strptime(doc_dict['data_validade'], "%d/%m/%Y")
@@ -5096,7 +4978,7 @@ def ver_resultado_validacao(codigo):
                     status = "válido"
             else:
                 status = "válido"
-            
+
             return render_template(
                 "resultado_validacao_completo.html",
                 valido=True,
@@ -5111,7 +4993,7 @@ def ver_resultado_validacao(codigo):
                 codigo=codigo.upper(),
                 mensagem="Documento não encontrado no sistema."
             )
-            
+
     except Exception as e:
         print(f"Erro na validação: {e}")
         return render_template(
@@ -5120,7 +5002,7 @@ def ver_resultado_validacao(codigo):
             codigo=codigo,
             mensagem="Erro ao validar documento."
         )
-        
+
 # ==========================
 # VALIDAÇÃO PÚBLICA DE DOCUMENTOS
 # ==========================
@@ -5128,23 +5010,23 @@ def ver_resultado_validacao(codigo):
 @app.route("/validar-documento", methods=["GET", "POST"])
 def validar_documento_publico():
     """Página pública para validação de documentos - SIMPLIFICADA"""
-    
+
     # Se for POST, processar a validação via AJAX
     if request.method == "POST":
         data = request.get_json()
         codigo = data.get('codigo', '').strip().upper()
-        
+
         if not codigo:
             return jsonify({"success": False, "message": "Código não fornecido"})
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Verificar se o código existe na tabela documentos_autenticados
         cursor.execute("SELECT id FROM documentos_autenticados WHERE codigo = %s", (codigo,))
         documento = cursor.fetchone()
         conn.close()
-        
+
         if documento:
             # Código válido - retornar URL de redirecionamento
             return jsonify({
@@ -5157,38 +5039,10 @@ def validar_documento_publico():
                 "success": False,
                 "message": "Código não encontrado. Verifique se digitou corretamente."
             })
-    
+
     # Se for GET, mostrar a página de validação
     return render_template("validar_documento.html")
 
-def buscar_documento_db(codigo):
-    """Busca documento no banco - VERSÃO CORRETA para sua estrutura de tabela"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Buscar pelo código (conforme sua tabela documentos_autenticados)
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
-        
-        documento = cursor.fetchone()
-        conn.close()
-        
-        if documento:
-            # Converter para dicionário (ajuste os índices conforme sua tabela)
-            # Sua tabela tem: 0=id, 1=codigo, 2=aluno_nome, 3=aluno_ra, 4=tipo, 5=conteudo_html, 6=data_geracao
-            return {
-                'codigo': documento[1],
-                'aluno_nome': documento[2],
-                'aluno_ra': documento[3],
-                'tipo': documento[4],
-                'conteudo_html': documento[5],
-                'data_geracao': documento[6]
-            }
-        return None
-        
-    except Exception as e:
-        print(f"Erro ao buscar documento: {e}")
-        return None
 
 @app.route("/api/validar-qrcode", methods=['POST'])
 def api_validar_qrcode():
@@ -5198,10 +5052,10 @@ def api_validar_qrcode():
     try:
         data = request.get_json()
         qr_data = data.get('qr_data')
-        
+
         if not qr_data:
             return jsonify({"success": False, "message": "Dados do QR Code não fornecidos"})
-        
+
         # Extrair informações do QR Code
         try:
             info = json.loads(qr_data)
@@ -5211,41 +5065,41 @@ def api_validar_qrcode():
             # Se não for JSON, tentar como código direto
             codigo = qr_data
             hash_recebido = None
-        
+
         if not codigo:
             return jsonify({"success": False, "message": "Código não encontrado no QR Code"})
-        
+
         # Buscar documento
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, data_validade, hash_documento
-            FROM documentos_autenticados 
+            FROM documentos_autenticados
             WHERE codigo = %s
         """, (codigo.upper(),))
-        
+
         documento = cursor.fetchone()
         conn.close()
-        
+
         if not documento:
             return jsonify({
                 "success": False,
                 "message": "Documento não encontrado",
                 "codigo": codigo
             })
-        
+
         # Verificar hash se fornecido
         hash_valido = True
         if hash_recebido and documento['hash_documento']:
             hash_valido = (hash_recebido == documento['hash_documento'])
-        
+
         # Verificar validade
         from datetime import datetime
         hoje = datetime.now()
         data_validade = datetime.strptime(documento['data_validade'], "%d/%m/%Y")
         valido = hoje <= data_validade
-        
+
         return jsonify({
             "success": True,
             "valido": valido,
@@ -5260,65 +5114,56 @@ def api_validar_qrcode():
             },
             "mensagem": "Documento válido" if valido else "Documento expirado"
         })
-        
+
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-        
+
 def buscar_documento_db(codigo):
-    """Busca documento no banco - VERSÃO CORRETA para sua estrutura de tabela"""
+    """Busca um documento autenticado sem depender de índices de tupla."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Buscar pelo código (conforme sua tabela documentos_autenticados)
-        cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
-        
+        cursor.execute("""
+            SELECT codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao
+            FROM documentos_autenticados
+            WHERE codigo = %s OR codigo_autenticacao = %s
+            ORDER BY id DESC LIMIT 1
+        """, (codigo, codigo))
         documento = cursor.fetchone()
-        conn.close()
-        
-        if documento:
-            # Converter para dicionário (ajuste os índices conforme sua tabela)
-            # Sua tabela tem: 0=id, 1=codigo, 2=aluno_nome, 3=aluno_ra, 4=tipo, 5=conteudo_html, 6=data_geracao
-            return {
-                'codigo': documento[1],
-                'aluno_nome': documento[2],
-                'aluno_ra': documento[3],
-                'tipo': documento[4],
-                'conteudo_html': documento[5],
-                'data_geracao': documento[6]
-            }
-        return None
-        
+        return dict(documento) if documento else None
     except Exception as e:
         print(f"Erro ao buscar documento: {e}")
         return None
-    
-    
+    finally:
+        conn.close()
+
+
+
 @app.route("/mew/gerar-documento")
 def mew_gerar_documento():
     """Página para gerar documentos autenticados"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar alunos para o formulário
     cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
     alunos = cursor.fetchall()
-    
+
     # Buscar disciplinas para o formulário
     cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/gerar_documento.html",
         alunos=alunos,
         disciplinas=disciplinas
     )
-    
+
 @app.route("/disciplinas-isoladas")
 def disciplinas_isoladas_page():
     """Página de landing page para disciplinas isoladas"""
@@ -5399,7 +5244,7 @@ def mew_gerenciar_disciplinas(aluno_id):
     cursor.execute("""
         SELECT d.id, d.nome,
             addd.data_inicio,
-            CASE 
+            CASE
                 WHEN addd.data_inicio IS NOT NULL
                 THEN substr(addd.data_inicio, 7, 4) || '-' ||
                     substr(addd.data_inicio, 4, 2) || '-' ||
@@ -5430,16 +5275,16 @@ def mew_gerenciar_notas():
     """Página inicial para gerenciar notas acadêmicas"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todos os alunos
     cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
     alunos = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template("mew/gerenciar_notas.html", alunos=alunos)
 
 @app.route("/mew/gerenciar-notas/aluno/<int:aluno_id>")
@@ -5447,34 +5292,34 @@ def mew_notas_aluno(aluno_id):
     """Mostra disciplinas de um aluno específico"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar informações do aluno
     cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-    
+
     if not aluno:
         conn.close()
         return "Aluno não encontrado", 404
-    
+
     # Buscar disciplinas do aluno
     cursor.execute("""
-        SELECT d.id, d.nome, 
+        SELECT d.id, d.nome,
                (SELECT COUNT(*) FROM capitulos WHERE disciplina_id = d.id) as total_capitulos,
-               (SELECT COUNT(DISTINCT capitulo) FROM notas 
+               (SELECT COUNT(DISTINCT capitulo) FROM notas
                 WHERE aluno_id = %s AND disciplina_id = d.id) as provas_feitas
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id, aluno_id))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/notas_disciplinas.html",
         aluno=aluno,
@@ -5486,50 +5331,50 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
     """Mostra e gerencia notas de uma disciplina específica"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar informações do aluno e disciplina
     cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-    
+
     cursor.execute("SELECT id, nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     if not aluno or not disciplina:
         conn.close()
         return "Aluno ou disciplina não encontrados", 404
-    
+
     # Buscar capítulos da disciplina
     cursor.execute("SELECT id, titulo FROM capitulos WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
     capitulos = cursor.fetchall()
-    
+
     # Buscar notas existentes
     cursor.execute("""
-        SELECT capitulo, nota 
-        FROM notas 
+        SELECT capitulo, nota
+        FROM notas
         WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY capitulo
     """, (aluno_id, disciplina_id))
     notas_existentes = {row['capitulo']: row['nota'] for row in cursor.fetchall()}
-    
+
     # Buscar nota final (se existir)
     cursor.execute("""
-        SELECT nota_final, media_disciplina, media_final, status 
-        FROM notas_finais 
+        SELECT nota_final, media_disciplina, media_final, status
+        FROM notas_finais
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     nota_final = cursor.fetchone()
-    
+
     # Buscar datas de liberação dos capítulos
     cursor.execute("""
-        SELECT data_inicio, prova_final_aberta 
-        FROM aluno_disciplina_datas 
+        SELECT data_inicio, prova_final_aberta
+        FROM aluno_disciplina_datas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     datas_info = cursor.fetchone()
-    
+
     # Calcular progresso atual
     total_capitulos = len(capitulos)
     provas_feitas = len(notas_existentes)
@@ -5547,9 +5392,9 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
             progresso_atual = 25
         else:
             progresso_atual = 0
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/notas_editar.html",
         aluno=aluno,
@@ -5568,36 +5413,36 @@ def mew_salvar_notas():
     """Salva ou atualiza notas do aluno"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     aluno_id = request.form.get("aluno_id")
     disciplina_id = request.form.get("disciplina_id")
     acao = request.form.get("acao")
-    
+
     if not all([aluno_id, disciplina_id, acao]):
         return jsonify({"success": False, "message": "Dados incompletos"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         if acao == "salvar_nota":
             capitulo = request.form.get("capitulo")
             nota = request.form.get("nota")
-            
+
             if not capitulo or not nota:
                 conn.close()
                 return jsonify({"success": False, "message": "Capítulo ou nota não informados"})
-            
+
             # Verificar se já existe nota
             cursor.execute("""
-                SELECT id FROM notas 
+                SELECT id FROM notas
                 WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
             """, (aluno_id, disciplina_id, capitulo))
-            
+
             if cursor.fetchone():
                 # Atualizar
                 cursor.execute("""
-                    UPDATE notas SET nota = %s 
+                    UPDATE notas SET nota = %s
                     WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
                 """, (nota, aluno_id, disciplina_id, capitulo))
             else:
@@ -5606,43 +5451,43 @@ def mew_salvar_notas():
                     INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota)
                     VALUES (%s, %s, %s, %s)
                 """, (aluno_id, disciplina_id, capitulo, nota))
-            
+
             message = "Nota salva com sucesso"
-            
+
         elif acao == "excluir_nota":
             capitulo = request.form.get("capitulo")
-            
+
             if not capitulo:
                 conn.close()
                 return jsonify({"success": False, "message": "Capítulo não informado"})
-            
+
             cursor.execute("""
-                DELETE FROM notas 
+                DELETE FROM notas
                 WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
             """, (aluno_id, disciplina_id, capitulo))
-            
+
             message = "Nota excluída com sucesso"
-            
+
         elif acao == "salvar_final":
             nota_final_val = request.form.get("nota_final")
             media_disciplina = request.form.get("media_disciplina")
             media_final = request.form.get("media_final")
             status = request.form.get("status")
-            
+
             if not all([nota_final_val, media_disciplina, media_final, status]):
                 conn.close()
                 return jsonify({"success": False, "message": "Dados da prova final incompletos"})
-            
+
             # Verificar se já existe nota final
             cursor.execute("""
-                SELECT id FROM notas_finais 
+                SELECT id FROM notas_finais
                 WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
-            
+
             if cursor.fetchone():
                 # Atualizar
                 cursor.execute("""
-                    UPDATE notas_finais 
+                    UPDATE notas_finais
                     SET nota_final = %s, media_disciplina = %s, media_final = %s, status = %s
                     WHERE aluno_id = %s AND disciplina_id = %s
                 """, (nota_final_val, media_disciplina, media_final, status, aluno_id, disciplina_id))
@@ -5650,30 +5495,30 @@ def mew_salvar_notas():
                 # Inserir
                 data_realizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
                 cursor.execute("""
-                    INSERT INTO notas_finais 
+                    INSERT INTO notas_finais
                     (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (aluno_id, disciplina_id, nota_final_val, media_disciplina, media_final, status, data_realizacao))
-            
+
             message = "Nota final salva com sucesso"
-            
+
         elif acao == "excluir_final":
             cursor.execute("""
-                DELETE FROM notas_finais 
+                DELETE FROM notas_finais
                 WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
-            
+
             message = "Nota final excluída com sucesso"
-            
+
         elif acao == "atualizar_progresso":
             novo_progresso = request.form.get("progresso")
             data_inicio = request.form.get("data_inicio")
             prova_final_aberta = request.form.get("prova_final_aberta", "0")
-            
+
             if not novo_progresso:
                 conn.close()
                 return jsonify({"success": False, "message": "Progresso não informado"})
-            
+
             # Determinar capítulos feitos baseado no progresso
             progresso_map = {
                 "0": 0,   # 0% - nenhuma prova
@@ -5682,33 +5527,33 @@ def mew_salvar_notas():
                 "75": 3,  # 75% - 3ªs provas
                 "100": 4  # 100% - 4ªs provas
             }
-            
+
             cap_feitos = progresso_map.get(novo_progresso, 0)
-            
+
             # Remover notas além do progresso
             if cap_feitos < 4:
                 cursor.execute("""
-                    DELETE FROM notas 
+                    DELETE FROM notas
                     WHERE aluno_id = %s AND disciplina_id = %s AND capitulo > %s
                 """, (aluno_id, disciplina_id, cap_feitos))
-            
+
             # Atualizar datas
             cursor.execute("""
-                SELECT id FROM aluno_disciplina_datas 
+                SELECT id FROM aluno_disciplina_datas
                 WHERE aluno_id = %s AND disciplina_id = %s
             """, (aluno_id, disciplina_id))
-            
+
             if cursor.fetchone():
                 # Atualizar
                 if data_inicio:
                     cursor.execute("""
-                        UPDATE aluno_disciplina_datas 
+                        UPDATE aluno_disciplina_datas
                         SET data_inicio = %s, prova_final_aberta = %s
                         WHERE aluno_id = %s AND disciplina_id = %s
                     """, (data_inicio, prova_final_aberta, aluno_id, disciplina_id))
                 else:
                     cursor.execute("""
-                        UPDATE aluno_disciplina_datas 
+                        UPDATE aluno_disciplina_datas
                         SET prova_final_aberta = %s
                         WHERE aluno_id = %s AND disciplina_id = %s
                     """, (prova_final_aberta, aluno_id, disciplina_id))
@@ -5716,39 +5561,39 @@ def mew_salvar_notas():
                 # Inserir (se tiver data_inicio)
                 if data_inicio:
                     cursor.execute("""
-                        INSERT INTO aluno_disciplina_datas 
+                        INSERT INTO aluno_disciplina_datas
                         (aluno_id, disciplina_id, data_inicio, prova_final_aberta)
                         VALUES (%s, %s, %s, %s)
                     """, (aluno_id, disciplina_id, data_inicio, prova_final_aberta))
-            
+
             message = "Progresso atualizado com sucesso"
-            
+
         else:
             conn.close()
             return jsonify({"success": False, "message": "Ação inválida"})
-        
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({
-            "success": True, 
+            "success": True,
             "message": message,
             "redirect": f"/mew/gerenciar-notas/disciplina/{aluno_id}/{disciplina_id}"
         })
-        
+
     except Exception as e:
         conn.close()
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+
 @app.route('/mew/buscar-dados-aluno/<int:aluno_id>')
 def buscar_dados_aluno(aluno_id):
     try:
         # Buscar dados completos do aluno
         aluno_completo = buscar_dados_pessoais_completos(aluno_id)
-        
+
         if not aluno_completo:
             return jsonify({'success': False, 'message': 'Aluno não encontrado'})
-        
+
         return jsonify({
             'success': True,
             'aluno': {
@@ -5776,17 +5621,17 @@ def buscar_dados_aluno(aluno_id):
         import traceback
         print(f"Erro em buscar_dados_aluno: {str(e)}")
         print(traceback.format_exc())
-        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}) 
-    
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
 @app.route('/mew/buscar-disciplinas-aluno/<int:aluno_id>')
 def buscar_disciplinas_aluno_route(aluno_id):
     try:
         # Buscar disciplinas do aluno usando a nova função
         disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
-        
+
         if disciplinas is None:
             return jsonify({'success': False, 'message': 'Erro ao buscar disciplinas'})
-        
+
         return jsonify({
             'success': True,
             'disciplinas': disciplinas,
@@ -5797,35 +5642,35 @@ def buscar_disciplinas_aluno_route(aluno_id):
         print(f"Erro em buscar_disciplinas_aluno_route: {str(e)}")
         print(traceback.format_exc())
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
-    
+
 
 @app.route('/mew/gerar-documento-processar', methods=['POST'])
 def gerar_documento_processar():
     try:
         import hashlib
         import secrets
-        
+
         data = request.get_json()
         aluno_id = data.get('aluno_id')
         tipo_documento = data.get('tipo_documento')
         conteudo_html = data.get('conteudo_html')
         observacoes = data.get('observacoes', '')
-        
+
         if not aluno_id or not tipo_documento:
             return jsonify({'success': False, 'message': 'Dados incompletos'})
-        
+
         # Buscar aluno
         aluno_completo = buscar_dados_pessoais_completos(aluno_id)
         if not aluno_completo:
             return jsonify({'success': False, 'message': 'Aluno não encontrado'})
-        
+
         # Gerar código único
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         codigo = f"HIST-{aluno_completo['ra']}-{timestamp}-{secrets.token_hex(4).upper()}"
-        
+
         # Gerar hash
         hash_documento = hashlib.sha256(f"{aluno_completo['ra']}{timestamp}{conteudo_html}".encode()).hexdigest()
-        
+
         # Salvar no banco
         documento_id = salvar_documento_autenticado({
             'codigo_autenticacao': codigo,
@@ -5838,10 +5683,10 @@ def gerar_documento_processar():
             'aluno_nome': aluno_completo['nome'],
             'aluno_ra': aluno_completo['ra']
         })
-        
+
         if not documento_id:
             return jsonify({'success': False, 'message': 'Erro ao salvar documento'})
-        
+
         return jsonify({
             'success': True,
             'codigo': codigo,
@@ -5851,20 +5696,20 @@ def gerar_documento_processar():
             'aluno_nome': aluno_completo['nome'],
             'aluno_ra': aluno_completo['ra']
         })
-        
+
     except Exception as e:
         import traceback
         print(f"Erro em gerar_documento_processar: {str(e)}")
         print(traceback.format_exc())
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
-    
+
 def buscar_dados_pessoais_completos(aluno_id):
     """Busca dados pessoais completos do aluno - VERSÃO COMPLETA"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT a.*, 
+        SELECT a.*,
                dp.cpf, dp.rg, dp.telefone, dp.endereco, dp.cidade, dp.estado, dp.cep,
                dp.curso_referencia, dp.nome_pai, dp.nome_mae, dp.naturalidade,
                dp.nacionalidade, dp.data_nascimento, dp.sexo, dp.estado_civil
@@ -5872,19 +5717,19 @@ def buscar_dados_pessoais_completos(aluno_id):
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
         WHERE a.id = %s
     """, (aluno_id,))
-    
+
     aluno_row = cursor.fetchone()
-    
+
     if not aluno_row:
         conn.close()
         return None
-    
+
     aluno = dict(aluno_row)
-    
+
     # Formatar dados
     aluno['cpf_formatado'] = formatar_cpf(aluno.get('cpf', '')) if aluno.get('cpf') else ''
     aluno['telefone_formatado'] = formatar_telefone(aluno.get('telefone', '')) if aluno.get('telefone') else ''
-    
+
     # Endereço completo
     endereco_parts = []
     if aluno.get('endereco'):
@@ -5895,9 +5740,9 @@ def buscar_dados_pessoais_completos(aluno_id):
         endereco_parts.append(f"- {aluno['estado']}")
     if aluno.get('cep'):
         endereco_parts.append(f"CEP: {aluno['cep']}")
-    
+
     aluno['endereco_completo'] = ', '.join(endereco_parts)
-    
+
     # Campos padrão se não existirem
     aluno['naturalidade'] = aluno.get('naturalidade', '')
     aluno['nacionalidade'] = aluno.get('nacionalidade', 'Brasileira')
@@ -5905,66 +5750,17 @@ def buscar_dados_pessoais_completos(aluno_id):
     aluno['sexo'] = aluno.get('sexo', '')
     aluno['estado_civil'] = aluno.get('estado_civil', '')
     aluno['curso'] = aluno.get('curso_referencia', 'Disciplinas Isoladas')
-    
+
     conn.close()
     return aluno
-        
-def salvar_documento_autenticado(documento_data):
-    """Salva um documento autenticado no banco - VERSÃO SIMPLIFICADA"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Verificar se a tabela existe
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS documentos_autenticados (
-            id SERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE,
-            aluno_nome TEXT,
-            aluno_ra TEXT,
-            tipo TEXT,
-            conteudo_html TEXT,
-            data_geracao TEXT
-            )
-        """)
-        
-        # Inserir documento
-        cursor.execute("""
-            INSERT INTO documentos_autenticados 
-            (codigo_autenticacao, aluno_id, tipo_documento, hash_documento, 
-             conteudo_html, data_emissao, observacoes, aluno_nome, aluno_ra)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            documento_data['codigo_autenticacao'],
-            documento_data['aluno_id'],
-            documento_data['tipo_documento'],
-            documento_data['hash_documento'],
-            documento_data['conteudo_html'],
-            documento_data['data_emissao'].strftime('%d/%m/%Y %H:%M'),
-            documento_data.get('observacoes', ''),
-            documento_data.get('aluno_nome', ''),
-            documento_data.get('aluno_ra', '')
-        ))
-        
-        documento_id = cursor.fetchone()["id"]
-        conn.commit()
-        conn.close()
-        
-        return documento_id
-        
-    except Exception as e:
-        print(f"Erro em salvar_documento_autenticado: {e}")
-        if 'conn' in locals():
-            conn.close()
-        return None
-    
-    
+
+
+
 def buscar_aluno_por_id(aluno_id):
     """Busca um aluno pelo ID - VERSÃO COMPLETA"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT a.*, dp.cpf, dp.rg, dp.telefone, dp.endereco, dp.cidade, dp.estado, dp.cep,
                dp.curso_referencia
@@ -5972,20 +5768,20 @@ def buscar_aluno_por_id(aluno_id):
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
         WHERE a.id = %s
     """, (aluno_id,))
-    
+
     aluno_row = cursor.fetchone()
     conn.close()
-    
+
     if not aluno_row:
         return None
-    
+
     aluno = dict(aluno_row)
-    
+
     # Formatar dados
     aluno['cpf_formatado'] = formatar_cpf(aluno.get('cpf', ''))
     aluno['telefone_formatado'] = formatar_telefone(aluno.get('telefone', ''))
     aluno['endereco_completo'] = f"{aluno.get('endereco', '')}, {aluno.get('cidade', '')} - {aluno.get('estado', '')}, CEP: {aluno.get('cep', '')}"
-    
+
     # Adicionar campos padrão para template
     aluno['filiacao'] = aluno.get('filiacao', '')
     aluno['naturalidade'] = aluno.get('naturalidade', '')
@@ -5993,7 +5789,7 @@ def buscar_aluno_por_id(aluno_id):
     aluno['data_nascimento'] = aluno.get('data_nascimento', '')
     aluno['sexo'] = aluno.get('sexo', '')
     aluno['curso'] = aluno.get('curso_referencia', 'Disciplinas Isoladas')
-    
+
     return aluno
 
 
@@ -6001,11 +5797,11 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
     """Busca todas as disciplinas de um aluno com notas - VERSÃO MELHORADA"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT 
-            d.id, 
-            d.nome, 
+        SELECT
+            d.id,
+            d.nome,
             d.carga_horaria,
             addd.data_inicio,
             addd.data_fim_previsto,
@@ -6022,7 +5818,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
             nf.status as status_final
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        LEFT JOIN aluno_disciplina_datas addd ON ad.aluno_id = addd.aluno_id 
+        LEFT JOIN aluno_disciplina_datas addd ON ad.aluno_id = addd.aluno_id
             AND ad.disciplina_id = addd.disciplina_id
         LEFT JOIN LATERAL (
             SELECT doc.nome AS docente_nome,
@@ -6043,23 +5839,23 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
         WHERE ad.aluno_id = %s
         ORDER BY d.nome
     """, (aluno_id,))
-    
+
     disciplinas_raw = cursor.fetchall()
     disciplinas = []
-    
+
     from datetime import datetime
-    
+
     for disc in disciplinas_raw:
         # Determinar carga horária
         carga_horaria = disc['carga_horaria'] if disc['carga_horaria'] else 80
-        
+
         # Determinar docente
         docente_display = "Docente Responsável — Coordenação Acadêmica SIGEU"
         if disc['docente_nome']:
             docente_display = disc['docente_nome']
             if disc['docente_titulacao']:
                 docente_display += f" ({disc['docente_titulacao']})"
-        
+
         # Determinar período
         periodo = disc['ano_semestre'] if disc['ano_semestre'] else ""
         if not periodo and disc['data_inicio']:
@@ -6073,14 +5869,14 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
                 periodo = f"{datetime.now().year}.1"
         elif not periodo:
             periodo = f"{datetime.now().year}.1"
-        
+
         # Determinar nota para exibição
         nota_final = disc['media_final'] if disc['media_final'] is not None else disc['nota_final']
         if nota_final is not None:
             nota_exibicao = round(float(nota_final), 2)
         else:
             nota_exibicao = None
-        
+
         # Determinar status
         if disc['status_final'] == 'aprovado':
             status_display = 'APROVADO'
@@ -6088,10 +5884,10 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
             status_display = 'REPROVADO'
         else:
             status_display = 'CURSANDO'
-        
+
         # Determinar semestre
         semestre = periodo.split('.')[-1] if '.' in periodo else "1"
-        
+
         disciplina = {
             'id': disc['id'],
             'nome': disc['nome'],
@@ -6109,7 +5905,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
             'media_final': disc['media_final']
         }
         disciplinas.append(disciplina)
-    
+
     conn.close()
     return disciplinas
 
@@ -6117,29 +5913,29 @@ def buscar_dados_pessoais_completos(aluno_id):
     """Busca dados pessoais completos do aluno - VERSÃO COMPLETA"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT a.*, 
+        SELECT a.*,
                dp.cpf, dp.rg, dp.telefone, dp.endereco, dp.cidade, dp.estado, dp.cep,
                dp.curso_referencia
         FROM alunos a
         LEFT JOIN dados_pessoais dp ON a.id = dp.aluno_id
         WHERE a.id = %s
     """, (aluno_id,))
-    
+
     aluno_row = cursor.fetchone()
-    
+
     if not aluno_row:
         conn.close()
         return None
-    
+
     aluno = dict(aluno_row)
-    
+
     # Formatar dados
     aluno['cpf_formatado'] = formatar_cpf(aluno.get('cpf', '')) if aluno.get('cpf') else ''
     aluno['telefone_formatado'] = formatar_telefone(aluno.get('telefone', '')) if aluno.get('telefone') else ''
     aluno['endereco_completo'] = f"{aluno.get('endereco', '')}, {aluno.get('cidade', '')} - {aluno.get('estado', '')}, CEP: {aluno.get('cep', '')}"
-    
+
     conn.close()
     return aluno
 
@@ -6160,64 +5956,49 @@ def formatar_telefone(tel):
     return tel
 
 def salvar_documento_autenticado(documento_data):
-    """Salva um documento autenticado no banco - VERSÃO CORRIGIDA"""
+    """Salva documento autenticado. A estrutura é criada exclusivamente pela migração."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
-        # Verificar se a tabela existe
+        data_emissao = documento_data.get('data_emissao')
+        if hasattr(data_emissao, 'strftime'):
+            data_emissao = data_emissao.strftime('%d/%m/%Y %H:%M')
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS documentos_autenticados (
-                id SERIAL PRIMARY KEY,
-                codigo_autenticacao TEXT UNIQUE,
-                aluno_id INTEGER,
-                tipo_documento TEXT,
-                hash_documento TEXT,
-                conteudo_html TEXT,
-                data_emissao TEXT,
-                observacoes TEXT,
-                aluno_nome TEXT,
-                aluno_ra TEXT,
-                FOREIGN KEY (aluno_id) REFERENCES alunos(id)
-            )
-        """)
-        
-        # Inserir documento
-        cursor.execute("""
-            INSERT INTO documentos_autenticados 
-            (codigo_autenticacao, aluno_id, tipo_documento, hash_documento, 
-             conteudo_html, data_emissao, observacoes, aluno_nome, aluno_ra)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO documentos_autenticados
+            (codigo_autenticacao, codigo, aluno_id, tipo_documento, tipo, hash_documento,
+             conteudo_html, data_emissao, data_geracao, observacoes, aluno_nome, aluno_ra)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
         """, (
-            documento_data['codigo_autenticacao'],
-            documento_data['aluno_id'],
-            documento_data['tipo_documento'],
-            documento_data['hash_documento'],
-            documento_data['conteudo_html'],
-            documento_data['data_emissao'].strftime('%d/%m/%Y %H:%M'),
+            documento_data.get('codigo_autenticacao'),
+            documento_data.get('codigo') or documento_data.get('codigo_autenticacao'),
+            documento_data.get('aluno_id'),
+            documento_data.get('tipo_documento'),
+            documento_data.get('tipo') or documento_data.get('tipo_documento'),
+            documento_data.get('hash_documento'),
+            documento_data.get('conteudo_html'),
+            data_emissao,
+            documento_data.get('data_geracao') or data_emissao,
             documento_data.get('observacoes', ''),
             documento_data.get('aluno_nome', ''),
-            documento_data.get('aluno_ra', '')
+            documento_data.get('aluno_ra', ''),
         ))
-        
-        documento_id = cursor.fetchone()["id"]
+        documento_id = cursor.fetchone()['id']
         conn.commit()
-        
+        return documento_id
     except Exception as e:
-        print(f"Erro ao salvar documento: {e}")
-        documento_id = None
+        conn.rollback()
+        print(f"Erro em salvar_documento_autenticado: {e}")
+        return None
     finally:
         conn.close()
-    
-    return documento_id
+
 
 @app.route("/mew/visualizar-documento/<codigo>")
 def mew_visualizar_documento(codigo):
     """Visualiza tanto documentos antigos (codigo_autenticacao) quanto novos (codigo)."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    init_documentos_integrados_db()
     conn = get_db_connection(); cursor = conn.cursor()
     cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo=%s OR codigo_autenticacao=%s ORDER BY id DESC LIMIT 1", (codigo, codigo))
     documento = cursor.fetchone(); conn.close()
@@ -6239,29 +6020,29 @@ def salvar_documento_simples(codigo, aluno_nome, aluno_ra, tipo, conteudo_html):
     """Salva documento de forma simples"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     data_geracao = datetime.now().strftime('%d/%m/%Y')
-    
+
     cursor.execute("""
-        INSERT INTO documentos_autenticados 
+        INSERT INTO documentos_autenticados
         (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao)
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (codigo, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao))
-    
+
     conn.commit()
     conn.close()
-    
+
     return True
 
 def buscar_documento_por_codigo(codigo):
     """Busca documento pelo código"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo,))
     documento = cursor.fetchone()
     conn.close()
-    
+
     if documento:
         return {
             'codigo': documento['codigo'],
@@ -6283,10 +6064,10 @@ def obter_configuracao_ano():
     # Você pode criar uma tabela no banco para configurações se quiser
     # Por enquanto, vamos usar um arquivo de configuração ou variável de ambiente
     ano_configurado = os.environ.get("HISTORICO_ANO", None)
-    
+
     if ano_configurado:
         return ano_configurado
-    
+
     # Se não tiver configuração, use o ano atual
     from datetime import datetime
     return str(datetime.now().year)
@@ -6295,10 +6076,10 @@ def calcular_ira_aluno_completo(aluno_id):
     """Calcular IRA do aluno baseado nas disciplinas aprovadas - VERSÃO CORRIGIDA (ponderada)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todas as disciplinas do aluno com status final
     cursor.execute("""
-        SELECT 
+        SELECT
             d.carga_horaria,
             nf.media_final,
             nf.status
@@ -6307,9 +6088,9 @@ def calcular_ira_aluno_completo(aluno_id):
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         WHERE ad.aluno_id = %s
     """, (aluno_id,))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     # Mapeamento de nota para conceito (baseado na média final 0-100)
     def nota_para_conceito_valor(nota):
         """Converte nota de 0-100 para valor do conceito"""
@@ -6318,32 +6099,32 @@ def calcular_ira_aluno_completo(aluno_id):
         elif nota >= 70: return ("C", 2.0)
         elif nota >= 60: return ("D", 1.0)
         else: return ("F", 0.0)
-    
+
     # Calcular IRA ponderado pela carga horária
     soma_pontos = 0
     soma_carga = 0
     disciplinas_aprovadas = 0
     carga_total_aprovada = 0
-    
+
     for disc in disciplinas:
         carga = disc['carga_horaria'] if disc['carga_horaria'] else 80
-        
+
         if disc['status'] == 'aprovado' and disc['media_final'] is not None:
             nota = disc['media_final']
             # Converter nota para valor do conceito
             _, valor_conceito = nota_para_conceito_valor(nota)
-            
+
             # Soma ponderada: valor_conceito * carga_horária
             soma_pontos += valor_conceito * carga
             soma_carga += carga
             disciplinas_aprovadas += 1
             carga_total_aprovada += carga
-    
+
     # IRA = Soma(conceito_valor * carga_horária) / Soma(carga_horária)
     ira = soma_pontos / soma_carga if soma_carga > 0 else 0
-    
+
     conn.close()
-    
+
     return {
         'ira': round(ira, 2),
         'disciplinas_aprovadas': disciplinas_aprovadas,
@@ -6354,10 +6135,10 @@ def calcular_ira_aluno_completo(aluno_id):
     """Calcular IRA do aluno baseado nas disciplinas aprovadas - VERSÃO PONDERADA"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todas as disciplinas do aluno com status final
     cursor.execute("""
-        SELECT 
+        SELECT
             d.carga_horaria,
             nf.media_final,
             nf.status
@@ -6366,9 +6147,9 @@ def calcular_ira_aluno_completo(aluno_id):
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         WHERE ad.aluno_id = %s
     """, (aluno_id,))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     # Mapeamento de nota para conceito (baseado na média final 0-100)
     def nota_para_conceito_valor(nota):
         """Converte nota de 0-100 para valor do conceito"""
@@ -6377,32 +6158,32 @@ def calcular_ira_aluno_completo(aluno_id):
         elif nota >= 70: return ("C", 2.0)
         elif nota >= 60: return ("D", 1.0)
         else: return ("F", 0.0)
-    
+
     # Calcular IRA ponderado pela carga horária
     soma_pontos = 0
     soma_carga = 0
     disciplinas_aprovadas = 0
     carga_total_aprovada = 0
-    
+
     for disc in disciplinas:
         carga = disc['carga_horaria'] if disc['carga_horaria'] else 80
-        
+
         if disc['status'] == 'aprovado' and disc['media_final'] is not None:
             nota = disc['media_final']
             # Converter nota para valor do conceito
             _, valor_conceito = nota_para_conceito_valor(nota)
-            
+
             # Soma ponderada: valor_conceito * carga_horária
             soma_pontos += valor_conceito * carga
             soma_carga += carga
             disciplinas_aprovadas += 1
             carga_total_aprovada += carga
-    
+
     # IRA = Soma(conceito_valor * carga_horária) / Soma(carga_horária)
     ira = soma_pontos / soma_carga if soma_carga > 0 else 0
-    
+
     conn.close()
-    
+
     return {
         'ira': round(ira, 2),
         'disciplinas_aprovadas': disciplinas_aprovadas,
@@ -6412,10 +6193,10 @@ def calcular_ira_aluno_completo(aluno_id):
 def obter_configuracao_ano():
     """Obtém o ano configurado para os documentos ou usa o ano atual"""
     ano_configurado = os.environ.get("HISTORICO_ANO", None)
-    
+
     if ano_configurado:
         return ano_configurado
-    
+
     from datetime import datetime
     return str(datetime.now().year)
 
@@ -6423,61 +6204,78 @@ def obter_configuracao_ano():
 
 def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64, codigo, hash_documento, ano_manual=None, ira_manual='N/I', total_disciplinas_manual='0', frequencia_manual='N/I'):
     """Gera HTML do histórico escolar com QR CODE JÁ INCLUSO"""
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Calcular carga horária total APROVADA apenas
+
+    # Carrega em uma única consulta tudo que será usado por disciplina no histórico.
+    # Evita 3 consultas extras para cada linha do documento.
+    disciplina_ids = [int(d['id']) for d in disciplinas if d.get('id') is not None]
+    info_por_disciplina = {}
+    if disciplina_ids:
+        cursor.execute("""
+            SELECT d.id, d.carga_horaria,
+                   doc.nome AS docente_nome, doc.titulacao,
+                   adt.data_inicio,
+                   nf.media_final
+            FROM disciplinas d
+            LEFT JOIN LATERAL (
+                SELECT dd.docente_id
+                FROM disciplina_docente dd
+                WHERE dd.disciplina_id = d.id
+                ORDER BY dd.ano_semestre DESC, dd.id DESC
+                LIMIT 1
+            ) dd_ultimo ON TRUE
+            LEFT JOIN docentes doc ON doc.id = dd_ultimo.docente_id
+            LEFT JOIN aluno_disciplina_datas adt
+                   ON adt.aluno_id = %s AND adt.disciplina_id = d.id
+            LEFT JOIN notas_finais nf
+                   ON nf.aluno_id = %s AND nf.disciplina_id = d.id
+            WHERE d.id = ANY(%s)
+        """, (aluno_id, aluno_id, disciplina_ids))
+        info_por_disciplina = {int(row['id']): dict(row) for row in cursor.fetchall()}
+
     carga_total_aprovada = 0
     carga_total_cursada = 0
-    
     for d in disciplinas:
-        # Contar apenas disciplinas com status APROVADO
+        info = info_por_disciplina.get(int(d['id']), {})
+        carga = int(info.get('carga_horaria') or 80)
+        carga_total_cursada += carga
         if d.get('status', '').upper() == 'APROVADO':
-            # Buscar carga horária real da disciplina
-            cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = %s", (d['id'],))
-            disciplina_info = cursor.fetchone()
-            carga = disciplina_info['carga_horaria'] if disciplina_info and disciplina_info['carga_horaria'] else 80
-            carga_total_aprovada += int(carga)
-        
-        # Para carga total cursada (todas disciplinas)
-        cursor.execute("SELECT carga_horaria FROM disciplinas WHERE id = %s", (d['id'],))
-        disciplina_info = cursor.fetchone()
-        carga = disciplina_info['carga_horaria'] if disciplina_info and disciplina_info['carga_horaria'] else 80
-        carga_total_cursada += int(carga)
-    
+            carga_total_aprovada += carga
+
     # Data atual
     from datetime import datetime
     data_atual = datetime.now().strftime("%d/%m/%Y")
-    
+
     # Obter ano configurável
     ano_historico = ano_manual if ano_manual else obter_configuracao_ano()
-    
+
     # ===== USAR VALORES MANUAIS DO FORMULÁRIO =====
     ira_display = ira_manual
-    
+
     # Converter total_disciplinas_manual para número
     try:
         total_disciplinas_valor = int(total_disciplinas_manual)
     except:
         total_disciplinas_valor = 0
-    
+
     ira_info = {
         'disciplinas_aprovadas': total_disciplinas_valor,
         'carga_total_aprovada': carga_total_aprovada
     }
     # ==============================================
-    
+
     # Buscar dados adicionais do aluno
     cursor.execute("""
-        SELECT nome_pai, nome_mae, naturalidade, nacionalidade, 
+        SELECT nome_pai, nome_mae, naturalidade, nacionalidade,
                data_nascimento, sexo, estado_civil, curso_referencia
-        FROM dados_pessoais 
+        FROM dados_pessoais
         WHERE aluno_id = %s
     """, (aluno_id,))
-    
+
     dados_adicionais = cursor.fetchone()
-    
+
     # Formatar filiação
     if dados_adicionais:
         pai = dados_adicionais['nome_pai'] if dados_adicionais['nome_pai'] else ''
@@ -6490,7 +6288,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             filiacao = mae
         else:
             filiacao = ""
-        
+
         naturalidade = dados_adicionais['naturalidade'] if dados_adicionais['naturalidade'] else ''
         nacionalidade = dados_adicionais['nacionalidade'] if dados_adicionais['nacionalidade'] else 'Brasileira'
         data_nascimento = dados_adicionais['data_nascimento'] if dados_adicionais['data_nascimento'] else ''
@@ -6505,7 +6303,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         sexo = ""
         estado_civil = ""
         curso_referencia = dados_aluno.get('curso_referencia', 'Disciplinas Isoladas')
-    
+
     # Converter abreviações de sexo
     if sexo.upper() in ['M', 'MASC', 'MASCULINO']:
         sexo_display = 'MASCULINO'
@@ -6513,67 +6311,36 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         sexo_display = 'FEMININO'
     else:
         sexo_display = sexo
-    
-    # Gerar linhas da tabela
+
+    # Gerar linhas da tabela com os dados já carregados acima.
     linhas = ""
     for d in disciplinas:
-        # Buscar informações adicionais da disciplina
-        cursor.execute("""
-            SELECT d.carga_horaria, doc.nome as docente_nome, doc.titulacao
-            FROM disciplinas d
-            LEFT JOIN disciplina_docente dd ON d.id = dd.disciplina_id
-            LEFT JOIN docentes doc ON dd.docente_id = doc.id
-            WHERE d.id = %s
-            ORDER BY dd.ano_semestre DESC
-            LIMIT 1
-        """, (d['id'],))
-        
-        info_disc = cursor.fetchone()
-        
-        # Determinar carga horária
-        carga_horaria = info_disc['carga_horaria'] if info_disc and info_disc['carga_horaria'] else 80
-        
-        # Determinar docente
-        if info_disc and info_disc['docente_nome']:
+        info_disc = info_por_disciplina.get(int(d['id']), {})
+        carga_horaria = info_disc.get('carga_horaria') or 80
+
+        if info_disc.get('docente_nome'):
             docente = info_disc['docente_nome']
-            if info_disc['titulacao']:
+            if info_disc.get('titulacao'):
                 docente += f" ({info_disc['titulacao']})"
         else:
             docente = 'Docente Responsável — Coordenação Acadêmica SIGEU'
-        
-        # Determinar período
-        cursor.execute("""
-            SELECT data_inicio FROM aluno_disciplina_datas 
-            WHERE aluno_id = %s AND disciplina_id = %s
-        """, (aluno_id, d['id']))
 
-        data_info = cursor.fetchone()
-        if data_info and data_info['data_inicio']:
+        data_inicio_disc = info_disc.get('data_inicio')
+        if data_inicio_disc:
             try:
-                data_obj = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
+                data_obj = datetime.strptime(data_inicio_disc, "%d/%m/%Y")
                 ano = data_obj.year
                 mes = data_obj.month
                 semestre = "1" if mes <= 6 else "2"
                 periodo = f"{ano}.{semestre}"
-            except:
+            except Exception:
                 periodo = f"{datetime.now().year}.1"
         else:
             periodo = f"{datetime.now().year}.1"
-        
-        # Buscar nota final direto da tabela notas_finais
-        cursor.execute("""
-            SELECT media_final
-            FROM notas_finais
-            WHERE aluno_id = %s AND disciplina_id = %s
-        """, (aluno_id, d['id']))
 
-        nota_row = cursor.fetchone()
+        media_final = info_disc.get('media_final')
+        nota_display = f"{float(media_final):.2f}" if media_final is not None else "N/I"
 
-        if nota_row and nota_row['media_final'] is not None:
-            nota_display = f"{float(nota_row['media_final']):.2f}"
-        else:
-            nota_display = "N/I"
-        
         # Determinar status
         status_display = d.get('status', 'CURSANDO')
 
@@ -6595,13 +6362,13 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
                 <td style="border: 1px solid #000; padding: 4px; text-align: center;">{status_display}</td>
             </tr>
         """
-        
+
     # Gerar link de validação
     base_url = "https://campusvirtualfacop.com.br"
     link_validacao = f"{base_url}/validar-documento/{codigo}"
     data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
     data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-    
+
     # HTML COMPLETO COM QUEBRA DE PÁGINA ANTES DO RESUMO ACADÊMICO
     html = f'''<!DOCTYPE html>
 <html>
@@ -6725,7 +6492,7 @@ body {{
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: 
+    background-image:
         repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
         repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
     pointer-events: none;
@@ -7353,7 +7120,7 @@ body {{
     body {{
         background: #fff;
     }}
-    
+
     .folha {{
         box-shadow: none;
         margin: 0;
@@ -7371,29 +7138,29 @@ body {{
     <div class="cantoneira top-right"></div>
     <div class="cantoneira bottom-left"></div>
     <div class="cantoneira bottom-right"></div>
-    
+
     <!-- MICROTEXTOS DE BORDA -->
     <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-    
+
     <!-- MARCAS D'ÁGUA -->
     <div class="marca-dagua-principal">FACOP SiGEu</div>
     <div class="marca-dagua-pattern"></div>
-    
+
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
     <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-    
+
     <!-- FAIXA IDENTIFICADORA -->
     <div class="faixa-identificadora"></div>
-    
+
     <!-- NÚMERO DE CONTROLE -->
     <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
-    
+
     <!-- CABEÇALHO -->
     <div class="cabecalho">
         <div class="logo-area">
@@ -7411,13 +7178,13 @@ body {{
             FCP-SiGEu<br>e-SIGEU-GTP-2026
         </div>
     </div>
-    
+
     <!-- TÍTULO -->
     <div class="titulo-documento">
         <div class="titulo-principal">Histórico Escolar</div>
         <div class="titulo-sub">COMPONENTES CURRICULARES - {ano_historico}</div>
     </div>
-    
+
     <!-- BOX DE IDENTIFICAÇÃO DO ALUNO (SIMPLIFICADO) -->
     <div class="box-identificacao">
         <div class="box-identificacao-header">Identificação do Discente</div>
@@ -7436,7 +7203,7 @@ body {{
             </div>
         </div>
     </div>
-    
+
     <!-- BOX DE DADOS PESSOAIS COMPLETOS -->
     <div class="box-dados-pessoais">
         <div class="dados-grid">
@@ -7474,7 +7241,7 @@ body {{
             <div class="dado-valor-historico">{curso_referencia}</div>
         </div>
     </div>
-    
+
     <!-- TABELA DE DISCIPLINAS -->
     <table class="tabela-disciplinas">
         <thead>
@@ -7509,29 +7276,29 @@ body {{
     <div class="cantoneira top-right"></div>
     <div class="cantoneira bottom-left"></div>
     <div class="cantoneira bottom-right"></div>
-    
+
     <!-- MICROTEXTOS DE BORDA -->
     <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
     <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
     <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
     <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-    
+
     <!-- MARCAS D'ÁGUA -->
     <div class="marca-dagua-principal">FACOP SiGEu</div>
     <div class="marca-dagua-pattern"></div>
-    
+
     <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
     <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
     <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
     <div class="microtexto-seguranca micro-3">FCP Certificadora | SiGEu Educacional</div>
     <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-    
+
     <!-- FAIXA IDENTIFICADORA -->
     <div class="faixa-identificadora"></div>
-    
+
     <!-- NÚMERO DE CONTROLE -->
     <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
-    
+
     <!-- CABEÇALHO -->
     <div class="cabecalho">
         <div class="logo-area">
@@ -7546,16 +7313,16 @@ body {{
             </div>
         </div>
         <div class="selo-autenticidade">
-            FCP-SiGEu<br>e-SIGEU-GTP-2026 
+            FCP-SiGEu<br>e-SIGEU-GTP-2026
         </div>
     </div>
-    
+
     <!-- TÍTULO -->
     <div class="titulo-documento">
         <div class="titulo-principal">Histórico Escolar</div>
         <div class="titulo-sub">COMPONENTES CURRICULARES - {ano_historico}</div>
     </div>
-    
+
     <!-- BOX DE RESUMO ACADÊMICO -->
     <div class="box-resumo">
         <div class="resumo-grid">
@@ -7575,14 +7342,14 @@ body {{
             </div>
         </div>
     </div>
-    
+
     <!-- BOX DE SISTEMA DE AVALIAÇÃO -->
     <div class="box-avaliacao">
         <p style="margin: 2mm 0;"><strong>Distribuição dos 100 pontos:</strong> Produção Científica (20%) | Prova I (20%) | Prova II (20%) | Prova III (20%) | Prova IV (20%)</p>
         <p style="margin: 2mm 0;"><strong>Avaliação Suplementar:</strong> Conteúdo total da disciplina - Valor: 100 pontos (Pré-requisito: Resultado Final ≥ 20 e < 60)</p>
         <p style="margin: 2mm 0;"><strong>Média Final:</strong> (Resultado Final + Nota Prova Suplementar) / 2 | Mínimo para aprovação: ≥ 60 pontos.</p>
     </div>
-    
+
     <!-- BOX DE OBSERVAÇÕES -->
     <div class="box-avaliacao2">
         <div class="observacoes-texto">
@@ -7590,19 +7357,19 @@ body {{
             <p style="margin-top: 2mm;">Este documento possui validade em todo território nacional e pode ser utilizado para fins de aproveitamento de estudos, comprovação de conclusão de componentes curriculares e demais fins legais.</p>
         </div>
     </div>
-    
+
     <!-- SELO GRANDE DE AUTENTICAÇÃO -->
     <div class="selo-grande">
         VALIDADO<br>
         ELETRONICAMENTE<br>
         {data_atual}
     </div>
-    
+
     <!-- DATA E LOCAL -->
     <div class="data-local">
         São Paulo – SP, {data_atual}.
     </div>
-    
+
      <!-- QR CODE - JÁ INCLUSO -->
     <div class="qr-code-box">
         <div class="qr-code-label">Validação Digital</div>
@@ -7610,11 +7377,11 @@ body {{
             <img src="{qr_code_base64}" alt="QR Code de Validação" style="width: 100%; height: 100%; object-fit: contain;">
         </div>
     </div>
-    
+
     <!-- SEÇÃO DE AUTENTICAÇÃO -->
     <div style="position: absolute; bottom: 17mm; left: 15mm; right: 15mm; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 8pt; text-align: center; border-top: 1px solid #3f464b;">
     </div>
-    
+
     <!-- RODAPÉ TÉCNICO -->
     <div class="rodape-tecnico">
         <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06, 14.063/20 e nº 9.394/96 e nº 5.154/2004.<br>
@@ -7625,7 +7392,7 @@ body {{
 
 </body>
 </html>'''
-    
+
     conn.close()
     return html
 
@@ -7638,11 +7405,11 @@ def ver_documento_completo(codigo):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("SELECT * FROM documentos_autenticados WHERE codigo = %s", (codigo.upper(),))
         documento = cursor.fetchone()
         conn.close()
-        
+
         if not documento:
             return '''
             <html>
@@ -7650,22 +7417,22 @@ def ver_documento_completo(codigo):
                 <title>Documento não encontrado</title>
                 <style>
                     body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-                    .error-box { 
-                        background: white; 
-                        padding: 30px; 
-                        border-radius: 10px; 
-                        max-width: 500px; 
+                    .error-box {
+                        background: white;
+                        padding: 30px;
+                        border-radius: 10px;
+                        max-width: 500px;
                         margin: 0 auto;
                         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
                         border-left: 4px solid #dc3545;
                     }
-                    .btn { 
-                        display: inline-block; 
-                        padding: 10px 20px; 
-                        background: #007bff; 
-                        color: white; 
-                        text-decoration: none; 
-                        border-radius: 5px; 
+                    .btn {
+                        display: inline-block;
+                        padding: 10px 20px;
+                        background: #343a40;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 5px;
                         margin-top: 20px;
                     }
                 </style>
@@ -7680,50 +7447,58 @@ def ver_documento_completo(codigo):
             </body>
             </html>
             '''.format(codigo)
-        
+
         # Converter para dicionário para facilitar o acesso
         doc_dict = dict(documento)
-        
+
         # Retornar o HTML salvo no banco diretamente
         return doc_dict.get('conteudo_html', '<p>Erro: Conteúdo não encontrado</p>')
-        
+
     except Exception as e:
         return f"Erro ao carregar documento: {str(e)}"
-    
+
 # ==========================
 # ROTA PARA LISTAR DOCUMENTOS (MEW)
 # ==========================
 
 @app.route("/mew/listar-documentos")
 def mew_listar_documentos():
-    """Lista todos os documentos gerados"""
+    """Lista metadados dos documentos sem carregar HTML, QR ou arquivos pesados."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Criar tabela se não existir
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS documentos_autenticados (
-            id SERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE NOT NULL,
-            aluno_id INTEGER,
-            aluno_nome TEXT,
-            aluno_ra TEXT,
-            tipo TEXT,
-            conteudo_html TEXT,
-            data_geracao TEXT,
-            FOREIGN KEY (aluno_id) REFERENCES alunos(id)
-        )
-    ''')
-    
-    # Buscar documentos
-    cursor.execute("SELECT * FROM documentos_autenticados ORDER BY data_geracao DESC")
-    documentos = cursor.fetchall()
-    conn.close()
-    
-    return render_template("mew/listar_documentos.html", documentos=documentos)
+    try:
+        pagina = max(1, int(request.args.get("pagina", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    por_pagina = min(100, max(20, int(os.getenv("DOCS_PAGE_SIZE", "50"))))
+    offset = (pagina - 1) * por_pagina
+    conn = get_db_connection(); cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados")
+        total = int((cursor.fetchone() or {}).get("total") or 0)
+        cursor.execute("""
+            SELECT id,
+                   COALESCE(codigo, codigo_autenticacao) AS codigo_autenticacao,
+                   COALESCE(tipo, tipo_documento) AS tipo_documento,
+                   aluno_id, aluno_nome, aluno_ra,
+                   data_geracao, data_emissao, data_validade, disciplina_id,
+                   CASE
+                     WHEN data_validade IS NULL OR data_validade='' THEN 'válido'
+                     ELSE 'válido'
+                   END AS status
+            FROM documentos_autenticados
+            ORDER BY id DESC
+            LIMIT %s OFFSET %s
+        """, (por_pagina, offset))
+        documentos = cursor.fetchall()
+    finally:
+        conn.close()
+    total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+    return render_template(
+        "mew/listar_documentos.html", documentos=documentos,
+        pagina=pagina, total_paginas=total_paginas, total_documentos=total
+    )
+
 
 # ==========================
 # ROTA PARA DELETAR DOCUMENTO (MEW)
@@ -7731,18 +7506,37 @@ def mew_listar_documentos():
 
 @app.route("/mew/deletar-documento/<codigo>")
 def deletar_documento(codigo):
-    """Deleta um documento"""
+    """Deleta o registro e, quando existir, o objeto privado correspondente no R2."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM documentos_autenticados WHERE codigo = %s OR codigo_autenticacao = %s", (codigo, codigo))
-    
-    conn.commit()
+    try:
+        cursor.execute(
+            "SELECT id, arquivo_r2_key FROM documentos_autenticados WHERE codigo=%s OR codigo_autenticacao=%s ORDER BY id DESC",
+            (codigo, codigo),
+        )
+        encontrados = cursor.fetchall()
+        ids = [r["id"] for r in encontrados]
+        if ids:
+            cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id = ANY(%s)", (ids,))
+        cursor.execute("DELETE FROM documentos_autenticados WHERE codigo=%s OR codigo_autenticacao=%s", (codigo, codigo))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        raise
     conn.close()
-    
+
+    for row in encontrados:
+        key = row.get("arquivo_r2_key")
+        if key:
+            try:
+                delete_object(key)
+            except Exception as exc:
+                app.logger.warning("Documento %s excluído do banco, mas falhou a remoção do R2 (%s): %s", row.get("id"), key, exc)
+
     return redirect("/mew/listar-documentos?sucesso=Documento+removido")
 
 # ==========================
@@ -7754,7 +7548,7 @@ def mew_info_disciplinas():
     """Página principal para gerenciar informações das disciplinas"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     return render_template("mew/info_disciplinas.html")
 
 @app.route("/mew/docentes", methods=["GET", "POST"])
@@ -7762,35 +7556,35 @@ def mew_docentes():
     """Gerenciar docentes"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if request.method == "POST":
         nome = request.form.get("nome")
         titulacao = request.form.get("titulacao", "")
         email = request.form.get("email", "")
         telefone = request.form.get("telefone", "")
-        
+
         if not nome:
             conn.close()
             return redirect("/mew/docentes?erro=Nome+obrigatório")
-        
+
         cursor.execute("""
             INSERT INTO docentes (nome, titulacao, email, telefone)
             VALUES (%s, %s, %s, %s)
         """, (nome, titulacao, email, telefone))
-        
+
         conn.commit()
         conn.close()
         return redirect("/mew/docentes?sucesso=Docente+cadastrado")
-    
+
     # GET: Listar docentes
     cursor.execute("SELECT * FROM docentes ORDER BY nome")
     docentes = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template("mew/docentes.html", docentes=docentes)
 
 @app.route("/mew/editar-docente/<int:docente_id>", methods=["GET", "POST"])
@@ -7798,31 +7592,31 @@ def mew_editar_docente(docente_id):
     """Editar informações de um docente"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if request.method == "POST":
         nome = request.form.get("nome")
         titulacao = request.form.get("titulacao", "")
         email = request.form.get("email", "")
         telefone = request.form.get("telefone", "")
         ativo = request.form.get("ativo", "1")
-        
+
         cursor.execute("""
-            UPDATE docentes 
+            UPDATE docentes
             SET nome = %s, titulacao = %s, email = %s, telefone = %s, ativo = %s
             WHERE id = %s
         """, (nome, titulacao, email, telefone, ativo, docente_id))
-        
+
         conn.commit()
         conn.close()
         return redirect("/mew/docentes?sucesso=Docente+atualizado")
-    
+
     # GET: Buscar docente
     cursor.execute("SELECT * FROM docentes WHERE id = %s", (docente_id,))
     docente = cursor.fetchone()
-    
+
     if not docente:
         conn.close()
         return redirect("/mew/docentes?erro=Docente+não+encontrado")
@@ -7835,9 +7629,9 @@ def mew_editar_docente(docente_id):
         ORDER BY dd.ano_semestre DESC NULLS LAST, d.nome
     """, (docente_id,))
     disciplinas_docente = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/editar_docente.html",
         docente=docente,
@@ -7849,21 +7643,21 @@ def mew_deletar_docente(docente_id):
     """Deletar docente (apenas se não estiver associado a disciplinas)"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Verificar se docente está associado a alguma disciplina
     cursor.execute("SELECT id FROM disciplina_docente WHERE docente_id = %s LIMIT 1", (docente_id,))
     if cursor.fetchone():
         conn.close()
         return redirect("/mew/docentes?erro=Docente+está+associado+a+disciplinas")
-    
+
     cursor.execute("DELETE FROM docentes WHERE id = %s", (docente_id,))
-    
+
     conn.commit()
     conn.close()
-    
+
     return redirect("/mew/docentes?sucesso=Docente+removido")
 
 @app.route("/mew/atribuir-info-disciplina", methods=["GET", "POST"])
@@ -7871,55 +7665,55 @@ def mew_atribuir_info_disciplina():
     """Atribuir informações a uma disciplina (carga horária, docente, semestre)"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if request.method == "POST":
         disciplina_id = request.form.get("disciplina_id")
         carga_horaria = request.form.get("carga_horaria", "80")
         docente_id = request.form.get("docente_id")
         ano_semestre = request.form.get("ano_semestre")
-        
+
         if not disciplina_id:
             conn.close()
             return redirect("/mew/atribuir-info-disciplina?erro=Selecione+uma+disciplina")
-        
+
         # Atualizar carga horária da disciplina
         cursor.execute("""
-            UPDATE disciplinas 
+            UPDATE disciplinas
             SET carga_horaria = %s
             WHERE id = %s
         """, (carga_horaria, disciplina_id))
-        
+
         # Se tiver docente, associar
         if docente_id and docente_id != "0":
             # Remover associação anterior para este ano/semestre
             cursor.execute("""
-                DELETE FROM disciplina_docente 
+                DELETE FROM disciplina_docente
                 WHERE disciplina_id = %s AND ano_semestre = %s
             """, (disciplina_id, ano_semestre))
-            
+
             # Adicionar nova associação
             cursor.execute("""
                 INSERT INTO disciplina_docente (disciplina_id, docente_id, ano_semestre)
                 VALUES (%s, %s, %s)
             """, (disciplina_id, docente_id, ano_semestre))
-        
+
         conn.commit()
         conn.close()
         return redirect("/mew/atribuir-info-disciplina?sucesso=Informações+salvas")
-    
+
     # GET: Mostrar formulário
-    
+
     # Buscar disciplinas
     cursor.execute("SELECT id, nome, carga_horaria FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
-    
+
     # Buscar docentes ativos
     cursor.execute("SELECT id, nome FROM docentes WHERE ativo = 1 ORDER BY nome")
     docentes = cursor.fetchall()
-    
+
     # Gerar lista de anos/semestres
     from datetime import datetime
     ano_atual = datetime.now().year
@@ -7927,9 +7721,9 @@ def mew_atribuir_info_disciplina():
     for ano in range(2020, ano_atual + 3):  # De 2020 até 2 anos no futuro
         semestres.append(f"{ano}.1")
         semestres.append(f"{ano}.2")
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/atribuir_info_disciplina.html",
         disciplinas=disciplinas,
@@ -7942,18 +7736,18 @@ def buscar_info_disciplina(disciplina_id):
     """Buscar informações de uma disciplina específica"""
     if not session.get("mew_admin"):
         return jsonify({"error": "Não autorizado"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar informações da disciplina
     cursor.execute("SELECT id, nome, carga_horaria FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     if not disciplina:
         conn.close()
         return jsonify({"error": "Disciplina não encontrada"})
-    
+
     # Buscar docente associado (mais recente)
     cursor.execute("""
         SELECT d.id, d.nome, dd.ano_semestre
@@ -7963,11 +7757,11 @@ def buscar_info_disciplina(disciplina_id):
         ORDER BY dd.ano_semestre DESC
         LIMIT 1
     """, (disciplina_id,))
-    
+
     docente_info = cursor.fetchone()
-    
+
     conn.close()
-    
+
     return jsonify({
         "success": True,
         "disciplina": dict(disciplina) if disciplina else None,
@@ -7980,13 +7774,13 @@ def mew_listar_info_disciplinas():
     """Listar todas as disciplinas com suas informações"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todas as disciplinas com suas informações
     cursor.execute("""
-        SELECT 
+        SELECT
             d.id,
             d.nome,
             d.carga_horaria,
@@ -7999,11 +7793,11 @@ def mew_listar_info_disciplinas():
         LEFT JOIN docentes doc ON dd.docente_id = doc.id
         ORDER BY d.nome
     """)
-    
+
     disciplinas = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template("mew/listar_info_disciplinas.html", disciplinas=disciplinas)
 
 @app.route("/mew/rendimento-academico")
@@ -8011,20 +7805,20 @@ def mew_rendimento_academico():
     """Gerenciar rendimento acadêmico dos alunos"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar alunos
     cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
     alunos = cursor.fetchall()
-    
+
     # Buscar disciplinas
     cursor.execute("SELECT id, nome FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/rendimento_academico.html",
         alunos=alunos,
@@ -8036,20 +7830,20 @@ def mew_salvar_rendimento():
     """Salvar ou atualizar rendimento acadêmico"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     aluno_id = request.form.get("aluno_id")
     disciplina_id = request.form.get("disciplina_id")
     nota_final = request.form.get("nota_final")
     carga_horaria = request.form.get("carga_horaria", "80")
     conceito = request.form.get("conceito")
-    
+
     if not all([aluno_id, disciplina_id, nota_final]):
         return jsonify({"success": False, "message": "Dados incompletos"})
-    
+
     try:
         nota_final = float(nota_final.replace(",", "."))
         carga_horaria = int(carga_horaria)
-        
+
         # Determinar conceito se não fornecido
         if not conceito:
             if nota_final >= 90:
@@ -8062,44 +7856,44 @@ def mew_salvar_rendimento():
                 conceito = "D"
             else:
                 conceito = "F"
-        
+
         # Calcular peso (baseado na carga horária)
         peso = carga_horaria / 80.0
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Verificar se já existe
         cursor.execute("""
-            SELECT id FROM rendimento_academico 
+            SELECT id FROM rendimento_academico
             WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, disciplina_id))
-        
+
         if cursor.fetchone():
             # Atualizar
             cursor.execute("""
-                UPDATE rendimento_academico 
+                UPDATE rendimento_academico
                 SET nota_final = %s, carga_horaria = %s, conceito = %s, peso = %s
                 WHERE aluno_id = %s AND disciplina_id = %s
             """, (nota_final, carga_horaria, conceito, peso, aluno_id, disciplina_id))
         else:
             # Inserir
             cursor.execute("""
-                INSERT INTO rendimento_academico 
+                INSERT INTO rendimento_academico
                 (aluno_id, disciplina_id, nota_final, carga_horaria, conceito, peso)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (aluno_id, disciplina_id, nota_final, carga_horaria, conceito, peso))
-        
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({
-            "success": True, 
+            "success": True,
             "message": "Rendimento salvo com sucesso",
             "conceito": conceito,
             "peso": peso
         })
-        
+
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
 
@@ -8108,10 +7902,10 @@ def buscar_rendimento(aluno_id, disciplina_id):
     """Buscar rendimento acadêmico de um aluno em uma disciplina"""
     if not session.get("mew_admin"):
         return jsonify({"error": "Não autorizado"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         SELECT ra.*, a.nome as aluno_nome, d.nome as disciplina_nome
         FROM rendimento_academico ra
@@ -8119,11 +7913,11 @@ def buscar_rendimento(aluno_id, disciplina_id):
         JOIN disciplinas d ON ra.disciplina_id = d.id
         WHERE ra.aluno_id = %s AND ra.disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     rendimento = cursor.fetchone()
-    
+
     conn.close()
-    
+
     if rendimento:
         return jsonify({"success": True, "rendimento": dict(rendimento)})
     else:
@@ -8134,10 +7928,10 @@ def calcular_ira_aluno_completo(aluno_id):
     """Calcular IRA do aluno baseado nas disciplinas aprovadas - VERSÃO CORRIGIDA (ponderada)"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todas as disciplinas do aluno com status final
     cursor.execute("""
-        SELECT 
+        SELECT
             d.carga_horaria,
             nf.media_final,
             nf.status
@@ -8146,9 +7940,9 @@ def calcular_ira_aluno_completo(aluno_id):
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         WHERE ad.aluno_id = %s
     """, (aluno_id,))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     # Mapeamento de nota para conceito (baseado na média final 0-100)
     def nota_para_conceito_valor(nota):
         """Converte nota de 0-100 para valor do conceito"""
@@ -8157,55 +7951,55 @@ def calcular_ira_aluno_completo(aluno_id):
         elif nota >= 70: return ("C", 2.0)
         elif nota >= 60: return ("D", 1.0)
         else: return ("F", 0.0)
-    
+
     # Calcular IRA ponderado pela carga horária
     soma_pontos = 0
     soma_carga = 0
     disciplinas_aprovadas = 0
     carga_total_aprovada = 0
-    
+
     for disc in disciplinas:
         carga = disc['carga_horaria'] if disc['carga_horaria'] else 80
-        
+
         if disc['status'] == 'aprovado' and disc['media_final'] is not None:
             nota = disc['media_final']
             # Converter nota para valor do conceito
             _, valor_conceito = nota_para_conceito_valor(nota)
-            
+
             # Soma ponderada: valor_conceito * carga_horária
             soma_pontos += valor_conceito * carga
             soma_carga += carga
             disciplinas_aprovadas += 1
             carga_total_aprovada += carga
-    
+
     # IRA = Soma(conceito_valor * carga_horária) / Soma(carga_horária)
     ira = soma_pontos / soma_carga if soma_carga > 0 else 0
-    
+
     conn.close()
-    
+
     return {
         'ira': round(ira, 2),
         'disciplinas_aprovadas': disciplinas_aprovadas,
         'carga_total_aprovada': carga_total_aprovada
     }
-    
+
 @app.route("/mew/api/estatisticas-info-disciplinas")
 def api_estatisticas_info_disciplinas():
     """API para estatísticas das informações das disciplinas"""
     if not session.get("mew_admin"):
         return jsonify({"error": "Não autorizado"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Total de disciplinas
     cursor.execute("SELECT COUNT(*) as total FROM disciplinas")
     total_disciplinas = cursor.fetchone()["total"] or 0
-    
+
     # Total de docentes
     cursor.execute("SELECT COUNT(*) as total FROM docentes WHERE ativo = 1")
     total_docentes = cursor.fetchone()["total"] or 0
-    
+
     # Disciplinas com informações completas (carga horária + docente)
     cursor.execute("""
         SELECT COUNT(DISTINCT d.id) as total
@@ -8215,9 +8009,9 @@ def api_estatisticas_info_disciplinas():
            OR dd.docente_id IS NOT NULL
     """)
     disciplinas_com_info = cursor.fetchone()["total"] or 0
-    
+
     conn.close()
-    
+
     return jsonify({
         "success": True,
         "total_disciplinas": total_disciplinas,
@@ -8229,10 +8023,10 @@ def calcular_ira_aluno_completo(aluno_id):
     """Calcular IRA do aluno baseado nas disciplinas aprovadas"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar todas as disciplinas do aluno com status final
     cursor.execute("""
-        SELECT 
+        SELECT
             d.carga_horaria,
             nf.media_final,
             nf.status
@@ -8241,9 +8035,9 @@ def calcular_ira_aluno_completo(aluno_id):
         LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         WHERE ad.aluno_id = %s
     """, (aluno_id,))
-    
+
     disciplinas = cursor.fetchall()
-    
+
     # Mapeamento de conceitos
     def nota_para_conceito(nota):
         if nota >= 90: return ("A", 4.0)
@@ -8251,41 +8045,41 @@ def calcular_ira_aluno_completo(aluno_id):
         elif nota >= 70: return ("C", 2.0)
         elif nota >= 60: return ("D", 1.0)
         else: return ("F", 0.0)
-    
+
     # Calcular IRA
     soma_pontos = 0
     soma_carga = 0
     disciplinas_aprovadas = 0
-    
+
     for disc in disciplinas:
         carga = disc['carga_horaria'] if disc['carga_horaria'] else 80
-        
+
         if disc['status'] == 'aprovado' and disc['media_final'] is not None:
             nota = disc['media_final']
             conceito, valor = nota_para_conceito(nota)
             soma_pontos += valor * carga
             soma_carga += carga
             disciplinas_aprovadas += 1
-    
+
     ira = soma_pontos / soma_carga if soma_carga > 0 else 0
-    
+
     conn.close()
-    
+
     return {
         'ira': round(ira, 2),
         'disciplinas_aprovadas': disciplinas_aprovadas,
         'carga_total_aprovada': soma_carga
     }
-     
+
 def obter_configuracao_ano():
     """Obtém o ano configurado para os documentos ou usa o ano atual"""
     # Você pode criar uma tabela no banco para configurações se quiser
     # Por enquanto, vamos usar um arquivo de configuração ou variável de ambiente
     ano_configurado = os.environ.get("HISTORICO_ANO", None)
-    
+
     if ano_configurado:
         return ano_configurado
-    
+
     # Se não tiver configuração, use o ano atual
     from datetime import datetime
     return str(datetime.now().year)
@@ -8301,24 +8095,24 @@ def api_validar_codigo():
     try:
         data = request.get_json()
         codigo = data.get('codigo', '').strip().upper()
-        
+
         if not codigo:
             return jsonify({"success": False, "message": "Código não fornecido"})
-        
+
         # Conectar ao banco
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Buscar o código na tabela documentos_autenticados
         cursor.execute("""
-            SELECT id, codigo 
-            FROM documentos_autenticados 
+            SELECT id, codigo
+            FROM documentos_autenticados
             WHERE codigo = %s
         """, (codigo,))
-        
+
         documento = cursor.fetchone()
         conn.close()
-        
+
         if documento:
             # Código encontrado!
             return jsonify({
@@ -8331,7 +8125,7 @@ def api_validar_codigo():
                 "success": False,
                 "message": "❌ Código não encontrado. Verifique e tente novamente."
             })
-            
+
     except Exception as e:
         print(f"Erro na API de validação: {e}")
         return jsonify({
@@ -8346,21 +8140,21 @@ def gerar_declaracao_conclusao_route():
     """
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     try:
         data = request.get_json()
         aluno_id = data.get('aluno_id')
         disciplina_id = data.get('disciplina_id')
         ano_manual = data.get('ano_historico')
-        
+
         if not aluno_id or not disciplina_id:
             return jsonify({"success": False, "message": "Aluno ou disciplina não selecionados"})
-        
+
         # Buscar dados do aluno
         aluno_completo = buscar_dados_pessoais_completos(aluno_id)
         if not aluno_completo:
             return jsonify({"success": False, "message": "Aluno não encontrado"})
-        
+
         # Buscar dados da disciplina específica
         disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
         disciplina_selecionada = None
@@ -8368,72 +8162,72 @@ def gerar_declaracao_conclusao_route():
             if d['id'] == disciplina_id:
                 disciplina_selecionada = d
                 break
-        
+
         if not disciplina_selecionada:
             return jsonify({"success": False, "message": "Disciplina não encontrada para este aluno"})
-        
+
         # Verificar se o aluno concluiu a disciplina (tem nota final)
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id FROM notas_finais 
+            SELECT id FROM notas_finais
             WHERE aluno_id = %s AND disciplina_id = %s
         """, (aluno_id, disciplina_id))
-        
+
         if not cursor.fetchone():
             conn.close()
             return jsonify({"success": False, "message": "Aluno ainda não concluiu esta disciplina"})
         conn.close()
-        
+
         # Gerar código único
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         codigo = f"DECL-{aluno_completo['ra']}-{disciplina_id}-{timestamp}-{secrets.token_hex(4).upper()}"
-        
+
         # Gerar hash do documento
         hash_documento = gerar_hash_documento(
-            f"declaracao_{aluno_id}_{disciplina_id}", 
-            aluno_completo['ra'], 
+            f"declaracao_{aluno_id}_{disciplina_id}",
+            aluno_completo['ra'],
             timestamp
         )
-        
+
         # Gerar link de validação
         base_url = request.host_url.rstrip('/')
         link_validacao = gerar_link_validacao(codigo, base_url)
-        
+
         # Gerar HTML da declaração
         html = gerar_declaracao_conclusao(
-            aluno_id, 
-            disciplina_id, 
-            aluno_completo, 
-            disciplina_selecionada, 
+            aluno_id,
+            disciplina_id,
+            aluno_completo,
+            disciplina_selecionada,
             ano_manual
         )
-        
+
         # GERAR QR CODE com o link
         dados_qr = link_validacao
         qr_code_base64 = gerar_qrcode_base64(dados_qr)
-        
+
         # Criar metadados
         metadados = criar_metadados_documento(aluno_id, 'declaracao_conclusao', codigo, hash_documento)
-        
+
         # Data atual
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-        
+
         # ADICIONAR QR CODE AO HTML DA DECLARAÇÃO
         html_com_qr = html.replace(
             '</body>',
             f'''
     <!-- SEÇÃO DE AUTENTICAÇÃO -->
     <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #3f464b; background: #f9f9f9;">
-        
+
         <!-- CABEÇALHO DA SEÇÃO -->
         <div style="text-align: center; margin-bottom: 20px;">
             <span style="background: #3f464b; color: white; padding: 5px 20px; border-radius: 20px; font-size: 11px; font-weight: bold;">
                 🔐 DOCUMENTO AUTENTICADO DIGITALMENTE
             </span>
         </div>
-        
+
         <!-- QR CODE E INFORMAÇÕES -->
         <table style="width: 100%; border-collapse: collapse;">
             <tr>
@@ -8448,7 +8242,7 @@ def gerar_declaracao_conclusao_route():
                 </td>
             </tr>
         </table>
-        
+
         <!-- INSTRUÇÕES DE VALIDAÇÃO -->
         <div style="margin-top: 15px; background: #e8f5e8; padding: 10px; border-radius: 5px; font-size: 10px; text-align: center;">
             <p style="margin: 2px 0;">📌 Para validar este documento, acesse <strong>{base_url}/validar-documento</strong></p>
@@ -8458,53 +8252,23 @@ def gerar_declaracao_conclusao_route():
     </body>
     '''
         )
-        
+
         # Salvar no banco
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Garantir colunas
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN aluno_id INTEGER")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN qr_code TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN hash_documento TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_emissao TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_validade TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN metadados TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN disciplina_id INTEGER")
-        except:
-            pass
-        
+
         cursor.execute('''
-            INSERT INTO documentos_autenticados 
+            INSERT INTO documentos_autenticados
             (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
              qr_code, hash_documento, data_emissao, data_validade, metadados, disciplina_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
-            codigo, 
-            aluno_id, 
-            aluno_completo['nome'], 
-            aluno_completo['ra'], 
-            'declaracao_conclusao', 
-            html_com_qr, 
+            codigo,
+            aluno_id,
+            aluno_completo['nome'],
+            aluno_completo['ra'],
+            'declaracao_conclusao',
+            html_com_qr,
             data_emissao,
             qr_code_base64,
             hash_documento,
@@ -8513,10 +8277,10 @@ def gerar_declaracao_conclusao_route():
             metadados,
             disciplina_id
         ))
-        
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({
             "success": True,
             "codigo": codigo,
@@ -8530,150 +8294,68 @@ def gerar_declaracao_conclusao_route():
             "data_emissao": data_emissao,
             "data_validade": data_validade
         })
-            
+
     except Exception as e:
         import traceback
         print(f"Erro: {e}")
         print(traceback.format_exc())
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+
 @app.route('/mew/buscar-documentos-aluno/<int:aluno_id>')
 def buscar_documentos_aluno(aluno_id):
-    """Busca documentos já gerados para um aluno"""
+    """Busca metadados dos documentos em uma consulta, sem N+1 e sem HTML pesado."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
-    
-    tipo = request.args.get('tipo', '')
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    query = "SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, disciplina_id FROM documentos_autenticados WHERE aluno_id = %s"
-    params = [aluno_id]
-    
+        return jsonify({"success":False,"message":"Não autorizado"}),403
+    tipo=request.args.get('tipo','')
+    conn=get_db_connection(); cursor=conn.cursor()
+    query="""SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,
+                    COALESCE(da.tipo,da.tipo_documento) AS tipo,da.aluno_nome,da.aluno_ra,
+                    da.data_emissao,da.disciplina_id,d.nome AS disciplina_nome
+             FROM documentos_autenticados da
+             LEFT JOIN disciplinas d ON d.id=da.disciplina_id
+             WHERE da.aluno_id=%s"""
+    params=[aluno_id]
     if tipo:
-        query += " AND tipo = %s"
-        params.append(tipo)
-    
-    query += " ORDER BY data_emissao DESC"
-    
-    cursor.execute(query, params)
-    documentos = cursor.fetchall()
-    
-    # Buscar nomes das disciplinas
-    result = []
-    for doc in documentos:
-        doc_dict = dict(doc)
-        if doc_dict.get('disciplina_id'):
-            cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (doc_dict['disciplina_id'],))
-            disc = cursor.fetchone()
-            doc_dict['disciplina_nome'] = disc['nome'] if disc else None
-        result.append(doc_dict)
-    
-    conn.close()
-    
-    return jsonify({
-        "success": True,
-        "documentos": result
-    })
-    
+        query += " AND COALESCE(da.tipo,da.tipo_documento)=%s"; params.append(tipo)
+    query += " ORDER BY da.id DESC LIMIT 300"
+    cursor.execute(query,params); documentos=[dict(x) for x in cursor.fetchall()]; conn.close()
+    return jsonify({"success":True,"documentos":documentos})
+
+
 @app.route("/mew/gerenciar-documentos")
 def mew_gerenciar_documentos():
-    """Página de gerenciamento de documentos emitidos - INCLUINDO PLANOS DE ENSINO"""
+    """Gerenciamento sem carregar conteúdo HTML, QR, blobs ou arquivos."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Buscar todos os alunos para o filtro
-    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
-    alunos = cursor.fetchall()
-    
-    # Buscar estatísticas - INCLUINDO PLANOS
-    cursor.execute("SELECT COUNT(*) as total FROM documentos_autenticados")
-    total_documentos = cursor.fetchone()["total"]
-    
-    cursor.execute("SELECT COUNT(*) as total FROM documentos_enviados WHERE status = 'enviado'")
-    documentos_enviados = cursor.fetchone()["total"]
-    
-    cursor.execute("SELECT COUNT(*) as total FROM documentos_enviados WHERE status = 'visualizado'")
-    documentos_visualizados = cursor.fetchone()["total"]
-    
-    # Buscar documentos com informações de envio - AGORA INCLUI PLANOS DE ENSINO
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,nome,ra FROM alunos ORDER BY nome"); alunos=cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) AS total FROM documentos_autenticados"); total_documentos=cursor.fetchone()["total"]
+    cursor.execute("SELECT COUNT(*) AS total FROM documentos_enviados WHERE status='enviado'"); documentos_enviados=cursor.fetchone()["total"]
+    cursor.execute("SELECT COUNT(*) AS total FROM documentos_enviados WHERE status='visualizado'"); documentos_visualizados=cursor.fetchone()["total"]
     cursor.execute("""
-        SELECT 
-            da.*,
-            a.nome as aluno_nome,
-            a.ra as aluno_ra,
-            d.nome as disciplina_nome,
-            de.id as envio_id,
-            de.status as status_envio,
-            de.data_envio,
-            de.data_visualizacao,
-            de.mensagem,
-            CASE 
-                WHEN da.tipo = 'plano_ensino' THEN 'Plano de Ensino'
-                WHEN da.tipo = 'historico' THEN 'Histórico Escolar'
-                WHEN da.tipo = 'declaracao_conclusao' THEN 'Declaração de Conclusão'
-                ELSE da.tipo
-            END as tipo_display
+        SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,
+               COALESCE(da.tipo,da.tipo_documento) AS tipo,da.aluno_id,da.aluno_nome,da.aluno_ra,
+               da.disciplina_id,da.data_emissao,da.data_geracao,d.nome AS disciplina_nome,
+               de.id AS envio_id,de.status AS status_envio,de.data_envio,de.data_visualizacao,de.mensagem
         FROM documentos_autenticados da
-        LEFT JOIN alunos a ON da.aluno_id = a.id
-        LEFT JOIN disciplinas d ON da.disciplina_id = d.id
-        LEFT JOIN documentos_enviados de ON da.id = de.documento_original_id
-        ORDER BY da.data_emissao DESC
+        LEFT JOIN disciplinas d ON d.id=da.disciplina_id
+        LEFT JOIN LATERAL (
+            SELECT id,status,data_envio,data_visualizacao,mensagem
+            FROM documentos_enviados WHERE documento_original_id=da.id ORDER BY id DESC LIMIT 1
+        ) de ON TRUE
+        ORDER BY da.id DESC LIMIT 500
     """)
-    
-    documentos_raw = cursor.fetchall()
-    
-    # Agrupar documentos por ID para evitar duplicatas
-    documentos_dict = {}
-    for doc in documentos_raw:
-        doc_id = doc['id']
-        if doc_id not in documentos_dict:
-            doc_dict = dict(doc)
-            doc_dict['envios'] = []
-            if doc['envio_id']:
-                doc_dict['envios'].append({
-                    'id': doc['envio_id'],
-                    'status': doc['status_envio'],
-                    'data_envio': doc['data_envio'],
-                    'data_visualizacao': doc['data_visualizacao'],
-                    'mensagem': doc['mensagem']
-                })
-            documentos_dict[doc_id] = doc_dict
-        else:
-            if doc['envio_id']:
-                documentos_dict[doc_id]['envios'].append({
-                    'id': doc['envio_id'],
-                    'status': doc['status_envio'],
-                    'data_envio': doc['data_envio'],
-                    'data_visualizacao': doc['data_visualizacao'],
-                    'mensagem': doc['mensagem']
-                })
-    
-    documentos = list(documentos_dict.values())
+    documentos=[]
+    for row in cursor.fetchall():
+        d=dict(row); d['envios']=[]
+        if d.get('envio_id'):
+            d['envios'].append({'id':d['envio_id'],'status':d.get('status_envio'),'data_envio':d.get('data_envio'),'data_visualizacao':d.get('data_visualizacao'),'mensagem':d.get('mensagem')})
+        documentos.append(d)
     conn.close()
-    
-    # Categorias para filtro - ADICIONADO PLANO DE ENSINO
-    categorias = [
-        {'id': 'historico', 'nome': 'Histórico Escolar'},
-        {'id': 'declaracao_conclusao', 'nome': 'Declaração de Conclusão'},
-        {'id': 'plano_ensino', 'nome': 'Plano de Ensino'},
-        {'id': 'outros', 'nome': 'Outros Documentos'}
-    ]
-    
-    return render_template(
-        "mew/gerenciar_documentos.html",
-        alunos=alunos,
-        documentos=documentos,
-        categorias=categorias,
-        total_documentos=total_documentos,
-        documentos_enviados=documentos_enviados,
-        documentos_visualizados=documentos_visualizados
-    )
-    
+    categorias=[{'id':'historico','nome':'Histórico Escolar'},{'id':'declaracao_conclusao','nome':'Declaração de Conclusão'},{'id':'plano_ensino','nome':'Plano de Ensino'},{'id':'outros','nome':'Outros Documentos'}]
+    return render_template("mew/gerenciar_documentos.html",alunos=alunos,documentos=documentos,categorias=categorias,total_documentos=total_documentos,documentos_enviados=documentos_enviados,documentos_visualizados=documentos_visualizados)
+
+
 @app.route('/mew/gerar-historico-automatico', methods=['POST'])
 def gerar_historico_automatico_route():
     """
@@ -8681,86 +8363,86 @@ def gerar_historico_automatico_route():
     """
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     try:
         data = request.get_json()
         aluno_id = data.get('aluno_id')
         ano_manual = data.get('ano_historico')
-        
+
         # 👇 PEGAR OS VALORES MANUAIS DO FORMULÁRIO
         ira_manual = data.get('ira_manual', 'N/I')
         total_disciplinas_manual = data.get('total_disciplinas', '0')
         frequencia = data.get('frequencia', 'N/I')  # 👈 DEFINIR A VARIÁVEL AQUI!
-        
+
         if not aluno_id:
             return jsonify({"success": False, "message": "Aluno não selecionado"})
-        
+
         # Buscar dados do aluno
         aluno_completo = buscar_dados_pessoais_completos(aluno_id)
         if not aluno_completo:
             return jsonify({"success": False, "message": "Aluno não encontrado"})
-        
+
         # Buscar disciplinas do aluno
         disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
         if not disciplinas:
             return jsonify({"success": False, "message": "Aluno não tem disciplinas"})
-        
+
         # Gerar código único
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         codigo = f"HIST-{aluno_completo['ra']}-{timestamp}-{secrets.token_hex(4).upper()}"
-        
+
         # Gerar hash do documento
         hash_documento = gerar_hash_documento(
-            f"historico_{aluno_id}_{timestamp}", 
-            aluno_completo['ra'], 
+            f"historico_{aluno_id}_{timestamp}",
+            aluno_completo['ra'],
             timestamp
         )
-        
+
         # Gerar link de validação
         base_url = request.host_url.rstrip('/')
         link_validacao = f"{base_url}/validar-documento/{codigo}"
-        
+
         # GERAR QR CODE
-        dados_qr = link_validacao 
+        dados_qr = link_validacao
         qr_code_base64 = gerar_qrcode_base64(dados_qr)
-        
+
         # 👇 PASSAR OS VALORES MANUAIS PARA A FUNÇÃO (10 PARÂMETROS)
         html = gerar_historico_automatico(
-            aluno_id, 
-            disciplinas, 
-            aluno_completo, 
-            qr_code_base64, 
-            codigo, 
+            aluno_id,
+            disciplinas,
+            aluno_completo,
+            qr_code_base64,
+            codigo,
             hash_documento,
             ano_manual,
             ira_manual,
             total_disciplinas_manual,
             frequencia  # 👈 10º PARÂMETRO
         )
-        
+
         # Criar metadados
         metadados = criar_metadados_documento(aluno_id, 'historico', codigo, hash_documento)
-        
+
         # Data atual
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-        
+
         # Salvar no banco
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute('''
-            INSERT INTO documentos_autenticados 
+            INSERT INTO documentos_autenticados
             (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
              qr_code, hash_documento, data_emissao, data_validade, metadados)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (
-            codigo, 
-            aluno_id, 
-            aluno_completo['nome'], 
-            aluno_completo['ra'], 
-            'historico', 
-            html, 
+            codigo,
+            aluno_id,
+            aluno_completo['nome'],
+            aluno_completo['ra'],
+            'historico',
+            html,
             data_emissao,
             qr_code_base64,
             hash_documento,
@@ -8768,10 +8450,10 @@ def gerar_historico_automatico_route():
             data_validade,
             metadados
         ))
-        
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({
             "success": True,
             "codigo": codigo,
@@ -8784,7 +8466,7 @@ def gerar_historico_automatico_route():
             "data_emissao": data_emissao,
             "data_validade": data_validade
         })
-            
+
     except Exception as e:
         import traceback
         print(f"Erro: {e}")
@@ -8797,47 +8479,47 @@ def mew_enviar_documento_aluno(documento_id):
     """Envia um documento para a área do aluno"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     try:
         data = request.get_json()
         mensagem_personalizada = data.get('mensagem', '')
         aluno_id = data.get('aluno_id')  # 👈 RECEBER O ALUNO_ID DO FORMULÁRIO
-        
+
         if not aluno_id:
             return jsonify({"success": False, "message": "Selecione um aluno para enviar o documento"})
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Buscar documento original
         cursor.execute("""
-            SELECT * FROM documentos_autenticados 
-            WHERE id = %s
+            SELECT id,COALESCE(codigo,codigo_autenticacao) AS codigo,COALESCE(tipo,tipo_documento) AS tipo,disciplina_id
+            FROM documentos_autenticados WHERE id = %s
         """, (documento_id,))
-        
+
         documento_row = cursor.fetchone()
-        
+
         if not documento_row:
             conn.close()
             return jsonify({"success": False, "message": "Documento não encontrado"})
-        
+
         # Converter para dicionário
         documento = dict(documento_row)
-        
+
         # Verificar se o aluno existe
         cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
         if not aluno:
             conn.close()
             return jsonify({"success": False, "message": "Aluno não encontrado no sistema"})
-        
+
         # Buscar nome da disciplina se houver
         disciplina_nome = None
         if documento.get('disciplina_id'):
             cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (documento['disciplina_id'],))
             disc = cursor.fetchone()
             disciplina_nome = disc['nome'] if disc else None
-        
+
         # Determinar título do documento baseado no tipo
         if documento['tipo'] == 'historico':
             titulo = "Histórico Escolar"
@@ -8847,22 +8529,22 @@ def mew_enviar_documento_aluno(documento_id):
             titulo = f"Plano de Ensino - {disciplina_nome}" if disciplina_nome else "Plano de Ensino"
         else:
             titulo = "Documento Acadêmico"
-        
+
         # Gerar mensagem padrão
         mensagem_padrao = gerar_mensagem_padrao(
-            documento['tipo'], 
+            documento['tipo'],
             aluno['nome'],
             disciplina_nome
         )
-        
+
         # Usar mensagem personalizada se fornecida, senão usar padrão
         mensagem_final = mensagem_personalizada if mensagem_personalizada.strip() else mensagem_padrao
-        
+
         # Inserir registro de envio
         data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
+
         cursor.execute("""
-            INSERT INTO documentos_enviados 
+            INSERT INTO documentos_enviados
             (documento_original_id, aluno_id, codigo, tipo, titulo, disciplina_id, data_envio, mensagem, status)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'enviado')
             RETURNING id
@@ -8876,18 +8558,18 @@ def mew_enviar_documento_aluno(documento_id):
             data_envio,
             mensagem_final
         ))
-        
+
         envio_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
-        
+
         return jsonify({
-            "success": True, 
+            "success": True,
             "message": f"Documento enviado para {aluno['nome']} com sucesso!",
             "envio_id": envio_id,
             "data_envio": data_envio
         })
-        
+
     except Exception as e:
         import traceback
         print(f"Erro ao enviar documento: {e}")
@@ -8895,20 +8577,20 @@ def mew_enviar_documento_aluno(documento_id):
         if 'conn' in locals():
             conn.close()
         return jsonify({"success": False, "message": f"Erro ao enviar documento: {str(e)}"})
-    
+
 @app.route("/meus-documentos")
 def meus_documentos():
     """Página do aluno para ver documentos recebidos"""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar documentos enviados para este aluno
     cursor.execute("""
-        SELECT 
+        SELECT
             de.*,
             da.conteudo_html,
             d.nome as disciplina_nome
@@ -8918,14 +8600,14 @@ def meus_documentos():
         WHERE de.aluno_id = %s
         ORDER BY de.data_envio DESC
     """, (aluno_id,))
-    
+
     documentos = cursor.fetchall()
-    
+
     # Contar não visualizados
     nao_visualizados = sum(1 for d in documentos if d['status'] == 'enviado')
-    
+
     conn.close()
-    
+
     return render_template(
         "aluno/meus_documentos.html",
         documentos=documentos,
@@ -8939,10 +8621,10 @@ def visualizar_documento(envio_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar documento e verificar se pertence ao aluno
     cursor.execute("""
         SELECT de.*, da.conteudo_html, da.codigo, a.nome as aluno_nome
@@ -8951,25 +8633,25 @@ def visualizar_documento(envio_id):
         JOIN alunos a ON de.aluno_id = a.id
         WHERE de.id = %s AND de.aluno_id = %s
     """, (envio_id, aluno_id))
-    
+
     documento = cursor.fetchone()
-    
+
     if not documento:
         conn.close()
         return "Documento não encontrado ou acesso negado", 404
-    
+
     # Atualizar status para visualizado se ainda não foi
     if documento['status'] == 'enviado':
         data_visualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
         cursor.execute("""
-            UPDATE documentos_enviados 
+            UPDATE documentos_enviados
             SET status = 'visualizado', data_visualizacao = %s
             WHERE id = %s
         """, (data_visualizacao, envio_id))
         conn.commit()
-    
+
     conn.close()
-    
+
     # Adicionar cabeçalho informativo
     html_completo = f"""
     <!DOCTYPE html>
@@ -9025,13 +8707,13 @@ def visualizar_documento(envio_id):
             📄 Documento disponibilizado pela SiGEu Educa • Facop CTP
             <span class="badge">Código: {documento['codigo']}</span>
         </div>
-        
+
         <div class="document-container">
             {documento['conteudo_html']}
         </div>
-        
+
         <a href="/meus-documentos" class="back-btn">← Voltar para Meus Documentos</a>
-        
+
         <script>
             // Registrar download quando imprimir/baixar PDF
             document.addEventListener('keydown', function(e) {{
@@ -9044,7 +8726,7 @@ def visualizar_documento(envio_id):
     </body>
     </html>
     """
-    
+
     return html_completo
 
 @app.route("/registrar-download-documento/<int:envio_id>", methods=["POST"])
@@ -9053,113 +8735,67 @@ def registrar_download_documento(envio_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        UPDATE documentos_enviados 
-        SET status = 'baixado' 
+        UPDATE documentos_enviados
+        SET status = 'baixado'
         WHERE id = %s AND aluno_id = %s
     """, (envio_id, aluno_id))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True})
 
 @app.route("/mew/filtrar-documentos")
 def mew_filtrar_documentos():
-    """API para filtrar documentos"""
     if not session.get("mew_admin"):
-        return jsonify({"error": "Não autorizado"})
-    
-    aluno_id = request.args.get('aluno_id', '')
-    categoria = request.args.get('categoria', '')
-    status = request.args.get('status', '')
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    query = """
-        SELECT 
-            da.*,
-            a.nome as aluno_nome,
-            a.ra as aluno_ra,
-            d.nome as disciplina_nome,
-            de.id as envio_id,
-            de.status as status_envio,
-            de.data_envio,
-            de.data_visualizacao
-        FROM documentos_autenticados da
-        JOIN alunos a ON da.aluno_id = a.id
-        LEFT JOIN disciplinas d ON da.disciplina_id = d.id
-        LEFT JOIN documentos_enviados de ON da.id = de.documento_original_id
-        WHERE 1=1
-    """
-    params = []
-    
-    if aluno_id:
-        query += " AND da.aluno_id = %s"
-        params.append(aluno_id)
-    
-    if categoria and categoria != 'todos':
-        query += " AND da.tipo = %s"
-        params.append(categoria)
-    
-    if status:
-        if status == 'enviados':
-            query += " AND de.id IS NOT NULL"
-        elif status == 'nao_enviados':
-            query += " AND de.id IS NULL"
-        elif status == 'visualizados':
-            query += " AND de.status = 'visualizado'"
-    
-    query += " ORDER BY da.data_emissao DESC"
-    
-    cursor.execute(query, params)
-    documentos = cursor.fetchall()
-    
-    conn.close()
-    
-    # Converter para lista de dicionários
-    resultado = []
-    for doc in documentos:
-        doc_dict = dict(doc)
-        resultado.append(doc_dict)
-    
-    return jsonify({"success": True, "documentos": resultado})
+        return jsonify({"error":"Não autorizado"}),403
+    aluno_id=request.args.get('aluno_id',''); categoria=request.args.get('categoria',''); status=request.args.get('status','')
+    query="""SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,
+                    COALESCE(da.tipo,da.tipo_documento) AS tipo,da.aluno_id,da.aluno_nome,da.aluno_ra,
+                    da.disciplina_id,da.data_emissao,d.nome AS disciplina_nome,
+                    de.id AS envio_id,de.status AS status_envio,de.data_envio,de.data_visualizacao
+             FROM documentos_autenticados da
+             LEFT JOIN disciplinas d ON d.id=da.disciplina_id
+             LEFT JOIN LATERAL (SELECT id,status,data_envio,data_visualizacao FROM documentos_enviados
+                 WHERE documento_original_id=da.id ORDER BY id DESC LIMIT 1) de ON TRUE
+             WHERE 1=1"""
+    params=[]
+    if aluno_id: query += " AND da.aluno_id=%s"; params.append(aluno_id)
+    if categoria and categoria!='todos': query += " AND COALESCE(da.tipo,da.tipo_documento)=%s"; params.append(categoria)
+    if status=='enviados': query += " AND de.id IS NOT NULL"
+    elif status=='nao_enviados': query += " AND de.id IS NULL"
+    elif status=='visualizados': query += " AND de.status='visualizado'"
+    query += " ORDER BY da.id DESC LIMIT 500"
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute(query,params); resultado=[dict(x) for x in cursor.fetchall()]; conn.close()
+    return jsonify({"success":True,"documentos":resultado})
+
 
 
 @app.route("/mew/excluir-documento/<int:documento_id>")
 def mew_excluir_documento(documento_id):
-    """Exclui um documento e seus envios relacionados"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
+    conn=get_db_connection(); cursor=conn.cursor()
     try:
-        # Verificar se tem envios
-        cursor.execute("SELECT id FROM documentos_enviados WHERE documento_original_id = %s", (documento_id,))
-        tem_envios = cursor.fetchone()
-        
-        if tem_envios:
-            # Primeiro excluir os envios
-            cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id = %s", (documento_id,))
-        
-        # Depois excluir o documento original
-        cursor.execute("DELETE FROM documentos_autenticados WHERE id = %s", (documento_id,))
-        
-        conn.commit()
-        conn.close()
-        
+        cursor.execute("SELECT arquivo_r2_key FROM documentos_autenticados WHERE id=%s",(documento_id,)); row=cursor.fetchone()
+        if not row:
+            conn.close(); return redirect("/mew/gerenciar-documentos?erro=Documento+não+encontrado")
+        cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id=%s",(documento_id,))
+        cursor.execute("DELETE FROM documentos_autenticados WHERE id=%s",(documento_id,)); conn.commit(); conn.close()
+        if row.get('arquivo_r2_key'):
+            try: delete_object(row['arquivo_r2_key'])
+            except Exception as e: app.logger.warning("Falha ao excluir arquivo R2 do documento %s: %s",documento_id,e)
         return redirect("/mew/gerenciar-documentos?sucesso=Documento+excluído+com+sucesso")
-        
     except Exception as e:
-        conn.close()
+        try: conn.rollback(); conn.close()
+        except Exception: pass
         return redirect(f"/mew/gerenciar-documentos?erro=Erro+ao+excluir:+{str(e)}")
+
 
 @app.route("/registrar-visualizacao-documento/<int:envio_id>", methods=["POST"])
 def registrar_visualizacao_documento(envio_id):
@@ -9167,21 +8803,21 @@ def registrar_visualizacao_documento(envio_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     data_visualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
-    
+
     cursor.execute("""
-        UPDATE documentos_enviados 
+        UPDATE documentos_enviados
         SET status = 'visualizado', data_visualizacao = %s
         WHERE id = %s AND aluno_id = %s AND status = 'enviado'
     """, (data_visualizacao, envio_id, aluno_id))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True})
 
 @app.route("/meus-documentos-api")
@@ -9190,13 +8826,13 @@ def meus_documentos_api():
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Buscar documentos enviados para este aluno
     cursor.execute("""
-        SELECT 
+        SELECT
             de.id,
             de.documento_original_id,
             de.codigo,
@@ -9212,28 +8848,28 @@ def meus_documentos_api():
         WHERE de.aluno_id = %s
         ORDER BY de.data_envio DESC
     """, (aluno_id,))
-    
+
     documentos = cursor.fetchall()
     conn.close()
-    
+
     # Converter para lista de dicionários
     resultado = []
     for doc in documentos:
         doc_dict = dict(doc)
         resultado.append(doc_dict)
-    
+
     return jsonify({"success": True, "documentos": resultado})
 
 
 def gerar_mensagem_padrao(tipo_documento, aluno_nome, disciplina_nome=None):
     """Gera mensagem padrão para envio de documentos"""
-    
+
     if tipo_documento == 'historico':
         return f"""Olá {aluno_nome},
 
 Seu Histórico Escolar foi gerado com sucesso! 📄
 
-Este documento oficial contém todas as disciplinas cursadas, notas e carga horária. 
+Este documento oficial contém todas as disciplinas cursadas, notas e carga horária.
 Ele possui autenticação digital com QR Code e pode ser validado no site da instituição.
 
 Para visualizar e baixar seu histórico:
@@ -9245,7 +8881,7 @@ Qualquer dúvida, estamos à disposição.
 
 Atenciosamente,
 Secretaria Acadêmica SiGEu Educacional"""
-    
+
     elif tipo_documento == 'declaracao_conclusao':
         return f"""Olá {aluno_nome},
 
@@ -9263,7 +8899,7 @@ Parabéns pela conquista!
 
 Atenciosamente,
 Secretaria Acadêmica SiGEu Educ • Facop CTF"""
-    
+
     elif tipo_documento == 'plano_ensino':
         return f"""Olá {aluno_nome},
 
@@ -9281,7 +8917,7 @@ Bons estudos!
 
 Atenciosamente,
 Coordenação Acadêmica SiGEu Educacional - FACOP Certificadora"""
-    
+
     else:
         return f"""Olá {aluno_nome},
 
@@ -9306,7 +8942,6 @@ def mew_gerar_plano_ensino():
     """Gera plano já vinculado a uma disciplina real do cadastro."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    init_documentos_integrados_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, nome, COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas ORDER BY nome")
@@ -9322,7 +8957,6 @@ def mew_processar_plano_ensino():
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"}), 403
 
-    init_documentos_integrados_db()
     dados_recebidos = request.get_json(silent=True) or {}
 
     try:
@@ -9437,33 +9071,31 @@ def mew_processar_plano_ensino():
 
 @app.route("/mew/planos-ensino")
 def mew_planos_ensino():
-    """Lista planos e mostra claramente a disciplina vinculada."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn=get_db_connection(); cursor=conn.cursor()
     cursor.execute("""
-        SELECT da.*, d.nome AS disciplina
+        SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,da.data_geracao,da.data_emissao,
+               da.hash_documento,da.disciplina_id,d.nome AS disciplina,
+               COALESCE(e.total_envios,0) AS total_envios
         FROM documentos_autenticados da
         LEFT JOIN disciplinas d ON d.id=da.disciplina_id
-        WHERE da.tipo='plano_ensino'
-        ORDER BY da.id DESC
-    """)
-    planos = cursor.fetchall()
-    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome")
-    disciplinas = cursor.fetchall()
-    conn.close()
-    return render_template("mew/planos_ensino.html", planos=planos, total_planos=len(planos), disciplinas=disciplinas)
+        LEFT JOIN LATERAL (SELECT COUNT(*) AS total_envios FROM documentos_enviados WHERE documento_original_id=da.id) e ON TRUE
+        WHERE COALESCE(da.tipo,da.tipo_documento)='plano_ensino'
+        ORDER BY da.id DESC LIMIT 500
+    """); planos=cursor.fetchall()
+    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome"); disciplinas=cursor.fetchall(); conn.close()
+    return render_template("mew/planos_ensino.html",planos=planos,total_planos=len(planos),disciplinas=disciplinas)
 
 
 
-def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria, 
+
+def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                              modalidade, docente, data_formatada, qr_code_base64, **kwargs):
     """Gera o HTML completo do plano de ensino com QR Code"""
-    
+
     from api_planos import METODOLOGIA_FIXA, SISTEMA_AVALIACAO_FIXO
-    
+
     # Extrair campos do kwargs (vindos da IA)
     objetivo_geral = kwargs.get('objetivo_geral', '')
     objetivos_especificos = kwargs.get('objetivos_especificos', '')
@@ -9471,11 +9103,11 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     conteudo_programatico = kwargs.get('conteudo_programatico', '')
     habilidades = kwargs.get('habilidades', '')
     enquadramento_curricular = kwargs.get('enquadramento_curricular', '')
-    
+
     # Bibliografia gerada automaticamente pela IA
     bibliografia_basica = kwargs.get('bibliografia_basica', '')
     bibliografia_complementar = kwargs.get('bibliografia_complementar', '')
-    
+
     # Processar bibliografia básica (converter texto simples em HTML)
     if bibliografia_basica:
         bibliografia_basica = bibliografia_basica.replace('\n', '<br>')
@@ -9483,16 +9115,16 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 # Processar bibliografia complementar
     if bibliografia_complementar:
         bibliografia_complementar = bibliografia_complementar.replace('\n', '<br>')
-    
+
     # Garantir que enquadramento tenha formatação adequada
     if enquadramento_curricular and '<br>' not in enquadramento_curricular:
         enquadramento_curricular = enquadramento_curricular.replace('\n', '<br>')
-    
+
     # Campos opcionais
     encontros_sincronos = kwargs.get('encontros_sincronos', 'Conforme cronograma')
     plataforma = kwargs.get('plataforma', 'AVA - Ambiente Virtual de Aprendizagem')
     pre_requisitos = kwargs.get('pre_requisitos', 'Não há pré-requisitos formais.')
-    
+
     # HTML do plano (mesmo template do sistema original)
     html = f'''<!DOCTYPE html>
 <html lang="pt-BR">
@@ -9756,7 +9388,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             white-space: pre-line;
             color: #1a1a1a;
         }}
-        
+
         .conteudo-programatico strong {{
             font-size: 11pt;
             color: #3f464b; /* Azul marinho */
@@ -9779,7 +9411,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         /* FÓRMULAS - ESTILO DE DESTAQUE IGUAL DECLARAÇÃO */
         .formula {{
             font-family: 'Courier New', monospace;
-            background: #f5f5f5;  
+            background: #f5f5f5;
             padding: 8pt 12pt;
             border-left: 4px solid #3f464b; /* Borda azul marinho */
             margin: 10pt 0;
@@ -9985,7 +9617,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             transform: scale(1.02);
             box-shadow: 0 8px 16px rgba(0,0,0,0.2);
         }}
-        
+
         .borda-seguranca {{
     position: absolute;
     top: 8mm;
@@ -10069,7 +9701,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: 
+    background-image:
         repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
         repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
     pointer-events: none;
@@ -10462,95 +10094,101 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     </div>
 </body>
 </html>'''
-    
+
     return html
 
 @app.route("/mew/excluir-documentos-lote", methods=["POST"])
 def mew_excluir_documentos_lote():
-    """Exclui múltiplos documentos em lote"""
+    """Exclui múltiplos documentos e limpa os objetos R2 somente após o commit do banco."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
-    
+        return jsonify({"success": False, "message": "Não autorizado"}), 403
+
+    conn = None
     try:
-        data = request.get_json()
-        documento_ids = data.get('documento_ids', [])
-        
+        data = request.get_json(silent=True) or {}
+        documento_ids = []
+        for value in data.get("documento_ids", []):
+            try:
+                documento_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        documento_ids = sorted(set(documento_ids))
         if not documento_ids:
-            return jsonify({"success": False, "message": "Nenhum documento selecionado"})
-        
+            return jsonify({"success": False, "message": "Nenhum documento selecionado"}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Criar placeholders para a query
-        placeholders = ','.join(['%s'] * len(documento_ids))
-        
-        # Primeiro excluir envios relacionados
-        cursor.execute(f"""
-            DELETE FROM documentos_enviados 
-            WHERE documento_original_id IN ({placeholders})
-        """, documento_ids)
-        
-        # Depois excluir documentos originais
-        cursor.execute(f"""
-            DELETE FROM documentos_autenticados 
-            WHERE id IN ({placeholders})
-        """, documento_ids)
-        
+        cursor.execute("SELECT id, arquivo_r2_key FROM documentos_autenticados WHERE id = ANY(%s)", (documento_ids,))
+        arquivos = cursor.fetchall()
+        cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id = ANY(%s)", (documento_ids,))
+        cursor.execute("DELETE FROM documentos_autenticados WHERE id = ANY(%s)", (documento_ids,))
         excluidos = cursor.rowcount
         conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "success": True, 
-            "message": f"{excluidos} documento(s) excluído(s)",
-            "excluidos": excluidos
-        })
-        
+        conn.close(); conn = None
+
+        falhas_r2 = 0
+        for row in arquivos:
+            key = row.get("arquivo_r2_key")
+            if not key:
+                continue
+            try:
+                delete_object(key)
+            except Exception as exc:
+                falhas_r2 += 1
+                app.logger.warning("Falha ao remover R2 do documento %s: %s", row.get("id"), exc)
+
+        mensagem = f"{excluidos} documento(s) excluído(s)"
+        if falhas_r2:
+            mensagem += f"; {falhas_r2} objeto(s) do R2 ficaram pendentes de limpeza"
+        return jsonify({"success": True, "message": mensagem, "excluidos": excluidos, "falhas_r2": falhas_r2})
     except Exception as e:
-        if 'conn' in locals():
-            conn.close()
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+        if conn is not None:
+            try:
+                conn.rollback(); conn.close()
+            except Exception:
+                pass
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/mew/enviar-plano-aluno/<int:documento_id>", methods=["POST"])
 def mew_enviar_plano_aluno(documento_id):
     """Envia um plano de ensino para um aluno específico"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     try:
         data = request.get_json()
         aluno_id = data.get('aluno_id')
         mensagem_personalizada = data.get('mensagem', '')
-        
+
         if not aluno_id:
             return jsonify({"success": False, "message": "Selecione um aluno"})
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Buscar documento original (plano de ensino)
         cursor.execute("""
-            SELECT * FROM documentos_autenticados 
-            WHERE id = %s AND tipo = 'plano_ensino'
+            SELECT id,COALESCE(codigo,codigo_autenticacao) AS codigo,disciplina_id
+            FROM documentos_autenticados WHERE id = %s AND COALESCE(tipo,tipo_documento) = 'plano_ensino'
         """, (documento_id,))
-        
+
         documento = cursor.fetchone()
         if not documento:
             conn.close()
             return jsonify({"success": False, "message": "Plano de ensino não encontrado"})
-        
+
         # Buscar dados do aluno
         cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
         aluno = cursor.fetchone()
         if not aluno:
             conn.close()
             return jsonify({"success": False, "message": "Aluno não encontrado"})
-        
+
         # Buscar nome da disciplina (do documento original)
         cursor.execute("SELECT nome FROM disciplinas WHERE id = %s", (documento['disciplina_id'],))
         disciplina = cursor.fetchone()
         disciplina_nome = disciplina['nome'] if disciplina else "Disciplina"
-        
+
         # Gerar mensagem padrão
         mensagem_padrao = f"""Olá {aluno['nome']},
 
@@ -10568,14 +10206,14 @@ Bons estudos!
 
 Atenciosamente,
 Coordenação Acadêmica SiGEU Educacional"""
-        
+
         mensagem_final = mensagem_personalizada if mensagem_personalizada.strip() else mensagem_padrao
-        
+
         # Inserir registro de envio
         data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
-        
+
         cursor.execute("""
-            INSERT INTO documentos_enviados 
+            INSERT INTO documentos_enviados
             (documento_original_id, aluno_id, codigo, tipo, titulo, disciplina_id, data_envio, mensagem, status)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'enviado')
             RETURNING id
@@ -10589,18 +10227,18 @@ Coordenação Acadêmica SiGEU Educacional"""
             data_envio,
             mensagem_final
         ))
-        
+
         envio_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
-        
+
         return jsonify({
             "success": True,
             "message": f"Plano de ensino enviado para {aluno['nome']}",
             "envio_id": envio_id,
             "data_envio": data_envio
         })
-        
+
     except Exception as e:
         import traceback
         print(f"Erro: {e}")
@@ -10608,19 +10246,13 @@ Coordenação Acadêmica SiGEU Educacional"""
         if 'conn' in locals():
             conn.close()
         return jsonify({"success": False, "message": f"Erro: {str(e)}"})
-    
+
 @app.route("/mew/testar-chave-api")
 def testar_chave_api():
-    """Rota temporária para testar se a chave API está configurada"""
+    """Confere somente a presença da chave; nunca revela prefixo, tamanho ou conteúdo."""
     if not session.get("mew_admin"):
-        return "Não autorizado"
-    
-    chave = os.getenv("OPENAI_API_KEY")
-    if chave:
-        # Mostra apenas os primeiros 5 caracteres por segurança
-        return f"API Key configurada: {chave[:5]}... (tamanho: {len(chave)})"
-    else:
-        return "API Key NÃO configurada no ambiente"
+        return "Não autorizado", 403
+    return "API Key configurada no ambiente" if os.getenv("OPENAI_API_KEY") else "API Key NÃO configurada no ambiente"
 
 # ============================================
 # ROTAS PARA DISCIPLINAS ALTERNATIVAS (ALUNO)
@@ -10632,16 +10264,16 @@ def disciplina_alternativa(disciplina_id):
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # Verificar se o aluno está matriculado
     cursor.execute("""
-        SELECT * FROM aluno_disciplina_alternativa 
+        SELECT * FROM aluno_disciplina_alternativa
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     if not cursor.fetchone():
         conn.close()
         return '''
@@ -10651,22 +10283,22 @@ def disciplina_alternativa(disciplina_id):
             <title>Acesso Negado</title>
             <style>
                 body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                .error-box { 
-                    background: #f8d7da; 
-                    color: #721c24; 
-                    padding: 30px; 
-                    border-radius: 10px; 
-                    margin: 20px auto; 
+                .error-box {
+                    background: #f8d7da;
+                    color: #721c24;
+                    padding: 30px;
+                    border-radius: 10px;
+                    margin: 20px auto;
                     max-width: 600px;
                     border: 1px solid #f5c6cb;
                 }
-                .btn { 
-                    display: inline-block; 
-                    background: #007bff; 
-                    color: white; 
-                    padding: 10px 20px; 
-                    text-decoration: none; 
-                    border-radius: 5px; 
+                .btn {
+                    display: inline-block;
+                    background: #343a40;
+                    color: white;
+                    padding: 10px 20px;
+                    text-decoration: none;
+                    border-radius: 5px;
                     margin-top: 20px;
                 }
             </style>
@@ -10680,34 +10312,34 @@ def disciplina_alternativa(disciplina_id):
         </body>
         </html>
         '''
-    
+
     # Buscar dados da disciplina
     cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     if not disciplina:
         conn.close()
         return "Disciplina não encontrada", 404
-    
+
     # Buscar anexos do aluno nesta disciplina
     cursor.execute("""
-        SELECT * FROM anexos_disciplina_alternativa 
+        SELECT * FROM anexos_disciplina_alternativa
         WHERE aluno_id = %s AND disciplina_id = %s
         ORDER BY data_envio DESC
     """, (aluno_id, disciplina_id))
-    
+
     anexos = cursor.fetchall()
-    
+
     # Buscar nota final
     cursor.execute("""
-        SELECT * FROM notas_finais_alternativas 
+        SELECT * FROM notas_finais_alternativas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     nota_final = cursor.fetchone()
-    
+
     conn.close()
-    
+
     return render_template(
         "disciplina_alternativa.html",
         disciplina=disciplina,
@@ -10719,105 +10351,76 @@ def disciplina_alternativa(disciplina_id):
 
 @app.route("/enviar-anexo", methods=["POST"])
 def enviar_anexo():
-    """Envia um anexo para a disciplina alternativa"""
+    """Envia anexo da disciplina alternativa diretamente ao R2."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
-        return jsonify({"success": False, "message": "Não autenticado"})
-    
+        return jsonify({"success": False, "message": "Não autenticado"}), 401
     disciplina_id = request.form.get("disciplina_id")
-    descricao = request.form.get("descricao", "")
-    
-    if not disciplina_id:
-        return jsonify({"success": False, "message": "Disciplina não identificada"})
-    
-    # Verificar se tem arquivo
-    if 'anexo' not in request.files:
-        return jsonify({"success": False, "message": "Nenhum arquivo enviado"})
-    
-    arquivo = request.files['anexo']
-    
-    if arquivo.filename == '':
-        return jsonify({"success": False, "message": "Nenhum arquivo selecionado"})
-    
-    # Salvar arquivo
+    descricao = (request.form.get("descricao") or "").strip()
+    arquivo = request.files.get("anexo")
+    if not disciplina_id or not arquivo or not arquivo.filename:
+        return jsonify({"success": False, "message": "Disciplina ou arquivo não informado"}), 400
+    if not r2_is_configured():
+        return jsonify({"success": False, "message": "Cloudflare R2 ainda não foi configurado."}), 503
+
+    nome_original = secure_filename(arquivo.filename) or "anexo"
+    extensao = nome_original.rsplit(".", 1)[1].lower() if "." in nome_original else ""
+    extensoes_permitidas = {"pdf", "doc", "docx", "jpg", "jpeg", "png", "zip"}
+    if extensao not in extensoes_permitidas:
+        return jsonify({"success": False, "message": "Formato não permitido. Use PDF, DOC, DOCX, JPG, PNG ou ZIP."}), 400
+    mime = arquivo.mimetype or guess_content_type(nome_original)
+    key = make_key("disciplinas-alternativas", nome_original, disciplina_id, aluno_id)
     try:
-        # Criar diretório se não existir
-        upload_dir = os.path.join('static', 'uploads', 'disciplinas_alternativas', str(disciplina_id))
-        os.makedirs(upload_dir, exist_ok=True)
-        
-        # Gerar nome único para o arquivo
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_seguro = f"aluno_{aluno_id}_{timestamp}_{arquivo.filename}"
-        caminho_arquivo = os.path.join(upload_dir, nome_seguro)
-        
-        arquivo.save(caminho_arquivo)
-        
-        # URL pública
-        url_arquivo = f"/{caminho_arquivo.replace(os.sep, '/')}"
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO anexos_disciplina_alternativa 
-            (aluno_id, disciplina_id, nome_arquivo, url_arquivo, descricao, data_envio, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pendente')
-        """, (aluno_id, disciplina_id, arquivo.filename, url_arquivo, descricao, 
-              datetime.now().strftime("%d/%m/%Y %H:%M")))
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "success": True, 
-            "message": "Arquivo enviado com sucesso! Aguarde a correção do professor."
-        })
-        
+        r2_upload_fileobj(arquivo.stream, key, mime, {"aluno_id": aluno_id, "disciplina_id": disciplina_id})
+        conn = get_db_connection(); cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO anexos_disciplina_alternativa
+                (aluno_id, disciplina_id, nome_arquivo, url_arquivo, descricao, data_envio, status, r2_key, content_type)
+                VALUES (%s,%s,%s,NULL,%s,%s,'pendente',%s,%s)
+                RETURNING id
+            """, (aluno_id, disciplina_id, arquivo.filename, descricao,
+                  datetime.now().strftime("%d/%m/%Y %H:%M"), key, mime))
+            anexo_id = cursor.fetchone()["id"]
+            conn.commit()
+        except Exception:
+            conn.rollback(); raise
+        finally:
+            conn.close()
+        return jsonify({"success": True, "message": "Arquivo enviado com sucesso! Aguarde a correção do professor.", "anexo_id": anexo_id})
     except Exception as e:
-        return jsonify({"success": False, "message": f"Erro ao enviar arquivo: {str(e)}"})
+        try: delete_object(key)
+        except Exception: pass
+        return jsonify({"success": False, "message": f"Erro ao enviar arquivo: {e}"}), 500
+
 
 @app.route("/excluir-anexo/<int:anexo_id>", methods=["POST"])
 def excluir_anexo(anexo_id):
-    """Exclui um anexo do aluno (apenas se não corrigido)"""
+    """Exclui anexo pendente do aluno e remove o objeto do R2 quando aplicável."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
-        return jsonify({"success": False, "message": "Não autenticado"})
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Verificar se o anexo pertence ao aluno e está pendente
-    cursor.execute("""
-        SELECT url_arquivo, status FROM anexos_disciplina_alternativa 
-        WHERE id = %s AND aluno_id = %s
-    """, (anexo_id, aluno_id))
-    
+        return jsonify({"success": False, "message": "Não autenticado"}), 401
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("SELECT r2_key, url_arquivo, status FROM anexos_disciplina_alternativa WHERE id=%s AND aluno_id=%s", (anexo_id, aluno_id))
     anexo = cursor.fetchone()
-    
     if not anexo:
-        conn.close()
-        return jsonify({"success": False, "message": "Anexo não encontrado"})
-    
-    if anexo['status'] != 'pendente':
-        conn.close()
-        return jsonify({"success": False, "message": "Não é possível excluir anexo já corrigido"})
-    
-    # Deletar arquivo físico
-    try:
-        caminho = anexo['url_arquivo'].lstrip('/')
-        if os.path.exists(caminho):
-            os.remove(caminho)
-    except:
-        pass  # Se não conseguir deletar o arquivo, continua
-    
-    # Deletar do banco
-    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE id = %s", (anexo_id,))
-    
-    conn.commit()
-    conn.close()
-    
+        conn.close(); return jsonify({"success": False, "message": "Anexo não encontrado"}), 404
+    if anexo.get("status") != "pendente":
+        conn.close(); return jsonify({"success": False, "message": "Não é possível excluir anexo já corrigido"}), 409
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE id=%s", (anexo_id,))
+    conn.commit(); conn.close()
+    if anexo.get("r2_key"):
+        try: delete_object(anexo["r2_key"])
+        except Exception as e: app.logger.warning("Falha ao excluir objeto R2 do anexo %s: %s", anexo_id, e)
+    elif anexo.get("url_arquivo"):
+        # Compatibilidade com anexos antigos salvos localmente.
+        try:
+            caminho = anexo["url_arquivo"].lstrip("/")
+            if os.path.exists(caminho): os.remove(caminho)
+        except Exception: pass
     return jsonify({"success": True, "message": "Anexo excluído com sucesso"})
-    
+
+
 
 
 # ============================================
@@ -10829,21 +10432,21 @@ def mew_disciplinas_alternativas():
     """Lista todas as disciplinas alternativas"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT da.*, 
+        SELECT da.*,
                (SELECT COUNT(*) FROM aluno_disciplina_alternativa WHERE disciplina_id = da.id) as total_alunos,
                (SELECT COUNT(*) FROM anexos_disciplina_alternativa WHERE disciplina_id = da.id) as total_anexos
         FROM disciplinas_alternativas da
         ORDER BY da.data_criacao DESC
     """)
-    
+
     disciplinas = cursor.fetchall()
     conn.close()
-    
+
     return render_template("mew/disciplinas_alternativas.html", disciplinas=disciplinas)
 
 @app.route("/mew/criar-disciplina-alternativa", methods=["GET", "POST"])
@@ -10851,31 +10454,31 @@ def mew_criar_disciplina_alternativa():
     """Cria uma nova disciplina alternativa"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     if request.method == "POST":
         nome = request.form.get("nome")
         mural = request.form.get("mural")
-        
+
         if not nome:
             flash("Nome da disciplina é obrigatório", "error")
             return redirect("/mew/criar-disciplina-alternativa")
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             INSERT INTO disciplinas_alternativas (nome, mural, data_criacao, ativa)
             VALUES (%s, %s, %s, 1)
             RETURNING id
         """, (nome, mural, datetime.now().strftime("%d/%m/%Y %H:%M")))
-        
+
         disciplina_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
-        
+
         flash(f"Disciplina '{nome}' criada com sucesso!", "success")
         return redirect(f"/mew/editar-disciplina-alternativa/{disciplina_id}")
-    
+
     return render_template("mew/criar_disciplina_alternativa.html")
 
 @app.route("/mew/editar-disciplina-alternativa/<int:disciplina_id>", methods=["GET", "POST"])
@@ -10883,28 +10486,28 @@ def mew_editar_disciplina_alternativa(disciplina_id):
     """Edita uma disciplina alternativa"""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     if request.method == "POST":
         nome = request.form.get("nome")
         mural = request.form.get("mural")
         ativa = request.form.get("ativa", "0")
-        
+
         cursor.execute("""
-            UPDATE disciplinas_alternativas 
+            UPDATE disciplinas_alternativas
             SET nome = %s, mural = %s, ativa = %s
             WHERE id = %s
         """, (nome, mural, ativa, disciplina_id))
-        
+
         conn.commit()
         flash("Disciplina atualizada com sucesso!", "success")
-    
+
     # GET: Buscar dados
     cursor.execute("SELECT * FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-    
+
     # Buscar alunos matriculados
     cursor.execute("""
         SELECT a.id, a.nome, a.ra, ada.data_matricula
@@ -10913,13 +10516,13 @@ def mew_editar_disciplina_alternativa(disciplina_id):
         WHERE ada.disciplina_id = %s
         ORDER BY a.nome
     """, (disciplina_id,))
-    
+
     alunos_matriculados = cursor.fetchall()
-    
+
     # Buscar todos os alunos para matricular
     cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
     todos_alunos = cursor.fetchall()
-    
+
     # Buscar anexos
     cursor.execute("""
         SELECT a.*, al.nome as aluno_nome, al.ra as aluno_ra
@@ -10928,11 +10531,11 @@ def mew_editar_disciplina_alternativa(disciplina_id):
         WHERE a.disciplina_id = %s
         ORDER BY a.data_envio DESC
     """, (disciplina_id,))
-    
+
     anexos = cursor.fetchall()
-    
+
     conn.close()
-    
+
     return render_template(
         "mew/editar_disciplina_alternativa.html",
         disciplina=disciplina,
@@ -10946,22 +10549,22 @@ def mew_matricular_aluno_alternativa():
     """Matricula um aluno em uma disciplina alternativa"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     disciplina_id = request.form.get("disciplina_id")
     aluno_id = request.form.get("aluno_id")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute("""
             INSERT INTO aluno_disciplina_alternativa (aluno_id, disciplina_id, data_matricula)
             VALUES (%s, %s, %s)
         """, (aluno_id, disciplina_id, datetime.now().strftime("%d/%m/%Y")))
-        
+
         conn.commit()
         conn.close()
-        
+
         return jsonify({"success": True, "message": "Aluno matriculado com sucesso"})
     except:
         conn.close()
@@ -10972,21 +10575,21 @@ def mew_remover_matricula_alternativa():
     """Remove matrícula de um aluno em disciplina alternativa"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     disciplina_id = request.form.get("disciplina_id")
     aluno_id = request.form.get("aluno_id")
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        DELETE FROM aluno_disciplina_alternativa 
+        DELETE FROM aluno_disciplina_alternativa
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({"success": True, "message": "Matrícula removida"})
 
 @app.route("/mew/corrigir-anexo/<int:anexo_id>", methods=["POST"])
@@ -10994,67 +10597,56 @@ def mew_corrigir_anexo(anexo_id):
     """Corrige um anexo, calcula média e SALVA NA TABELA notas_finais (disciplinas normais)"""
     if not session.get("mew_admin"):
         return jsonify({"success": False, "message": "Não autorizado"})
-    
+
     data = request.get_json()
     nota = data.get("nota")
     feedback = data.get("feedback", "")
     status = data.get("status", "corrigido")
-    
+
     if nota is None:
         return jsonify({"success": False, "message": "Nota não informada"})
-    
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    
+
     # 1. BUSCAR DADOS DO ANEXO
     cursor.execute("SELECT disciplina_id, aluno_id FROM anexos_disciplina_alternativa WHERE id = %s", (anexo_id,))
     anexo = cursor.fetchone()
-    
+
     if not anexo:
         conn.close()
         return jsonify({"success": False, "message": "Anexo não encontrado"})
-    
+
     disciplina_id = anexo['disciplina_id']
     aluno_id = anexo['aluno_id']
-    
-    # 2. ATUALIZAR ANEXO (com feedback)
-    try:
-        cursor.execute("""
-            UPDATE anexos_disciplina_alternativa 
-            SET nota = %s, feedback = %s, status = %s, data_correcao = %s
-            WHERE id = %s
-        """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
-    except psycopg2.errors.UndefinedColumn:
-        # Se a coluna feedback não existir, adicioná-la no PostgreSQL
-        conn.rollback()
-        cursor = conn.cursor()
-        cursor.execute("ALTER TABLE anexos_disciplina_alternativa ADD COLUMN IF NOT EXISTS feedback TEXT")
-        cursor.execute("""
-            UPDATE anexos_disciplina_alternativa 
-            SET nota = %s, feedback = %s, status = %s, data_correcao = %s
-            WHERE id = %s
-        """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
-    
+
+    # 2. ATUALIZAR ANEXO (a coluna feedback é garantida por migrate.py)
+    cursor.execute("""
+        UPDATE anexos_disciplina_alternativa
+        SET nota = %s, feedback = %s, status = %s, data_correcao = %s
+        WHERE id = %s
+    """, (nota, feedback, status, datetime.now().strftime("%d/%m/%Y %H:%M"), anexo_id))
+
     # 3. CALCULAR MÉDIA DO ALUNO NESTA DISCIPLINA
     cursor.execute("""
-        SELECT AVG(nota) as media 
-        FROM anexos_disciplina_alternativa 
+        SELECT AVG(nota) as media
+        FROM anexos_disciplina_alternativa
         WHERE aluno_id = %s AND disciplina_id = %s AND nota IS NOT NULL
     """, (aluno_id, disciplina_id))
-    
+
     resultado = cursor.fetchone()
     media = resultado['media'] if resultado and resultado['media'] else 0
     nota_final = round(media, 2)
-    
+
     # 4. BUSCAR O NOME DA DISCIPLINA ALTERNATIVA
     cursor.execute("SELECT nome FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
     disciplina_alt = cursor.fetchone()
     nome_disciplina = disciplina_alt['nome'] if disciplina_alt else f"Disciplina Alternativa {disciplina_id}"
-    
+
     # 5. VERIFICAR SE JÁ EXISTE UMA DISCIPLINA NORMAL COM ESTE NOME
     cursor.execute("SELECT id FROM disciplinas WHERE nome = %s", (nome_disciplina,))
     disciplina_normal = cursor.fetchone()
-    
+
     if disciplina_normal:
         # Já existe - usar o ID existente
         disciplina_normal_id = disciplina_normal['id']
@@ -11062,7 +10654,7 @@ def mew_corrigir_anexo(anexo_id):
         # Criar nova disciplina normal
         cursor.execute("INSERT INTO disciplinas (nome) VALUES (%s) RETURNING id", (nome_disciplina,))
         disciplina_normal_id = cursor.fetchone()["id"]
-        
+
         # Criar 4 capítulos vazios para esta disciplina (para fins de estrutura)
         for i in range(1, 5):
             cursor.execute("""
@@ -11070,32 +10662,32 @@ def mew_corrigir_anexo(anexo_id):
                 VALUES (%s, %s, '', '')
                 RETURNING id
             """, (disciplina_normal_id, f"Capítulo {i}"))
-            
+
             capitulo_id = cursor.fetchone()["id"]
             # Criar prova vazia
             cursor.execute("""
                 INSERT INTO provas (capitulo_id, questoes_json)
                 VALUES (%s, '[]')
             """, (capitulo_id,))
-    
+
     # 6. SALVAR NA TABELA notas_finais (disciplinas normais)
     # Calcular média das provas dos capítulos (vai ser 0, já que não tem)
     cursor.execute("""
-        SELECT AVG(nota) as media_capitulos 
-        FROM notas 
+        SELECT AVG(nota) as media_capitulos
+        FROM notas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_normal_id))
-    
+
     media_capitulos = cursor.fetchone()
     media_capitulos_valor = media_capitulos['media_capitulos'] if media_capitulos and media_capitulos['media_capitulos'] else 0
-    
+
     # A média final é a nota da disciplina alternativa
     media_final = nota_final
     status_final = "aprovado" if media_final >= 7 else "reprovado" if media_final > 0 else "cursando"
-    
+
     # Salvar/Atualizar nota final na tabela de disciplinas normais
     cursor.execute("""
-        INSERT INTO notas_finais 
+        INSERT INTO notas_finais
         (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
@@ -11104,25 +10696,25 @@ def mew_corrigir_anexo(anexo_id):
             media_final = EXCLUDED.media_final,
             status = EXCLUDED.status,
             data_realizacao = EXCLUDED.data_realizacao
-    """, (aluno_id, disciplina_normal_id, nota_final, media_capitulos_valor, media_final, status_final, 
+    """, (aluno_id, disciplina_normal_id, nota_final, media_capitulos_valor, media_final, status_final,
           datetime.now().strftime("%d/%m/%Y %H:%M")))
-    
+
     # 7. TAMBÉM SALVAR NA TABELA DE NOTAS FINAIS ALTERNATIVAS
     cursor.execute("""
         DELETE FROM notas_finais_alternativas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     cursor.execute("""
-        INSERT INTO notas_finais_alternativas 
+        INSERT INTO notas_finais_alternativas
         (aluno_id, disciplina_id, nota_final, status, data_realizacao)
         VALUES (%s, %s, %s, %s, %s)
     """, (aluno_id, disciplina_id, nota_final, status_final, datetime.now().strftime("%d/%m/%Y %H:%M")))
-    
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({
-        "success": True, 
+        "success": True,
         "message": f"Correção salva! Nota: {nota_final} - {status_final.upper()}",
         "media": media,
         "nota_final": nota_final,
@@ -11132,292 +10724,230 @@ def mew_corrigir_anexo(anexo_id):
 
 @app.route("/mew/excluir-disciplina-alternativa/<int:disciplina_id>")
 def mew_excluir_disciplina_alternativa(disciplina_id):
-    """Exclui uma disciplina alternativa e todos os dados relacionados"""
+    """Exclui a disciplina e seus vínculos sem deixar objetos órfãos no R2."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Buscar anexos para deletar arquivos
-    cursor.execute("SELECT url_arquivo FROM anexos_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
-    anexos = cursor.fetchall()
-    
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT r2_key,url_arquivo FROM anexos_disciplina_alternativa WHERE disciplina_id=%s",(disciplina_id,))
+    anexos=cursor.fetchall()
+    cursor.execute("DELETE FROM notas_finais_alternativas WHERE disciplina_id=%s",(disciplina_id,))
+    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE disciplina_id=%s",(disciplina_id,))
+    cursor.execute("DELETE FROM aluno_disciplina_alternativa WHERE disciplina_id=%s",(disciplina_id,))
+    cursor.execute("DELETE FROM disciplinas_alternativas WHERE id=%s",(disciplina_id,))
+    conn.commit(); conn.close()
     for anexo in anexos:
-        try:
-            caminho = anexo['url_arquivo'].lstrip('/')
-            if os.path.exists(caminho):
-                os.remove(caminho)
-        except:
-            pass
-    
-    # Deletar dados relacionados
-    cursor.execute("DELETE FROM notas_finais_alternativas WHERE disciplina_id = %s", (disciplina_id,))
-    cursor.execute("DELETE FROM anexos_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
-    cursor.execute("DELETE FROM aluno_disciplina_alternativa WHERE disciplina_id = %s", (disciplina_id,))
-    cursor.execute("DELETE FROM disciplinas_alternativas WHERE id = %s", (disciplina_id,))
-    
-    # Tentar deletar pasta de uploads
-    try:
-        pasta = os.path.join('static', 'uploads', 'disciplinas_alternativas', str(disciplina_id))
-        if os.path.exists(pasta):
-            import shutil
-            shutil.rmtree(pasta)
-    except:
-        pass
-    
-    conn.commit()
-    conn.close()
-    
+        if anexo.get("r2_key"):
+            try: delete_object(anexo["r2_key"])
+            except Exception as e: app.logger.warning("Objeto R2 órfão após exclusão da disciplina %s: %s",disciplina_id,e)
+        elif anexo.get("url_arquivo"):
+            try:
+                caminho=anexo["url_arquivo"].lstrip("/")
+                if os.path.exists(caminho): os.remove(caminho)
+            except Exception: pass
     return redirect("/mew/disciplinas-alternativas?sucesso=Disciplina+excluída")
+
+
+
+
+def _redirect_arquivo_r2_ou_legacy(r2_key=None, legacy_path=None, download_name=None, inline=True):
+    """Entrega arquivo privado por URL assinada e mantém compatibilidade com uploads antigos."""
+    if r2_key:
+        return redirect(r2_presigned_url(r2_key, download_name=download_name, inline=inline))
+    if legacy_path:
+        caminho = str(legacy_path).replace("\\", "/").lstrip("/")
+        if caminho.startswith("static/"):
+            caminho = caminho[len("static/"):]
+        return redirect(url_for("static", filename=caminho))
+    return "Arquivo não encontrado.", 404
+
+
+@app.route("/anexo-disciplina-alternativa/<int:anexo_id>")
+def baixar_anexo_disciplina_alternativa(anexo_id):
+    aluno_id = session.get("aluno_id")
+    admin = bool(session.get("mew_admin"))
+    if not aluno_id and not admin:
+        return redirect(url_for("login"))
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,aluno_id,nome_arquivo,r2_key,url_arquivo FROM anexos_disciplina_alternativa WHERE id=%s",(anexo_id,))
+    anexo=cursor.fetchone(); conn.close()
+    if not anexo:
+        return "Anexo não encontrado.",404
+    if not admin and int(anexo["aluno_id"]) != int(aluno_id):
+        return "Acesso não autorizado.",403
+    return _redirect_arquivo_r2_ou_legacy(anexo.get("r2_key"),anexo.get("url_arquivo"),anexo.get("nome_arquivo"),inline=True)
+
+
+@app.route("/projeto-final/arquivo-aluno/<int:projeto_id>")
+def baixar_projeto_final_aluno(projeto_id):
+    aluno_id=session.get("aluno_id"); admin=bool(session.get("mew_admin"))
+    if not aluno_id and not admin:
+        return redirect(url_for("login"))
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,aluno_id,nome_arquivo,arquivo_r2_key,arquivo_path FROM projetos_finais WHERE id=%s",(projeto_id,))
+    projeto=cursor.fetchone(); conn.close()
+    if not projeto: return "Projeto não encontrado.",404
+    if not admin and int(projeto["aluno_id"]) != int(aluno_id): return "Acesso não autorizado.",403
+    return _redirect_arquivo_r2_ou_legacy(projeto.get("arquivo_r2_key"),projeto.get("arquivo_path"),projeto.get("nome_arquivo"),inline=True)
+
+
+@app.route("/projeto-final/arquivo-atividade/<int:projeto_id>")
+def baixar_atividade_projeto_final(projeto_id):
+    aluno_id=session.get("aluno_id"); admin=bool(session.get("mew_admin"))
+    if not aluno_id and not admin:
+        return redirect(url_for("login"))
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,aluno_id,nome_arquivo_atividade,arquivo_atividade_r2_key,arquivo_atividade_path FROM projetos_finais WHERE id=%s",(projeto_id,))
+    projeto=cursor.fetchone(); conn.close()
+    if not projeto: return "Projeto não encontrado.",404
+    if not admin and int(projeto["aluno_id"]) != int(aluno_id): return "Acesso não autorizado.",403
+    return _redirect_arquivo_r2_ou_legacy(projeto.get("arquivo_atividade_r2_key"),projeto.get("arquivo_atividade_path"),projeto.get("nome_arquivo_atividade"),inline=True)
+
+
+@app.route("/documento-anexo/<codigo>")
+def baixar_documento_anexo(codigo):
+    # O código é o próprio token de validação do documento; nunca expõe a chave R2.
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("""SELECT arquivo_r2_key,arquivo_nome,arquivo_mime
+                      FROM documentos_autenticados
+                      WHERE codigo=%s OR codigo_autenticacao=%s ORDER BY id DESC LIMIT 1""",(codigo,codigo))
+    doc=cursor.fetchone(); conn.close()
+    if not doc or not doc.get("arquivo_r2_key"):
+        return "Arquivo não encontrado ou documento antigo ainda não migrado.",404
+    return redirect(r2_presigned_url(doc["arquivo_r2_key"],download_name=doc.get("arquivo_nome") or "documento",inline=True))
+
 
 @app.route("/contrato-pendente", methods=["GET", "POST"])
 def contrato_pendente():
-    aluno_id = session.get("aluno_id")
-    if not aluno_id:
-        return redirect(url_for("login"))
-
-    init_contratos_db()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Segurança: a assinatura só pode ocorrer depois do pagamento aprovado.
-    cursor.execute("""
-        SELECT status
-        FROM situacao_financeira
-        WHERE aluno_id = %s
-        ORDER BY id DESC
-        LIMIT 1
-    """, (aluno_id,))
-    financeiro = cursor.fetchone()
-
-    if financeiro and financeiro.get("status") != "pago":
-        conn.close()
-        return redirect(url_for("aguardando_pagamento"))
-
-    cursor.execute("""
-        SELECT c.*, a.nome, a.ra, a.email, dp.cpf
-        FROM contratos_alunos c
-        JOIN alunos a ON a.id = c.aluno_id
-        LEFT JOIN dados_pessoais dp ON dp.aluno_id = a.id
-        WHERE c.aluno_id = %s AND c.status = 'pendente'
-        ORDER BY c.id DESC
-        LIMIT 1
-    """, (aluno_id,))
-    contrato = cursor.fetchone()
-
-    if not contrato:
-        conn.close()
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST":
-        assinatura = request.form.get("assinatura", "")
-        foto = request.form.get("foto_assinatura", "")
-        aceite_contrato = request.form.get("aceite_contrato") == "1"
-        aceite_foto = request.form.get("aceite_foto") == "1"
-
-        if not aceite_contrato:
-            conn.close()
-            return "É obrigatório declarar a leitura e o aceite do contrato.", 400
-
-        if not aceite_foto:
-            conn.close()
-            return "É obrigatória a autorização específica para o registro fotográfico desta assinatura.", 400
-
-        if not validar_data_image(
-            assinatura,
-            {"data:image/png;base64", "data:image/jpeg;base64"},
-            1_500_000
-        ):
-            conn.close()
-            return "Assinatura eletrônica inválida ou muito grande.", 400
-
-        if not validar_data_image(
-            foto,
-            {"data:image/jpeg;base64", "data:image/png;base64", "data:image/webp;base64"},
-            3_000_000
-        ):
-            conn.close()
-            return "Fotografia de confirmação inválida ou muito grande.", 400
-
-        agora = agora_brasilia()
-        data_assinatura = agora.strftime("%d/%m/%Y %H:%M:%S")
-        ip_assinatura = obter_ip_cliente()
-        user_agent = (request.headers.get("User-Agent") or "")[:1000]
-
-        texto_aceite_completo = (
-            TEXTO_ACEITE_CONTRATO
-            + "\n\nAUTORIZAÇÃO DO REGISTRO FOTOGRÁFICO:\n"
-            + TEXTO_ACEITE_FOTO
-        )
-
-        # O hash final vincula assinatura, foto, identidade, aceite e evidências técnicas.
-        dados_hash = json.dumps({
-            "contrato_id": contrato["id"],
-            "aluno_id": aluno_id,
-            "nome": contrato.get("nome") or "",
-            "ra": contrato.get("ra") or "",
-            "cpf": contrato.get("cpf") or "",
-            "data_assinatura": data_assinatura,
-            "assinatura": assinatura,
-            "foto": foto,
-            "ip": ip_assinatura,
-            "user_agent": user_agent,
-            "aceite": texto_aceite_completo,
-            "versao": VERSAO_CONTRATO
-        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        hash_assinado = hashlib.sha256(dados_hash.encode("utf-8")).hexdigest().upper()
-
-        caminho_publico = f"/contrato/pdf/{contrato['id']}"
-
-        cursor.execute("""
-            UPDATE contratos_alunos
-            SET status = 'assinado',
-                assinatura_base64 = %s,
-                foto_assinatura_base64 = %s,
-                arquivo_assinado_path = %s,
-                data_assinatura = %s,
-                ip_assinatura = %s,
-                user_agent_assinatura = %s,
-                aceite_contrato = TRUE,
-                aceite_foto = TRUE,
-                texto_aceite = %s,
-                versao_contrato = %s,
-                hash_assinado = %s
-            WHERE id = %s AND status = 'pendente'
-        """, (
-            assinatura,
-            foto,
-            caminho_publico,
-            data_assinatura,
-            ip_assinatura,
-            user_agent,
-            texto_aceite_completo,
-            VERSAO_CONTRATO,
-            hash_assinado,
-            contrato["id"]
-        ))
-
-        if cursor.rowcount != 1:
-            conn.rollback()
-            conn.close()
-            return "Este contrato já foi assinado ou não está mais disponível.", 409
-
-        conn.commit()
-        conn.close()
-
-        # Gera e grava o PDF definitivo. Se houver falha externa de renderização,
-        # a assinatura permanece válida e o PDF poderá ser gerado novamente ao abrir a rota.
+    aluno_id=session.get("aluno_id")
+    if not aluno_id: return redirect(url_for("login"))
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT status FROM situacao_financeira WHERE aluno_id=%s ORDER BY id DESC LIMIT 1",(aluno_id,)); financeiro=cursor.fetchone()
+    if financeiro and financeiro.get("status")!="pago": conn.close(); return redirect(url_for("aguardando_pagamento"))
+    cursor.execute("""SELECT c.id,c.status,c.data_envio,a.nome,a.ra,a.email,dp.cpf
+                      FROM contratos_alunos c JOIN alunos a ON a.id=c.aluno_id
+                      LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
+                      WHERE c.aluno_id=%s AND c.status='pendente' ORDER BY c.id DESC LIMIT 1""",(aluno_id,))
+    contrato=cursor.fetchone()
+    if not contrato: conn.close(); return redirect(url_for("dashboard"))
+    if request.method=="POST":
+        if not r2_is_configured(): conn.close(); return "Cloudflare R2 ainda não foi configurado no Render.",503
+        assinatura=request.form.get("assinatura",""); foto=request.form.get("foto_assinatura","")
+        if request.form.get("aceite_contrato")!="1": conn.close(); return "É obrigatório declarar a leitura e o aceite do contrato.",400
+        if request.form.get("aceite_foto")!="1": conn.close(); return "É obrigatória a autorização específica para o registro fotográfico desta assinatura.",400
         try:
-            gerar_pdf_contrato_assinado(contrato["id"], salvar=True)
+            assinatura_raw, assinatura_mime=decode_data_url(assinatura)
+            foto_raw, foto_mime=decode_data_url(foto)
+        except Exception:
+            conn.close(); return "Assinatura ou fotografia inválida.",400
+        if assinatura_mime not in {"image/png","image/jpeg"} or not (0<len(assinatura_raw)<=1_500_000): conn.close(); return "Assinatura eletrônica inválida ou muito grande.",400
+        if foto_mime not in {"image/jpeg","image/png","image/webp"} or not (0<len(foto_raw)<=3_000_000): conn.close(); return "Fotografia de confirmação inválida ou muito grande.",400
+        agora=agora_brasilia(); data_assinatura=agora.strftime("%d/%m/%Y %H:%M:%S"); ip_assinatura=obter_ip_cliente(); user_agent=(request.headers.get("User-Agent") or "")[:1000]
+        aceite=TEXTO_ACEITE_CONTRATO+"\n\nAUTORIZAÇÃO DO REGISTRO FOTOGRÁFICO:\n"+TEXTO_ACEITE_FOTO
+        sha_ass=hashlib.sha256(assinatura_raw).hexdigest(); sha_foto=hashlib.sha256(foto_raw).hexdigest()
+        dados_hash=json.dumps({"contrato_id":contrato["id"],"aluno_id":aluno_id,"nome":contrato.get("nome") or "","ra":contrato.get("ra") or "","cpf":contrato.get("cpf") or "","data_assinatura":data_assinatura,"assinatura_sha256":sha_ass,"foto_sha256":sha_foto,"ip":ip_assinatura,"user_agent":user_agent,"aceite":aceite,"versao":VERSAO_CONTRATO},ensure_ascii=False,sort_keys=True,separators=(",",":"))
+        hash_assinado=hashlib.sha256(dados_hash.encode()).hexdigest().upper()
+        key_ass=make_key("contratos/assinaturas",f"assinatura{extension_for_mime(assinatura_mime)}",contrato["id"])
+        key_foto=make_key("contratos/fotos",f"foto{extension_for_mime(foto_mime)}",contrato["id"])
+        enviados=[]
+        try:
+            r2_upload_bytes(assinatura_raw,key_ass,assinatura_mime,{"contrato_id":contrato["id"],"sha256":sha_ass}); enviados.append(key_ass)
+            r2_upload_bytes(foto_raw,key_foto,foto_mime,{"contrato_id":contrato["id"],"sha256":sha_foto}); enviados.append(key_foto)
+            cursor.execute("""UPDATE contratos_alunos SET status='assinado', assinatura_base64=NULL,
+                foto_assinatura_base64=NULL, assinatura_r2_key=%s, assinatura_mime=%s,
+                foto_assinatura_r2_key=%s, foto_assinatura_mime=%s, arquivo_assinado_path=%s,
+                data_assinatura=%s, ip_assinatura=%s, user_agent_assinatura=%s, aceite_contrato=TRUE,
+                aceite_foto=TRUE, texto_aceite=%s, versao_contrato=%s, hash_assinado=%s
+                WHERE id=%s AND status='pendente'""",
+                (key_ass,assinatura_mime,key_foto,foto_mime,f"/contrato/pdf/{contrato['id']}",data_assinatura,ip_assinatura,user_agent,aceite,VERSAO_CONTRATO,hash_assinado,contrato["id"]))
+            if cursor.rowcount!=1: raise RuntimeError("Este contrato já foi assinado ou não está mais disponível.")
+            conn.commit()
         except Exception as e:
-            print(f"Erro ao gerar PDF final do contrato {contrato['id']}: {e}")
-
-        return redirect(url_for("visualizar_contrato_registro", contrato_id=contrato["id"]))
-
+            conn.rollback()
+            for key in enviados:
+                try: delete_object(key)
+                except Exception: pass
+            conn.close(); return escape(str(e)),409
+        conn.close()
+        # Retira imediatamente as grandes strings base64 do alcance do processo.
+        del assinatura_raw, foto_raw, assinatura, foto
+        try: gerar_pdf_contrato_assinado(contrato["id"],salvar=True)
+        except Exception as e: app.logger.exception("Falha ao gerar PDF do contrato %s: %s",contrato["id"],e)
+        return redirect(url_for("visualizar_contrato_registro",contrato_id=contrato["id"]))
     conn.close()
+    return render_template("assinar_contrato.html",contrato=contrato,texto_aceite_contrato=TEXTO_ACEITE_CONTRATO,texto_aceite_foto=TEXTO_ACEITE_FOTO)
 
-    return render_template(
-        "assinar_contrato.html",
-        contrato=contrato,
-        texto_aceite_contrato=TEXTO_ACEITE_CONTRATO,
-        texto_aceite_foto=TEXTO_ACEITE_FOTO
-    )
 
 
 @app.route("/mew/contratos", methods=["GET", "POST"])
 def mew_contratos():
     if not session.get("mew_admin"):
         return "Não autorizado", 403
-
-    init_contratos_db()
-
     if request.method == "POST":
         aluno_id = request.form.get("aluno_id", type=int)
-        if not aluno_id:
-            return redirect("/mew/contratos")
-        criar_contrato_aluno(aluno_id)
+        if aluno_id:
+            criar_contrato_aluno(aluno_id)
         return redirect("/mew/contratos")
 
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    per_page = 100
+    offset = (page - 1) * per_page
     conn = get_db_connection()
     cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT a.id, a.nome, a.ra
+            FROM alunos a
+            WHERE NOT EXISTS (
+                SELECT 1 FROM contratos_alunos c WHERE c.aluno_id = a.id
+            )
+            ORDER BY a.nome
+        """)
+        alunos_sem_contrato = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT a.id, a.nome, a.ra
-        FROM alunos a
-        WHERE NOT EXISTS (
-            SELECT 1 FROM contratos_alunos c WHERE c.aluno_id = a.id
-        )
-        ORDER BY a.nome
-    """)
-    alunos_sem_contrato = cursor.fetchall()
+        cursor.execute("SELECT COUNT(*) AS total FROM contratos_alunos")
+        total = int((cursor.fetchone() or {}).get("total") or 0)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        if page > total_pages:
+            page = total_pages
+            offset = (page - 1) * per_page
 
-    cursor.execute("""
-        SELECT c.*, a.nome, a.ra
-        FROM contratos_alunos c
-        JOIN alunos a ON a.id = c.aluno_id
-        ORDER BY c.id DESC
-    """)
-    contratos = cursor.fetchall()
-    conn.close()
+        # Listagem leve: nunca carrega assinatura, foto, HTML ou PDF.
+        cursor.execute("""
+            SELECT c.id, c.status, c.data_envio, c.data_assinatura, a.nome, a.ra
+            FROM contratos_alunos c
+            JOIN alunos a ON a.id = c.aluno_id
+            ORDER BY c.id DESC
+            LIMIT %s OFFSET %s
+        """, (per_page, offset))
+        contratos = cursor.fetchall()
+    finally:
+        conn.close()
 
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <title>MEW - Contratos Automáticos</title>
-        <style>
-            body { font-family:Arial,sans-serif; padding:30px; background:#f4f4f4; color:#111827; }
-            .box { background:white; padding:25px; border-radius:10px; margin-bottom:25px; }
-            select, button { padding:10px; margin:5px 0; width:100%; }
-            button { background:#111827; color:white; border:0; cursor:pointer; }
-            table { width:100%; border-collapse:collapse; background:white; }
-            th, td { padding:10px; border-bottom:1px solid #ddd; text-align:left; }
-            .pendente { color:#b45309; font-weight:bold; }
-            .assinado { color:#15803d; font-weight:bold; }
-            a { color:#1d4ed8; }
-        </style>
-    </head>
-    <body>
-        <p><a href="/mew/dashboard">← Voltar ao Dashboard</a></p>
-        <div class="box">
-            <h2>Contratos automáticos</h2>
-            <p>O contrato padrão é criado automaticamente no cadastro do aluno. Não é mais necessário anexar PDF.</p>
+    return render_template_string("""<!DOCTYPE html>
+<html lang='pt-br'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>MEW - Contratos Automáticos</title>
+<style>
+:root{--grafite:#353b40;--preto:#1f2428;--cinza:#e9ecef;--borda:#c9d0d5;--laranja:#c86d20}
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;background:var(--cinza);color:var(--preto)}
+.wrap{width:min(1180px,calc(100% - 28px));margin:22px auto}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+a{color:var(--preto)}.box{background:#fff;padding:20px;border:1px solid var(--borda);border-top:4px solid var(--grafite);margin-bottom:16px;box-shadow:0 2px 8px #0000000d}
+h1,h2{margin-top:0}.muted{color:#667078;font-size:13px}select,button{padding:11px;border:1px solid #adb5ba;width:100%;font:inherit}button{background:var(--grafite);color:#fff;border:0;font-weight:700;cursor:pointer;margin-top:8px}button:hover{background:#252a2e}
+.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:690px}th,td{padding:10px;border-bottom:1px solid #dfe4e7;text-align:left}th{background:#eceff1;font-size:12px;text-transform:uppercase;letter-spacing:.03em}.pendente{color:#9a6500;font-weight:700}.assinado{color:#28733d;font-weight:700}
+.pager{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:16px}.pager a,.pager span{padding:8px 11px;border:1px solid var(--borda);background:#fff;text-decoration:none}.pager .current{background:var(--grafite);color:#fff;border-color:var(--grafite)}
+@media(max-width:640px){.wrap{width:min(100% - 16px,1180px);margin:10px auto}.box{padding:14px}.top{align-items:flex-start;flex-direction:column}.top h1{font-size:20px}.pager a,.pager span{padding:8px}}
+</style></head>
+<body><div class='wrap'>
+<div class='top'><div><h1>Contratos automáticos</h1><div class='muted'>Gestão acadêmica • documentos contratuais</div></div><a href='/mew/dashboard'>← Dashboard administrativo</a></div>
+<div class='box'><h2>Cadastros antigos sem contrato</h2><p class='muted'>O contrato padrão continua sendo criado automaticamente no cadastro do aluno.</p>
+{% if alunos_sem_contrato %}<form method='POST'><label for='aluno_id'><strong>Gerar contrato para:</strong></label><select id='aluno_id' name='aluno_id' required><option value=''>Selecione...</option>{% for aluno in alunos_sem_contrato %}<option value='{{ aluno.id }}'>{{ aluno.nome }} — RA {{ aluno.ra }}</option>{% endfor %}</select><button type='submit'>GERAR CONTRATO PADRÃO</button></form>{% else %}<p>Todos os alunos possuem contrato registrado.</p>{% endif %}</div>
+<div class='box'><h2>Contratos</h2><p class='muted'>{{ total }} registro(s). A listagem carrega somente metadados; PDFs, foto e assinatura são buscados apenas ao abrir o contrato.</p><div class='table-wrap'><table><tr><th>Aluno</th><th>RA</th><th>Status</th><th>Envio</th><th>Documento</th></tr>{% for c in contratos %}<tr><td>{{ c.nome }}</td><td>{{ c.ra }}</td><td class='{{ c.status }}'>{{ c.status|upper }}</td><td>{{ c.data_envio or '—' }}</td><td><a href='/contrato/registro/{{ c.id }}' target='_blank' rel='noopener'>Abrir contrato</a></td></tr>{% else %}<tr><td colspan='5'>Nenhum contrato encontrado.</td></tr>{% endfor %}</table></div>
+{% if total_pages > 1 %}<div class='pager'>{% if page > 1 %}<a href='?page={{ page-1 }}'>← Anterior</a>{% endif %}<span class='current'>Página {{ page }} de {{ total_pages }}</span>{% if page < total_pages %}<a href='?page={{ page+1 }}'>Próxima →</a>{% endif %}</div>{% endif %}</div>
+</div></body></html>""", contratos=contratos, alunos_sem_contrato=alunos_sem_contrato,
+        total=total, page=page, total_pages=total_pages)
 
-            {% if alunos_sem_contrato %}
-            <form method="POST">
-                <label>Gerar contrato para cadastro antigo sem contrato:</label>
-                <select name="aluno_id" required>
-                    <option value="">Selecione...</option>
-                    {% for aluno in alunos_sem_contrato %}
-                    <option value="{{ aluno.id }}">{{ aluno.nome }} - RA {{ aluno.ra }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit">GERAR CONTRATO PADRÃO</button>
-            </form>
-            {% endif %}
-        </div>
-
-        <div class="box">
-            <h2>Contratos</h2>
-            <table>
-                <tr><th>Aluno</th><th>Matrícula/RA</th><th>Status</th><th>Envio</th><th>Documento</th></tr>
-                {% for c in contratos %}
-                <tr>
-                    <td>{{ c.nome }}</td>
-                    <td>{{ c.ra }}</td>
-                    <td class="{{ c.status }}">{{ c.status|upper }}</td>
-                    <td>{{ c.data_envio }}</td>
-                    <td><a href="/contrato/registro/{{ c.id }}" target="_blank">Abrir contrato</a></td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
-    </body>
-    </html>
-    """, contratos=contratos, alunos_sem_contrato=alunos_sem_contrato)
 
 @app.before_request
 def controlar_acesso_aluno_pagamento_contrato():
@@ -11515,7 +11045,7 @@ def aguardando_pagamento():
     <style>
       body{font-family:Arial;background:#f3f4f6;margin:0;padding:30px;color:#111827}
       .card{max-width:650px;margin:70px auto;background:#fff;padding:35px;border-radius:14px;box-shadow:0 10px 30px #0001;text-align:center}
-      .btn{display:inline-block;margin:10px;padding:13px 22px;border-radius:8px;background:#009ee3;color:#fff;text-decoration:none;font-weight:700}
+      .btn{display:inline-block;margin:10px;padding:13px 22px;border-radius:8px;background:#343a40;color:#fff;text-decoration:none;font-weight:700}
       .sair{background:#374151}
     </style></head><body><div class="card">
       <h1>⏳ Pagamento pendente</h1>
@@ -11529,694 +11059,75 @@ def aguardando_pagamento():
 
 @app.route("/mew/anexar-documento", methods=["GET", "POST"])
 def mew_anexar_documento():
-    """Anexa qualquer arquivo e gera documento autenticado com QR Code - VERSÃO SIMPLES"""
+    """Anexa arquivo privado ao R2 e mantém apenas metadados/HTML leve no PostgreSQL."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    
+
     if request.method == "GET":
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Anexar Documento - SiGEU Educacional</title>
-            <style>
-                body { font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }
-                .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #3f464b; }
-                h1 { color: #3f464b; }
-                label { display: block; margin-top: 15px; font-weight: bold; color: #333; }
-                input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 5px; }
-                .btn { background: #3f464b; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px; }
-                .btn:hover { background: #262b2f; }
-                .info { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #16a34a; }
-                .preview { background: #f1f5f9; padding: 10px; border-radius: 5px; margin-top: 10px; display: none; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>📎 ANEXAR DOCUMENTO</h1>
-                <p>Envie qualquer arquivo e gere um documento autenticado com QR Code.</p>
-                
-                <div class="info">
-                    <strong>📌 Como funciona:</strong><br>
-                    1. Selecione o tipo de documento<br>
-                    2. Anexe o arquivo<br>
-                    3. Clique em "Anexar e Autenticar"<br>
-                    4. O documento será gerado com QR Code e código de autenticação
-                </div>
-                
-                <form action="/mew/anexar-documento" method="POST" enctype="multipart/form-data">
-                    <label>📋 Tipo de Documento *</label>
-                    <select name="tipo" required>
-                        <option value="">Selecione...</option>
-                        <option value="plano_aula">Plano de Aula</option>
-                        <option value="certificado">Certificado</option>
-                        <option value="diploma">Diploma</option>
-                        <option value="atestado">Atestado</option>
-                        <option value="comprovante">Comprovante</option>
-                        <option value="outro">Outro</option>
-                    </select>
-                    
-                    <label>📝 Título do Documento</label>
-                    <input type="text" name="titulo" placeholder="Ex: Plano de Aula - Matemática">
-                    
-                    <label>📝 Descrição (opcional)</label>
-                    <textarea name="descricao" rows="3" placeholder="Descreva o documento..."></textarea>
-                    
-                    <label>📄 Arquivo *</label>
-                    <input type="file" name="arquivo" required id="arquivoInput">
-                    <div class="preview" id="previewDiv">
-                        <strong>Arquivo selecionado:</strong> <span id="nomeArquivo"></span>
-                    </div>
-                    
-                    <button type="submit" class="btn">🔐 ANEXAR E AUTENTICAR</button>
-                </form>
-                
-                <p style="margin-top: 20px; text-align: center; color: #666;">
-                    <a href="/mew/dashboard">⬅️ Voltar ao MEW</a>
-                </p>
-            </div>
-            
-            <script>
-                document.getElementById('arquivoInput').addEventListener('change', function(e) {
-                    const preview = document.getElementById('previewDiv');
-                    const nome = document.getElementById('nomeArquivo');
-                    if (this.files && this.files[0]) {
-                        nome.textContent = this.files[0].name + ' (' + (this.files[0].size / 1024).toFixed(1) + ' KB)';
-                        preview.style.display = 'block';
-                    } else {
-                        preview.style.display = 'none';
-                    }
-                });
-            </script>
-        </body>
-        </html>
-        '''
-    
-    # POST - Processa o arquivo
+        return """
+        <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Anexar Documento - SIGEU</title><style>
+        body{font-family:Arial,sans-serif;background:#e9ecef;color:#1f2428;margin:0;padding:32px}.box{max-width:700px;margin:auto;background:#fff;border:1px solid #c9ced2;border-top:5px solid #353b40;padding:28px;box-shadow:0 8px 22px #0001}h1{margin-top:0}label{display:block;font-weight:700;margin-top:16px}input,select,textarea{width:100%;box-sizing:border-box;padding:11px;margin-top:6px;border:1px solid #aeb5ba}.info{background:#f5f6f7;border-left:4px solid #c86d20;padding:12px;margin:16px 0}.btn{width:100%;margin-top:20px;padding:13px;border:0;background:#353b40;color:#fff;font-weight:700;cursor:pointer}.btn:hover{background:#1f2428}a{color:#1f2428}
+        </style></head><body><div class="box"><h1>📎 Anexar documento</h1>
+        <div class="info">O arquivo será armazenado no Cloudflare R2. O PostgreSQL guardará apenas código, hash e metadados.</div>
+        <form method="POST" enctype="multipart/form-data">
+        <label>Tipo *</label><select name="tipo" required><option value="">Selecione...</option><option value="plano_aula">Plano de Aula</option><option value="certificado">Certificado</option><option value="diploma">Diploma</option><option value="atestado">Atestado</option><option value="comprovante">Comprovante</option><option value="outro">Outro</option></select>
+        <label>Título</label><input name="titulo" type="text" placeholder="Ex.: Documento complementar">
+        <label>Descrição</label><textarea name="descricao" rows="3"></textarea>
+        <label>Arquivo *</label><input name="arquivo" type="file" required>
+        <button class="btn" type="submit">🔐 ANEXAR E AUTENTICAR</button></form>
+        <p style="text-align:center;margin-top:20px"><a href="/mew/dashboard">← Voltar ao MEW</a></p></div></body></html>
+        """
+
+    tipo=(request.form.get("tipo") or "").strip()
+    titulo=(request.form.get("titulo") or f"Documento {tipo}").strip()
+    descricao=(request.form.get("descricao") or "").strip()
+    arquivo=request.files.get("arquivo")
+    if not tipo or not arquivo or not arquivo.filename:
+        return "Tipo e arquivo são obrigatórios.",400
+    if not r2_is_configured():
+        return "Cloudflare R2 ainda não foi configurado no Render.",503
+
+    original=secure_filename(arquivo.filename) or "documento"
+    mime=arquivo.mimetype or guess_content_type(original)
+    sha256=_hash_e_rebobinar(arquivo.stream)
+    agora=datetime.now(); timestamp=agora.strftime("%Y%m%d%H%M%S")
+    codigo=f"DOC-{timestamp}-{secrets.token_hex(4).upper()}"
+    key=make_key("documentos-anexos",original,tipo,codigo)
+    r2_upload_fileobj(arquivo.stream,key,mime,{"codigo":codigo,"sha256":sha256,"tipo":tipo})
+
+    base_url=request.host_url.rstrip('/')
+    link_validacao=f"{base_url}/validar-documento/{codigo}"
+    qr_code_base64=gerar_qrcode_base64(link_validacao)
+    data_emissao=agora.strftime("%d/%m/%Y %H:%M")
+    data_validade=(agora+timedelta(days=365*5)).strftime("%d/%m/%Y")
+    hash_documento=hashlib.sha256(f"{codigo}|{tipo}|{sha256}".encode()).hexdigest()
+    titulo_html=escape(titulo); descricao_html=escape(descricao); nome_html=escape(arquivo.filename)
+    html_conteudo=f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'><style>
+    body{{font-family:Arial,sans-serif;background:#d8dcdf;color:#1f2428;margin:0;padding:28px}}.folha{{max-width:820px;min-height:900px;margin:auto;background:#fff;border:1px solid #aeb5ba;padding:40px;box-shadow:0 10px 30px #0002}}h1{{border-bottom:3px solid #353b40;padding-bottom:12px}}.arquivo{{margin:28px 0;padding:22px;background:#f3f4f5;border-left:5px solid #c86d20}}.btn{{display:inline-block;background:#353b40;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold}}.auth{{margin-top:42px;border-top:1px solid #aaa;padding-top:18px;display:flex;gap:18px;align-items:center}}.auth img{{width:105px;height:105px}}.hash{{font-family:monospace;font-size:8pt;word-break:break-all}}
+    </style></head><body><div class='folha'><h1>{titulo_html}</h1><p>{descricao_html}</p><div class='arquivo'><b>Arquivo:</b> {nome_html}<br><b>Tipo:</b> {escape(mime)}<br><b>Tamanho:</b> armazenado externamente no R2<br><br><a class='btn' href='/documento-anexo/{codigo}' target='_blank'>ABRIR ARQUIVO</a></div><div class='auth'><img src='{qr_code_base64}'><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {data_emissao}<br><b>Validade:</b> {data_validade}<div class='hash'>SHA-256: {sha256}</div></div></div></div></body></html>"""
+    metadados=json.dumps({"titulo":titulo,"descricao":descricao,"arquivo":arquivo.filename,"mime":mime,"sha256_arquivo":sha256,"storage":"r2"},ensure_ascii=False)
+
+    conn=get_db_connection(); cursor=conn.cursor()
     try:
-        from datetime import datetime, timedelta
-        import secrets
-        import hashlib
-        import json
-        import base64
-        
-        # Dados do formulário
-        tipo = request.form.get("tipo")
-        titulo = request.form.get("titulo", f"Documento {tipo}")
-        descricao = request.form.get("descricao", "")
-        
-        if not tipo:
-            return "Tipo de documento obrigatório", 400
-        
-        # Pega o arquivo
-        if 'arquivo' not in request.files:
-            return "Nenhum arquivo enviado", 400
-        
-        arquivo = request.files['arquivo']
-        if arquivo.filename == '':
-            return "Nenhum arquivo selecionado", 400
-        
-        # Lê o arquivo e codifica em base64
-        arquivo_bytes = arquivo.read()
-        arquivo_base64 = base64.b64encode(arquivo_bytes).decode()
-        
-        # Gera código de autenticação
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        codigo = f"DOC-{timestamp}-{secrets.token_hex(4).upper()}"
-        
-        # Gera hash
-        hash_documento = hashlib.sha256(
-            f"{tipo}{timestamp}{arquivo.filename}{arquivo_base64[:100]}".encode()
-        ).hexdigest()
-        
-        # Gera link de validação e QR Code
-        base_url = request.host_url.rstrip('/')
-        link_validacao = f"{base_url}/validar-documento/{codigo}"
-        qr_code_base64 = gerar_qrcode_base64(link_validacao)
-        
-        data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-        data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-        
-        # Determinar ícone baseado na extensão
-        file_ext = arquivo.filename.split('.')[-1].lower()
-        file_icon = "📄"
-        if file_ext in ['pdf']:
-            file_icon = "📕"
-        elif file_ext in ['jpg', 'jpeg', 'png', 'gif']:
-            file_icon = "🖼️"
-        elif file_ext in ['doc', 'docx']:
-            file_icon = "📘"
-        elif file_ext in ['xls', 'xlsx']:
-            file_icon = "📊"
-        
-        # ============================================
-        # GERA HTML IGUAL AOS OUTROS DOCUMENTOS
-        # ============================================
-        
-        html_conteudo = f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>{titulo} - SiGEU Educação</title>
-            <style>
-                * {{
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }}
-                body {{
-                    margin: 0;
-                    padding: 0;
-                    background: #c9c9c9;
-                    font-family: "Arial Nova", "Arial", "Calibri", "Segoe UI", sans-serif;
-                    font-size: 10.5pt;
-                    color: #1a1a1a;
-                    line-height: 1.4;
-                    -webkit-print-color-adjust: exact;
-                    print-color-adjust: exact;
-                }}
-                .folha {{
-                    width: 210mm;
-                    min-height: 297mm;
-                    margin: 0 auto;
-                    background: #fefefe;
-                    position: relative;
-                    overflow: hidden;
-                    box-shadow: 0 0 20px rgba(0,0,0,0.3);
-                    padding: 15mm 20mm 25mm 20mm;
-                    page-break-after: always;
-                }}
-                .borda-seguranca {{
-                    position: absolute;
-                    top: 8mm;
-                    left: 8mm;
-                    right: 8mm;
-                    bottom: 8mm;
-                    border: 0.5pt solid #3f464b;
-                    pointer-events: none;
-                }}
-                .borda-seguranca::before {{
-                    content: "";
-                    position: absolute;
-                    top: 2mm;
-                    left: 2mm;
-                    right: 2mm;
-                    bottom: 2mm;
-                    border: 0.3pt dashed #3f464b;
-                    opacity: 0.5;
-                }}
-                .cantoneira {{
-                    position: absolute;
-                    width: 15mm;
-                    height: 15mm;
-                    border: 2pt solid #3f464b;
-                    z-index: 100;
-                }}
-                .cantoneira.top-left {{ top: 6mm; left: 6mm; border-right: none; border-bottom: none; }}
-                .cantoneira.top-right {{ top: 6mm; right: 6mm; border-left: none; border-bottom: none; }}
-                .cantoneira.bottom-left {{ bottom: 6mm; left: 6mm; border-right: none; border-top: none; }}
-                .cantoneira.bottom-right {{ bottom: 6mm; right: 6mm; border-left: none; border-top: none; }}
-                .marca-dagua-principal {{
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%) rotate(-45deg);
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 72pt;
-                    color: rgba(26, 35, 126, 0.03);
-                    text-transform: uppercase;
-                    letter-spacing: 15px;
-                    white-space: nowrap;
-                    pointer-events: none;
-                    z-index: 1;
-                    font-weight: 900;
-                }}
-                .marca-dagua-pattern {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-image: 
-                        repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
-                        repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
-                    pointer-events: none;
-                    z-index: 1;
-                }}
-                .microtexto-borda {{
-                    position: absolute;
-                    font-family: "Arial", sans-serif;
-                    font-size: 5pt;
-                    color: rgba(26,35,126,0.3);
-                    letter-spacing: 1px;
-                    text-transform: uppercase;
-                    white-space: nowrap;
-                    z-index: 2;
-                }}
-                .microtexto-borda.top {{ top: 5mm; left: 50%; transform: translateX(-50%); }}
-                .microtexto-borda.bottom {{ bottom: 5mm; left: 50%; transform: translateX(-50%); }}
-                .microtexto-borda.left {{ left: 3mm; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: center; }}
-                .microtexto-borda.right {{ right: 3mm; top: 50%; transform: translateY(-50%) rotate(90deg); transform-origin: center; }}
-                .faixa-identificadora {{
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    height: 4mm;
-                    background: repeating-linear-gradient(90deg, #3f464b 0px, #3f464b 5mm, #ffffff 5mm, #ffffff 10mm, #3f464b 10mm, #3f464b 15mm);
-                    z-index: 10;
-                }}
-                .cabecalho {{
-                    position: relative;
-                    z-index: 5;
-                    border-bottom: 1.5pt solid #3f464b;
-                    padding-bottom: 4mm;
-                    margin-bottom: 10mm;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                }}
-                .logo-area {{
-                    display: flex;
-                    align-items: center;
-                    gap: 5mm;
-                }}
-                .logo-area img {{
-                    width: 25mm;
-                    height: auto;
-                    opacity: 0.9;
-                }}
-                .instituicao-nome {{
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 14pt;
-                    color: #3f464b;
-                    text-transform: uppercase;
-                    letter-spacing: 1.5px;
-                    line-height: 1.2;
-                    margin-top: 8mm;
-                }}
-                .instituicao-sub {{
-                    font-family: "Arial", sans-serif;
-                    font-size: 8pt;
-                    color: #444;
-                    margin-top: 2mm;
-                    line-height: 1.3;
-                }}
-                .selo-autenticidade {{
-                    width: 22mm;
-                    height: 22mm;
-                    border: 1.5pt solid #3f464b;
-                    border-radius: 50%;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    font-family: "Arial", sans-serif;
-                    font-size: 6pt;
-                    color: #3f464b;
-                    text-align: center;
-                    line-height: 1.1;
-                    position: relative;
-                    background: radial-gradient(circle, rgba(26,35,126,0.05) 0%, transparent 70%);
-                }}
-                .selo-autenticidade::before {{
-                    content: "";
-                    display: inline-block;
-                    width: 24px;
-                    height: 16px;
-                    margin-bottom: 1mm;
-                    margin-right: 4px;
-                    vertical-align: middle;
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Crect x='0' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='4' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='7' y='0' width='3' height='16' fill='%231a237e'/%3E%3Crect x='12' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='15' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='19' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='22' y='0' width='2' height='16' fill='%231a237e'/%3E%3C/svg%3E");
-                    background-repeat: no-repeat;
-                    background-size: contain;
-                }}
-                .titulo-documento {{
-                    text-align: center;
-                    margin: 1mm 0 10mm 0;
-                    position: relative;
-                    z-index: 5;
-                }}
-                .titulo-principal {{
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 18pt;
-                    color: #3f464b;
-                    text-transform: uppercase;
-                    letter-spacing: 4px;
-                    margin-bottom: 3mm;
-                    position: relative;
-                    display: inline-block;
-                    padding: 0 15mm;
-                }}
-                .titulo-principal::before, .titulo-principal::after {{
-                    content: "";
-                    position: absolute;
-                    top: 50%;
-                    width: 10mm;
-                    height: 1pt;
-                    background: #3f464b;
-                }}
-                .titulo-principal::before {{ left: 0; }}
-                .titulo-principal::after {{ right: 0; }}
-                .box-identificacao {{
-                    border: 1pt solid #3f464b;
-                    margin: 8mm 0;
-                    position: relative;
-                    z-index: 5;
-                    background: rgba(26,35,126,0.02);
-                }}
-                .box-identificacao-header {{
-                    background: #3f464b;
-                    color: #fff;
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 8pt;
-                    text-transform: uppercase;
-                    letter-spacing: 2px;
-                    padding: 1mm 4mm;
-                    text-align: center;
-                }}
-                .box-identificacao-content {{
-                    padding: 3mm;
-                }}
-                .linha-dado {{
-                    display: flex;
-                    margin-bottom: 3mm;
-                    border-bottom: 0.3pt dotted #999;
-                    padding-bottom: 2mm;
-                }}
-                .linha-dado:last-child {{ margin-bottom: 0; border-bottom: none; }}
-                .rotulo {{
-                    width: 25mm;
-                    font-family: "Arial", sans-serif;
-                    font-size: 8pt;
-                    color: #3f464b;
-                    font-weight: bold;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                }}
-                .valor {{
-                    flex: 1;
-                    font-family: "Arial", sans-serif;
-                    font-size: 11pt;
-                    color: #000;
-                    font-weight: bold;
-                    padding-left: 3mm;
-                }}
-                .conteudo-arquivo {{
-                    border: 1pt solid #ddd;
-                    margin: 8mm 0;
-                    padding: 5mm;
-                    background: #f9f9f9;
-                    position: relative;
-                    z-index: 5;
-                    border-left: 4pt solid #3f464b;
-                }}
-                .conteudo-arquivo::before {{
-                    content: "📄 CONTEÚDO DO DOCUMENTO";
-                    position: absolute;
-                    top: -3mm;
-                    left: 5mm;
-                    background: #f9f9f9;
-                    padding: 0 3mm;
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 7pt;
-                    color: #3f464b;
-                    letter-spacing: 1px;
-                }}
-                .conteudo-arquivo a {{
-                    color: #3f464b;
-                    text-decoration: none;
-                    font-weight: bold;
-                }}
-                .conteudo-arquivo a:hover {{
-                    text-decoration: underline;
-                }}
-                .qr-code-box {{
-                    position: absolute;
-                    bottom: 23mm;
-                    left: 15mm;
-                    width: 30mm;
-                    height: 30mm;
-                    border: 0.5pt solid #ccc;
-                    background: #fafafa;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 5;
-                }}
-                .qr-code-label {{
-                    font-size: 6pt;
-                    color: #666;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    margin-bottom: 2mm;
-                }}
-                .qr-code-box img {{
-                    width: 20mm;
-                    height: 20mm;
-                    object-fit: contain;
-                }}
-                .rodape-tecnico {{
-                    position: absolute;
-                    bottom: 12mm;
-                    left: 50mm;
-                    right: 15mm;
-                    font-family: "Arial", sans-serif;
-                    font-size: 6.5pt;
-                    color: #666;
-                    text-align: center;
-                    line-height: 1.4;
-                    z-index: 5;
-                    border-top: 0.3pt solid #ddd;
-                    padding-top: 3mm;
-                }}
-                .rodape-tecnico strong {{
-                    color: #3f464b;
-                }}
-                .data-local {{
-                    text-align: right;
-                    margin: 20mm 0 10mm 0;
-                    font-family: "Arial", sans-serif;
-                    font-size: 8pt;
-                    color: #333;
-                    position: relative;
-                    z-index: 5;
-                    font-style: italic;
-                }}
-                .assinatura-area {{
-                    margin-top: 20mm;
-                    text-align: center;
-                    position: relative;
-                    z-index: 5;
-                    page-break-inside: avoid;
-                }}
-                .assinatura-linha {{
-                    width: 70mm;
-                    height: 0;
-                    border-top: 0.5pt solid #000;
-                    margin: 0 auto 3mm auto;
-                    position: relative;
-                }}
-                .assinatura-nome {{
-                    font-family: "Arial Black", "Arial", sans-serif;
-                    font-size: 11pt;
-                    color: #3f464b;
-                    margin-bottom: 1mm;
-                }}
-                .assinatura-cargo {{
-                    font-family: "Arial", sans-serif;
-                    font-size: 8pt;
-                    color: #555;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                }}
-                @media print {{
-                    body {{ background: #fff; }}
-                    .folha {{ box-shadow: none; margin: 0; }}
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="folha">
-                <div class="borda-seguranca"></div>
-                <div class="cantoneira top-left"></div>
-                <div class="cantoneira top-right"></div>
-                <div class="cantoneira bottom-left"></div>
-                <div class="cantoneira bottom-right"></div>
-                
-                <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educ - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
-                <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
-                <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
-                <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-                
-                <div class="marca-dagua-principal">FACOP SiGEu</div>
-                <div class="marca-dagua-pattern"></div>
-                
-                <div class="faixa-identificadora"></div>
-                
-                <div class="cabecalho">
-                    <div class="logo-area">
-                        <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
-                        <div>
-                            <div class="instituicao-nome">FACOP - SiGEu</div>
-                            <div class="instituicao-sub">Faculdade do Centro Oeste Paulista<br>Credenciada pela Portaria MEC nº 887 de 26/07/2017</div>
-                        </div>
-                    </div>
-                    <div class="selo-autenticidade">SiGEu Educacional<br>e-SIGEU-ICP-2026</div>
-                </div>
-                
-                <div class="titulo-documento">
-                    <div class="titulo-principal">{titulo.upper()}</div>
-                </div>
-                
-                <div class="box-identificacao">
-                    <div class="box-identificacao-header">DADOS DO DOCUMENTO</div>
-                    <div class="box-identificacao-content">
-                        <div class="linha-dado"><div class="rotulo">Tipo</div><div class="valor">{tipo.upper()}</div></div>
-                        <div class="linha-dado"><div class="rotulo">Arquivo</div><div class="valor">{arquivo.filename}</div></div>
-                        <div class="linha-dado"><div class="rotulo">Descrição</div><div class="valor">{descricao if descricao else 'Não informada'}</div></div>
-                        <div class="linha-dado"><div class="rotulo">Data Emissão</div><div class="valor">{data_emissao}</div></div>
-                        <div class="linha-dado"><div class="rotulo">Código</div><div class="valor" style="font-family:monospace;font-size:10pt;">{codigo}</div></div>
-                    </div>
-                </div>
-                
-                <div class="conteudo-arquivo">
-                    <p style="text-align:center;padding:10px;">
-                        <a href="data:application/octet-stream;base64,{arquivo_base64}" download="{arquivo.filename}" style="font-size:14pt;">
-                            ACESSO ABERTO AO PLANO DE ENSINO: {arquivo.filename} ({file_icon})
-                        </a>
-                    </p>
-                </div>
-                
-                <div class="data-local">São Paulo – SP, {datetime.now().strftime("%d de %B de %Y")}</div>
-                
-                <div class="assinatura-area">
-    <img src="/static/img/assinatura_total.png" alt="Assinatura e Carimbo" style="max-width: 250px; height: auto;">
-    <div style="margin-top: 5px; font-size: 8pt; color: #555; text-transform: uppercase; letter-spacing: 1px;">
-        DEPARTAMENTO EDUCACIONAL • SiGEU Educacional
-    </div>
-</div>
-                
-                <div class="qr-code-box">
-                    <div class="qr-code-label">Validação Digital</div>
-                    <img src="{qr_code_base64}" alt="QR Code">
-                </div>
-                
-                <div class="rodape-tecnico">
-                    <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06 e 14.063/20.<br>
-                    Para verificar autenticidade: <strong>{base_url}/validar-documento</strong> | Protocolo: {codigo}
-                </div>
-            </div>
-        </body>
-        </html>
-        '''
-        
-        # Salva no banco
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Garantir colunas
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN aluno_id INTEGER")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN qr_code TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN hash_documento TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_emissao TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN data_validade TEXT")
-        except:
-            pass
-        try:
-            cursor.execute("ALTER TABLE documentos_autenticados ADD COLUMN metadados TEXT")
-        except:
-            pass
-        
-        cursor.execute('''
-            INSERT INTO documentos_autenticados 
-            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
-             qr_code, hash_documento, data_emissao, data_validade, metadados)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (
-            codigo,
-            None,
-            "ADMIN - MEW",
-            "ADMIN",
-            f"anexo_{tipo}",
-            html_conteudo,
-            data_emissao,
-            qr_code_base64,
-            hash_documento,
-            data_emissao,
-            data_validade,
-            json.dumps({"tipo": tipo, "arquivo": arquivo.filename, "descricao": descricao, "titulo": titulo})
-        ))
-        
+        cursor.execute("""
+            INSERT INTO documentos_autenticados
+            (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,
+             qr_code,hash_documento,data_emissao,data_validade,metadados,arquivo_r2_key,arquivo_nome,arquivo_mime)
+            VALUES(%s,%s,NULL,'ADMIN - MEW','ADMIN',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,(codigo,codigo,f"anexo_{tipo}",f"anexo_{tipo}",html_conteudo,data_emissao,qr_code_base64,hash_documento,data_emissao,data_validade,metadados,key,arquivo.filename,mime))
         conn.commit()
+    except Exception:
+        conn.rollback()
+        try: delete_object(key)
+        except Exception: pass
+        raise
+    finally:
         conn.close()
-        
-        # Página de sucesso
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Documento Autenticado - SiGEU Educação/Facop Certificadora</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; padding: 40px; background: #f7fafc; }}
-                .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); border-top: 4px solid #16a34a; text-align: center; }}
-                .success {{ color: #16a34a; font-size: 48px; }}
-                h1 {{ color: #3f464b; }}
-                .code {{ background: #f1f5f9; padding: 20px; border-radius: 5px; font-family: monospace; font-size: 16px; word-break: break-all; margin: 20px 0; }}
-                .btn {{ display: inline-block; background: #3f464b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 5px; }}
-                .btn:hover {{ background: #262b2f; }}
-                .info {{ background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0; border-left: 4px solid #16a34a; text-align: left; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="success">✅</div>
-                <h1>DOCUMENTO AUTENTICADO!</h1>
-                
-                <div class="info">
-                    <p><strong>📌 Tipo:</strong> {tipo.upper()}</p>
-                    <p><strong>📎 Arquivo:</strong> {arquivo.filename}</p>
-                    <p><strong>📅 Emissão:</strong> {data_emissao}</p>
-                </div>
-                
-                <p><strong>🔑 Código de Autenticação:</strong></p>
-                <div class="code">{codigo}</div>
-                
-                <a href="{link_validacao}" class="btn" target="_blank">📄 Ver Documento</a>
-                <a href="/validar-documento" class="btn" style="background:#6c757d;">🔍 Validar</a>
-                <a href="/mew/anexar-documento" class="btn" style="background:#16a34a;">📎 Novo</a>
-                <a href="/mew/dashboard" class="btn" style="background:#6c757d;">⬅️ Voltar</a>
-                
-                <p style="margin-top: 20px; color: #666; font-size: 14px;">
-                    <strong>⚠️ Guarde este código!</strong> Ele será usado para validar o documento.
-                </p>
-            </div>
-        </body>
-        </html>
-        '''
-        
-    except Exception as e:
-        import traceback
-        print(f"Erro: {e}")
-        print(traceback.format_exc())
-        return f"❌ Erro: {str(e)}", 500
-    
-    
+    return f"""<!doctype html><html><body style='font-family:Arial;background:#eceff1;padding:40px'><div style='max-width:650px;margin:auto;background:#fff;padding:30px;border-top:5px solid #353b40'><h2>✅ Documento autenticado</h2><p><b>Código:</b> {codigo}</p><p>O arquivo foi enviado ao Cloudflare R2 e não ficou gravado no PostgreSQL.</p><p><a href='/ver-documento/{codigo}' target='_blank'>Visualizar documento</a></p><p><a href='/mew/anexar-documento'>Anexar outro</a> · <a href='/mew/dashboard'>Voltar ao MEW</a></p></div></body></html>"""
+
+
+
 
 # ==========================================================
 # PROJETO FINAL
@@ -12255,368 +11166,169 @@ def projeto_final():
 @app.route("/projeto-final/enviar/<int:disciplina_id>", methods=["POST"])
 def enviar_projeto_final(disciplina_id):
     aluno_id = session.get("aluno_id")
-
     if not aluno_id:
         return redirect(url_for("login"))
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT *
-        FROM projetos_finais
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-          AND liberado = 1
-    """, (aluno_id, disciplina_id))
-
-    projeto = cursor.fetchone()
-
-    if not projeto:
-        conn.close()
-        return redirect("/projeto-final?erro=Projeto+Final+não+liberado")
-
-    if projeto["corrigido"]:
-        conn.close()
-        return redirect("/projeto-final?erro=Este+projeto+já+foi+corrigido")
-
     arquivo = request.files.get("arquivo")
-
-    if not arquivo or arquivo.filename == "":
-        conn.close()
+    if not arquivo or not arquivo.filename:
         return redirect("/projeto-final?erro=Selecione+um+arquivo")
-
     extensoes_permitidas = {"pdf", "doc", "docx", "zip"}
     nome_original = arquivo.filename
     extensao = nome_original.rsplit(".", 1)[1].lower() if "." in nome_original else ""
-
     if extensao not in extensoes_permitidas:
-        conn.close()
-        return redirect(
-            "/projeto-final?erro=Formato+não+permitido.+Use+PDF,+DOC,+DOCX+ou+ZIP"
-        )
+        return redirect("/projeto-final?erro=Formato+não+permitido.+Use+PDF,+DOC,+DOCX+ou+ZIP")
+    if not r2_is_configured():
+        return redirect("/projeto-final?erro=Armazenamento+Cloudflare+R2+não+configurado")
 
-    upload_dir = os.path.join(
-        "static",
-        "uploads",
-        "projetos_finais",
-        str(aluno_id),
-        str(disciplina_id)
-    )
-    os.makedirs(upload_dir, exist_ok=True)
+    conn = get_db_connection(); cursor = conn.cursor()
+    cursor.execute("""SELECT id,corrigido,arquivo_r2_key FROM projetos_finais
+                      WHERE aluno_id=%s AND disciplina_id=%s AND liberado=1""", (aluno_id, disciplina_id))
+    projeto = cursor.fetchone()
+    if not projeto:
+        conn.close(); return redirect("/projeto-final?erro=Projeto+Final+não+liberado")
+    if projeto.get("corrigido"):
+        conn.close(); return redirect("/projeto-final?erro=Este+projeto+já+foi+corrigido")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    nome_seguro = secure_filename(nome_original)
-    nome_salvo = f"{timestamp}_{nome_seguro}"
-    caminho_completo = os.path.join(upload_dir, nome_salvo)
-
-    arquivo.save(caminho_completo)
-
-    arquivo_path = os.path.join(
-        "uploads",
-        "projetos_finais",
-        str(aluno_id),
-        str(disciplina_id),
-        nome_salvo
-    ).replace("\\", "/")
-
-    data_envio = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-    cursor.execute("""
-        UPDATE projetos_finais
-        SET arquivo_path = %s,
-            nome_arquivo = %s,
-            data_envio = %s,
-            nota = NULL,
-            corrigido = 0,
-            data_correcao = NULL
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-    """, (
-        arquivo_path,
-        nome_original,
-        data_envio,
-        aluno_id,
-        disciplina_id
-    ))
-
-    conn.commit()
+    mime = arquivo.mimetype or guess_content_type(nome_original)
+    key = make_key("projetos-finais/alunos", nome_original, aluno_id, disciplina_id)
+    antigo = projeto.get("arquivo_r2_key")
+    try:
+        r2_upload_fileobj(arquivo.stream, key, mime, {"aluno_id": aluno_id, "disciplina_id": disciplina_id})
+        cursor.execute("""
+            UPDATE projetos_finais
+            SET arquivo_r2_key=%s, arquivo_path=NULL, nome_arquivo=%s, data_envio=%s,
+                nota=NULL, corrigido=0, data_correcao=NULL
+            WHERE id=%s
+        """, (key, nome_original, datetime.now().strftime("%d/%m/%Y %H:%M"), projeto["id"]))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        try: delete_object(key)
+        except Exception: pass
+        conn.close(); raise
     conn.close()
-
+    if antigo and antigo != key:
+        try: delete_object(antigo)
+        except Exception: pass
     return redirect("/projeto-final?sucesso=Projeto+enviado+com+sucesso")
+
 
 
 @app.route("/mew/arquivo-final")
 def arquivo_final():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id, nome, ra FROM alunos ORDER BY nome")
-    alunos = cursor.fetchall()
-
-    cursor.execute("SELECT id, nome FROM disciplinas ORDER BY nome")
-    disciplinas = cursor.fetchall()
-
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,nome,ra FROM alunos ORDER BY nome"); alunos=cursor.fetchall()
+    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome"); disciplinas=cursor.fetchall()
     cursor.execute("""
-        SELECT
-            pf.*,
-            a.nome AS aluno_nome,
-            a.ra AS aluno_ra,
-            d.nome AS disciplina_nome
+        SELECT pf.id,pf.aluno_id,pf.disciplina_id,pf.liberado,pf.titulo_atividade,pf.conteudo_atividade,
+               pf.arquivo_atividade_path,pf.nome_arquivo_atividade,pf.arquivo_path,pf.nome_arquivo,
+               pf.data_envio,pf.nota,pf.corrigido,pf.data_correcao,pf.data_liberacao,
+               pf.arquivo_r2_key,pf.arquivo_atividade_r2_key,
+               a.nome AS aluno_nome,a.ra AS aluno_ra,d.nome AS disciplina_nome
         FROM projetos_finais pf
-        JOIN alunos a ON a.id = pf.aluno_id
-        JOIN disciplinas d ON d.id = pf.disciplina_id
-        ORDER BY
-            CASE
-                WHEN pf.arquivo_path IS NOT NULL
-                 AND pf.corrigido = 0
-                THEN 0
-                ELSE 1
-            END,
-            pf.id DESC
+        JOIN alunos a ON a.id=pf.aluno_id JOIN disciplinas d ON d.id=pf.disciplina_id
+        ORDER BY CASE WHEN COALESCE(pf.arquivo_r2_key,pf.arquivo_path) IS NOT NULL AND pf.corrigido=0 THEN 0 ELSE 1 END, pf.id DESC
     """)
+    projetos=cursor.fetchall(); conn.close()
+    return render_template("mew/arquivo_final.html",alunos=alunos,disciplinas=disciplinas,projetos=projetos)
 
-    projetos = cursor.fetchall()
-    conn.close()
-
-    return render_template(
-        "mew/arquivo_final.html",
-        alunos=alunos,
-        disciplinas=disciplinas,
-        projetos=projetos
-    )
 
 
 @app.route("/mew/liberar-projeto-final", methods=["POST"])
 def liberar_projeto_final():
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-
-    aluno_id = request.form.get("aluno_id")
-    disciplina_id = request.form.get("disciplina_id")
-    titulo_atividade = (request.form.get("titulo_atividade") or "Projeto Final").strip()
-    conteudo_atividade = (request.form.get("conteudo_atividade") or "").strip()
-    arquivo_atividade = request.files.get("arquivo_atividade")
-
+    aluno_id=request.form.get("aluno_id"); disciplina_id=request.form.get("disciplina_id")
+    titulo=(request.form.get("titulo_atividade") or "Projeto Final").strip()
+    conteudo=(request.form.get("conteudo_atividade") or "").strip()
+    arquivo=request.files.get("arquivo_atividade")
     if not aluno_id or not disciplina_id:
-        return redirect(
-            "/mew/arquivo-final?erro=Selecione+aluno+e+disciplina"
-        )
+        return redirect("/mew/arquivo-final?erro=Selecione+aluno+e+disciplina")
+    if not conteudo and (not arquivo or not arquivo.filename):
+        return redirect("/mew/arquivo-final?erro=Escreva+as+orientações+ou+anexe+o+arquivo+da+atividade")
+    if arquivo and arquivo.filename and not r2_is_configured():
+        return redirect("/mew/arquivo-final?erro=Armazenamento+Cloudflare+R2+não+configurado")
 
-    if not conteudo_atividade and (not arquivo_atividade or arquivo_atividade.filename == ""):
-        return redirect(
-            "/mew/arquivo-final?erro=Escreva+as+orientações+ou+anexe+o+arquivo+da+atividade"
-        )
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT *
-        FROM projetos_finais
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    existente = cursor.fetchone()
-
-    arquivo_atividade_path = existente["arquivo_atividade_path"] if existente else None
-    nome_arquivo_atividade = existente["nome_arquivo_atividade"] if existente else None
-
-    if arquivo_atividade and arquivo_atividade.filename:
-        extensoes_atividade = {"pdf", "doc", "docx"}
-        nome_original_atividade = arquivo_atividade.filename
-        extensao_atividade = (
-            nome_original_atividade.rsplit(".", 1)[1].lower()
-            if "." in nome_original_atividade
-            else ""
-        )
-
-        if extensao_atividade not in extensoes_atividade:
-            conn.close()
-            return redirect(
-                "/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX"
-            )
-
-        upload_dir = os.path.join(
-            "static",
-            "uploads",
-            "projetos_finais",
-            "atividades",
-            str(aluno_id),
-            str(disciplina_id)
-        )
-        os.makedirs(upload_dir, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_seguro = secure_filename(nome_original_atividade)
-        nome_salvo = f"{timestamp}_{nome_seguro}"
-        arquivo_atividade.save(os.path.join(upload_dir, nome_salvo))
-
-        arquivo_atividade_path = os.path.join(
-            "uploads",
-            "projetos_finais",
-            "atividades",
-            str(aluno_id),
-            str(disciplina_id),
-            nome_salvo
-        ).replace("\\", "/")
-        nome_arquivo_atividade = nome_original_atividade
-
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-    if existente:
-        cursor.execute("""
-            UPDATE projetos_finais
-            SET liberado = 1,
-                titulo_atividade = %s,
-                conteudo_atividade = %s,
-                arquivo_atividade_path = %s,
-                nome_arquivo_atividade = %s,
-                data_liberacao = %s
-            WHERE aluno_id = %s
-              AND disciplina_id = %s
-        """, (
-            titulo_atividade,
-            conteudo_atividade,
-            arquivo_atividade_path,
-            nome_arquivo_atividade,
-            agora,
-            aluno_id,
-            disciplina_id
-        ))
-    else:
-        cursor.execute("""
-            INSERT INTO projetos_finais
-            (
-                aluno_id,
-                disciplina_id,
-                liberado,
-                titulo_atividade,
-                conteudo_atividade,
-                arquivo_atividade_path,
-                nome_arquivo_atividade,
-                data_liberacao
-            )
-            VALUES (%s, %s, 1, %s, %s, %s, %s, %s)
-        """, (
-            aluno_id,
-            disciplina_id,
-            titulo_atividade,
-            conteudo_atividade,
-            arquivo_atividade_path,
-            nome_arquivo_atividade,
-            agora
-        ))
-
-    # Projeto Final substitui a prova final normal: desativa a liberação de 30 questões
-    cursor.execute("""
-        UPDATE liberacao_final
-        SET liberada = 0
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    # Mantém coerência com qualquer flag antiga de abertura da prova final
-    cursor.execute("""
-        UPDATE aluno_disciplina_datas
-        SET prova_final_aberta = 0
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    conn.commit()
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,arquivo_atividade_r2_key,nome_arquivo_atividade FROM projetos_finais WHERE aluno_id=%s AND disciplina_id=%s",(aluno_id,disciplina_id))
+    existente=cursor.fetchone(); key_antigo=existente.get("arquivo_atividade_r2_key") if existente else None
+    key=key_antigo; nome=existente.get("nome_arquivo_atividade") if existente else None; novo_key=None
+    if arquivo and arquivo.filename:
+        ext=arquivo.filename.rsplit('.',1)[1].lower() if '.' in arquivo.filename else ''
+        if ext not in {"pdf","doc","docx"}:
+            conn.close(); return redirect("/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX")
+        nome=arquivo.filename; novo_key=make_key("projetos-finais/atividades",nome,aluno_id,disciplina_id); key=novo_key
+        try: r2_upload_fileobj(arquivo.stream,key,arquivo.mimetype or guess_content_type(nome),{"aluno_id":aluno_id,"disciplina_id":disciplina_id})
+        except Exception:
+            conn.close(); raise
+    agora=datetime.now().strftime("%d/%m/%Y %H:%M")
+    try:
+        if existente:
+            cursor.execute("""UPDATE projetos_finais SET liberado=1,titulo_atividade=%s,conteudo_atividade=%s,
+                arquivo_atividade_r2_key=%s,arquivo_atividade_path=CASE WHEN %s IS NOT NULL THEN NULL ELSE arquivo_atividade_path END,
+                nome_arquivo_atividade=%s,data_liberacao=%s WHERE id=%s""",
+                (titulo,conteudo,key,novo_key,nome,agora,existente["id"]))
+        else:
+            cursor.execute("""INSERT INTO projetos_finais(aluno_id,disciplina_id,liberado,titulo_atividade,conteudo_atividade,
+                arquivo_atividade_r2_key,nome_arquivo_atividade,data_liberacao) VALUES(%s,%s,1,%s,%s,%s,%s,%s)""",
+                (aluno_id,disciplina_id,titulo,conteudo,key,nome,agora))
+        cursor.execute("UPDATE liberacao_final SET liberada=0 WHERE aluno_id=%s AND disciplina_id=%s",(aluno_id,disciplina_id))
+        cursor.execute("UPDATE aluno_disciplina_datas SET prova_final_aberta=0 WHERE aluno_id=%s AND disciplina_id=%s",(aluno_id,disciplina_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        if novo_key:
+            try: delete_object(novo_key)
+            except Exception: pass
+        conn.close(); raise
     conn.close()
+    if novo_key and key_antigo and key_antigo != novo_key:
+        try: delete_object(key_antigo)
+        except Exception: pass
+    return redirect("/mew/arquivo-final?sucesso=Projeto+Final+liberado+e+prova+final+normal+bloqueada")
 
-    return redirect(
-        "/mew/arquivo-final?sucesso=Projeto+Final+liberado+e+prova+final+normal+bloqueada"
-    )
 
 
 @app.route("/mew/editar-projeto-final/<int:projeto_id>", methods=["POST"])
 def editar_projeto_final(projeto_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-
-    titulo_atividade = (request.form.get("titulo_atividade") or "Projeto Final").strip()
-    conteudo_atividade = (request.form.get("conteudo_atividade") or "").strip()
-    arquivo_atividade = request.files.get("arquivo_atividade")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM projetos_finais WHERE id = %s", (projeto_id,))
-    projeto = cursor.fetchone()
-
+    titulo=(request.form.get("titulo_atividade") or "Projeto Final").strip()
+    conteudo=(request.form.get("conteudo_atividade") or "").strip()
+    arquivo=request.files.get("arquivo_atividade")
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("SELECT id,aluno_id,disciplina_id,arquivo_atividade_r2_key,nome_arquivo_atividade FROM projetos_finais WHERE id=%s",(projeto_id,))
+    projeto=cursor.fetchone()
     if not projeto:
-        conn.close()
-        return redirect("/mew/arquivo-final?erro=Projeto+não+encontrado")
-
-    arquivo_atividade_path = projeto["arquivo_atividade_path"]
-    nome_arquivo_atividade = projeto["nome_arquivo_atividade"]
-
-    if arquivo_atividade and arquivo_atividade.filename:
-        extensoes_atividade = {"pdf", "doc", "docx"}
-        nome_original_atividade = arquivo_atividade.filename
-        extensao_atividade = (
-            nome_original_atividade.rsplit(".", 1)[1].lower()
-            if "." in nome_original_atividade
-            else ""
-        )
-
-        if extensao_atividade not in extensoes_atividade:
-            conn.close()
-            return redirect(
-                "/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX"
-            )
-
-        upload_dir = os.path.join(
-            "static",
-            "uploads",
-            "projetos_finais",
-            "atividades",
-            str(projeto["aluno_id"]),
-            str(projeto["disciplina_id"])
-        )
-        os.makedirs(upload_dir, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_seguro = secure_filename(nome_original_atividade)
-        nome_salvo = f"{timestamp}_{nome_seguro}"
-        arquivo_atividade.save(os.path.join(upload_dir, nome_salvo))
-
-        arquivo_atividade_path = os.path.join(
-            "uploads",
-            "projetos_finais",
-            "atividades",
-            str(projeto["aluno_id"]),
-            str(projeto["disciplina_id"]),
-            nome_salvo
-        ).replace("\\", "/")
-        nome_arquivo_atividade = nome_original_atividade
-
-    cursor.execute("""
-        UPDATE projetos_finais
-        SET titulo_atividade = %s,
-            conteudo_atividade = %s,
-            arquivo_atividade_path = %s,
-            nome_arquivo_atividade = %s
-        WHERE id = %s
-    """, (
-        titulo_atividade,
-        conteudo_atividade,
-        arquivo_atividade_path,
-        nome_arquivo_atividade,
-        projeto_id
-    ))
-
-    conn.commit()
+        conn.close(); return redirect("/mew/arquivo-final?erro=Projeto+não+encontrado")
+    key=projeto.get("arquivo_atividade_r2_key"); nome=projeto.get("nome_arquivo_atividade"); novo=None
+    if arquivo and arquivo.filename:
+        if not r2_is_configured():
+            conn.close(); return redirect("/mew/arquivo-final?erro=Armazenamento+Cloudflare+R2+não+configurado")
+        ext=arquivo.filename.rsplit('.',1)[1].lower() if '.' in arquivo.filename else ''
+        if ext not in {"pdf","doc","docx"}:
+            conn.close(); return redirect("/mew/arquivo-final?erro=Arquivo+da+atividade+deve+ser+PDF,+DOC+ou+DOCX")
+        nome=arquivo.filename; novo=make_key("projetos-finais/atividades",nome,projeto["aluno_id"],projeto["disciplina_id"])
+        r2_upload_fileobj(arquivo.stream,novo,arquivo.mimetype or guess_content_type(nome),{"projeto_id":projeto_id})
+        key=novo
+    try:
+        cursor.execute("""UPDATE projetos_finais SET titulo_atividade=%s,conteudo_atividade=%s,
+            arquivo_atividade_r2_key=%s, arquivo_atividade_path=CASE WHEN %s IS NOT NULL THEN NULL ELSE arquivo_atividade_path END,
+            nome_arquivo_atividade=%s WHERE id=%s""",(titulo,conteudo,key,novo,nome,projeto_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        if novo:
+            try: delete_object(novo)
+            except Exception: pass
+        conn.close(); raise
     conn.close()
-
+    if novo and projeto.get("arquivo_atividade_r2_key") and projeto["arquivo_atividade_r2_key"] != novo:
+        try: delete_object(projeto["arquivo_atividade_r2_key"])
+        except Exception: pass
     return redirect("/mew/arquivo-final?sucesso=Conteúdo+da+atividade+atualizado")
+
 
 
 @app.route("/mew/remover-projeto-final/<int:projeto_id>")
@@ -12665,7 +11377,7 @@ def corrigir_projeto_final(projeto_id):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT *
+        SELECT id, aluno_id, disciplina_id, arquivo_r2_key, arquivo_path
         FROM projetos_finais
         WHERE id = %s
     """, (projeto_id,))
@@ -12678,7 +11390,7 @@ def corrigir_projeto_final(projeto_id):
             "/mew/arquivo-final?erro=Projeto+não+encontrado"
         )
 
-    if not projeto["arquivo_path"]:
+    if not (projeto.get("arquivo_r2_key") or projeto.get("arquivo_path")):
         conn.close()
         return redirect(
             "/mew/arquivo-final?erro=O+aluno+ainda+não+enviou+o+arquivo"
@@ -13002,7 +11714,7 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     capitulos_avaliados = int((cursor.fetchone() or {}).get("total") or 0)
 
     cursor.execute("""
-        SELECT corrigido, nota, arquivo_path, data_envio
+        SELECT corrigido, nota, arquivo_r2_key, arquivo_path, data_envio
         FROM projetos_finais
         WHERE aluno_id = %s AND disciplina_id = %s
         LIMIT 1
@@ -13028,8 +11740,11 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     final_tipo = "Prova Final"
     if projeto:
         final_tipo = "Projeto Final"
-        final_concluido = bool(projeto.get("corrigido")) and projeto.get("nota") is not None
-        if not final_concluido:
+        arquivo_enviado = bool(projeto.get("arquivo_r2_key") or projeto.get("arquivo_path"))
+        final_concluido = arquivo_enviado and bool(projeto.get("corrigido")) and projeto.get("nota") is not None
+        if not arquivo_enviado:
+            motivos.append("Projeto Final ainda não foi enviado")
+        elif not final_concluido:
             motivos.append("Projeto Final ainda não foi corrigido e lançado")
     else:
         final_concluido = d.get("media_final") is not None or d.get("nota_final") is not None
@@ -13074,7 +11789,6 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
 
 
 def _disciplinas_documentos_aluno(aluno_id):
-    init_documentos_integrados_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -13186,26 +11900,22 @@ def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
 
 
 def _html_para_pdf(html_texto, base_url=None):
-    return HTML(string=html_texto, base_url=base_url or request.host_url).write_pdf()
+    return render_html_to_pdf_bytes(html_texto, base_url or request.host_url)
 
 
 def _mesclar_pdfs(lista_pdfs):
-    from pypdf import PdfReader, PdfWriter
-    writer = PdfWriter()
-    buffers = []
+    temporarios=[]
     try:
+        entradas=[]
         for pdf_bytes in lista_pdfs:
-            b = BytesIO(pdf_bytes)
-            buffers.append(b)
-            reader = PdfReader(b)
-            for page in reader.pages:
-                writer.add_page(page)
-        out = BytesIO()
-        writer.write(out)
-        return out.getvalue()
+            tmp=tempfile.NamedTemporaryFile(suffix=".pdf",delete=False); tmp.write(pdf_bytes); tmp.close()
+            temporarios.append(tmp.name); entradas.append(tmp.name)
+        out=tempfile.NamedTemporaryFile(suffix=".pdf",delete=False); out.close(); temporarios.append(out.name)
+        merge_pdf_files(entradas,out.name)
+        with open(out.name,"rb") as fh: return fh.read()
     finally:
-        for b in buffers:
-            try: b.close()
+        for caminho in temporarios:
+            try: os.remove(caminho)
             except Exception: pass
 
 
@@ -13228,108 +11938,68 @@ def _salvar_componente_autenticado(cursor, aluno, tipo, html_texto, codigo, hash
 
 
 def _gerar_previa_solicitacao_integrada(solicitacao_id):
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    """Gera o pacote em arquivos temporários e envia um único PDF ao R2."""
+    if not r2_is_configured():
+        return False, "Cloudflare R2 ainda não foi configurado no Render."
+    conn=get_db_connection(); cursor=conn.cursor(); temporarios=[]
     try:
-        cursor.execute("SELECT * FROM solicitacoes_documentos_integrados WHERE id = %s", (solicitacao_id,))
-        s = cursor.fetchone()
-        if not s:
-            raise ValueError("Solicitação não encontrada.")
-
-        aluno = _dados_aluno_documentos(s["aluno_id"])
-        if not aluno:
-            raise ValueError("Aluno não encontrado.")
-
-        ids = [int(x) for x in str(s.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
-        if not ids:
-            raise ValueError("Nenhuma disciplina foi selecionada.")
-
-        disciplinas = []
+        cursor.execute("SELECT id,aluno_id,tipo_solicitacao,tipos_documentos,disciplinas_ids FROM solicitacoes_documentos_integrados WHERE id=%s",(solicitacao_id,)); sol=cursor.fetchone()
+        if not sol: raise ValueError("Solicitação não encontrada.")
+        aluno=_dados_aluno_documentos(sol["aluno_id"])
+        if not aluno: raise ValueError("Aluno não encontrado.")
+        ids=[int(x) for x in str(sol.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+        if not ids: raise ValueError("Nenhuma disciplina foi selecionada.")
+        disciplinas=[]
         for did in ids:
-            status = _status_disciplina_documentos(s["aluno_id"], did, cursor)
-            if not status.get("elegivel"):
-                raise ValueError(f"{status.get('nome','Disciplina')}: {status.get('motivo')}")
-            disciplinas.append(status)
+            st=_status_disciplina_documentos(sol["aluno_id"],did,cursor)
+            if not st.get("elegivel"): raise ValueError(f"{st.get('nome','Disciplina')}: {st.get('motivo')}")
+            disciplinas.append(st)
+        tipos=json.loads(sol.get("tipos_documentos") or "[]")
+        if not tipos: raise ValueError("Nenhum tipo de documento solicitado.")
+        componentes=[]; timestamp=datetime.now().strftime("%Y%m%d%H%M%S"); base_url=request.host_url.rstrip("/")
 
-        tipos = json.loads(s.get("tipos_documentos") or "[]")
-        if not tipos:
-            raise ValueError("Nenhum tipo de documento solicitado.")
-
-        pdfs = []
-        componentes = []
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        base_url = request.host_url.rstrip("/")
+        def add_html(html_texto):
+            tmp=tempfile.NamedTemporaryFile(suffix=".pdf",delete=False); tmp.close(); temporarios.append(tmp.name)
+            render_html_to_pdf_file(html_texto,tmp.name,base_url)
 
         if "historico" in tipos:
-            codigo = f"HIST-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
-            hash_doc = gerar_hash_documento("historico-integrado-" + str(solicitacao_id), aluno["ra"], timestamp)
-            qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
-            html_h = _html_historico_integrado(aluno, disciplinas, codigo, qr, hash_doc)
-            doc_id = _salvar_componente_autenticado(cursor, aluno, "historico", html_h, codigo, hash_doc, None, qr)
-            pdfs.append(_html_para_pdf(html_h, base_url))
-            componentes.append({"id": doc_id, "tipo": "historico", "codigo": codigo})
-
+            codigo=f"HIST-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"; hash_doc=gerar_hash_documento("historico-integrado-"+str(solicitacao_id),aluno["ra"],timestamp); qr=gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}"); html_h=_html_historico_integrado(aluno,disciplinas,codigo,qr,hash_doc); doc_id=_salvar_componente_autenticado(cursor,aluno,"historico",html_h,codigo,hash_doc,None,qr); add_html(html_h); componentes.append({"id":doc_id,"tipo":"historico","codigo":codigo})
         if "conclusao" in tipos:
             for d in disciplinas:
-                codigo = f"DECL-{aluno['ra']}-{d['id']}-{timestamp}-{secrets.token_hex(2).upper()}"
-                hash_doc = gerar_hash_documento(f"declaracao-{s['id']}-{d['id']}", aluno["ra"], timestamp)
-                qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
-                html_d = _html_declaracao_integrada(aluno, d, codigo, qr, hash_doc)
-                doc_id = _salvar_componente_autenticado(cursor, aluno, "declaracao_conclusao", html_d, codigo, hash_doc, d["id"], qr)
-                pdfs.append(_html_para_pdf(html_d, base_url))
-                componentes.append({"id": doc_id, "tipo": "declaracao_conclusao", "disciplina_id": d["id"], "codigo": codigo})
-
+                codigo=f"DECL-{aluno['ra']}-{d['id']}-{timestamp}-{secrets.token_hex(2).upper()}"; hash_doc=gerar_hash_documento(f"declaracao-{solicitacao_id}-{d['id']}",aluno["ra"],timestamp); qr=gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}"); html_d=_html_declaracao_integrada(aluno,d,codigo,qr,hash_doc); doc_id=_salvar_componente_autenticado(cursor,aluno,"declaracao_conclusao",html_d,codigo,hash_doc,d["id"],qr); add_html(html_d); componentes.append({"id":doc_id,"tipo":"declaracao_conclusao","disciplina_id":d["id"],"codigo":codigo})
         if "plano_ensino" in tipos:
             for d in disciplinas:
-                cursor.execute("""
-                    SELECT id, codigo, conteudo_html, hash_documento
-                    FROM documentos_autenticados
-                    WHERE tipo = 'plano_ensino' AND disciplina_id = %s
-                    ORDER BY id DESC LIMIT 1
-                """, (d["id"],))
-                plano = cursor.fetchone()
-                if not plano or not plano.get("conteudo_html"):
-                    raise ValueError(f"Plano de Ensino ainda não foi gerado/vinculado à disciplina {d['nome']}.")
-                pdfs.append(_html_para_pdf(plano["conteudo_html"], base_url))
-                componentes.append({"id": plano["id"], "tipo": "plano_ensino", "disciplina_id": d["id"], "codigo": plano.get("codigo")})
-
-        if not pdfs:
-            raise ValueError("Nenhum documento pôde ser gerado.")
-
-        pdf_final = _mesclar_pdfs(pdfs)
-        hash_pdf = hashlib.sha256(pdf_final).hexdigest().upper()
-        codigo_pacote = f"PAC-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
-        nome_arquivo = f"SIGEU_documentos_{aluno['ra']}_{timestamp}.pdf"
-        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-        cursor.execute("""
-            UPDATE solicitacoes_documentos_integrados
-            SET status='aguardando_aprovacao', mensagem_status=%s, codigo_pacote=%s,
-                pdf_previa=%s, pdf_final=NULL, nome_arquivo=%s, hash_pdf=%s,
-                componentes_json=%s, data_preparacao=%s
-            WHERE id=%s
-        """, (
-            "Prévia automática pronta para conferência do MEW.", codigo_pacote,
-            psycopg2.Binary(pdf_final), nome_arquivo, hash_pdf,
-            json.dumps(componentes, ensure_ascii=False), agora, solicitacao_id
-        ))
-        conn.commit()
-        return True, None
+                cursor.execute("SELECT id,codigo,conteudo_html,hash_documento FROM documentos_autenticados WHERE tipo='plano_ensino' AND disciplina_id=%s ORDER BY id DESC LIMIT 1",(d["id"],)); plano=cursor.fetchone()
+                if not plano or not plano.get("conteudo_html"): raise ValueError(f"Plano de Ensino ainda não foi gerado/vinculado à disciplina {d['nome']}.")
+                add_html(plano["conteudo_html"]); componentes.append({"id":plano["id"],"tipo":"plano_ensino","disciplina_id":d["id"],"codigo":plano.get("codigo")})
+        if not temporarios: raise ValueError("Nenhum documento pôde ser gerado.")
+        merged=tempfile.NamedTemporaryFile(suffix=".pdf",delete=False); merged.close(); temporarios.append(merged.name)
+        merge_pdf_files(temporarios[:-1],merged.name)
+        h=hashlib.sha256()
+        with open(merged.name,"rb") as fh:
+            while True:
+                chunk=fh.read(1024*1024)
+                if not chunk: break
+                h.update(chunk)
+        hash_pdf=h.hexdigest().upper(); codigo_pacote=f"PAC-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"; nome_arquivo=f"SIGEU_documentos_{aluno['ra']}_{timestamp}.pdf"; key=make_key("documentos-integrados",nome_arquivo,solicitacao_id)
+        with open(merged.name,"rb") as fh: r2_upload_fileobj(fh,key,"application/pdf",{"solicitacao_id":solicitacao_id,"hash":hash_pdf})
+        agora=datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        cursor.execute("""UPDATE solicitacoes_documentos_integrados SET status='aguardando_aprovacao',mensagem_status=%s,codigo_pacote=%s,
+            arquivo_r2_key=%s,pdf_previa=NULL,pdf_final=NULL,nome_arquivo=%s,hash_pdf=%s,componentes_json=%s,data_preparacao=%s WHERE id=%s""",
+            ("Prévia automática pronta para conferência do MEW.",codigo_pacote,key,nome_arquivo,hash_pdf,json.dumps(componentes,ensure_ascii=False),agora,solicitacao_id))
+        conn.commit(); return True,None
     except Exception as e:
         conn.rollback()
         try:
-            cursor.execute("""
-                UPDATE solicitacoes_documentos_integrados
-                SET status='erro', mensagem_status=%s, pdf_previa=NULL
-                WHERE id=%s
-            """, (str(e), solicitacao_id))
-            conn.commit()
-        except Exception:
-            conn.rollback()
-        return False, str(e)
+            cursor.execute("UPDATE solicitacoes_documentos_integrados SET status='erro',mensagem_status=%s WHERE id=%s",(str(e),solicitacao_id)); conn.commit()
+        except Exception: conn.rollback()
+        return False,str(e)
     finally:
         conn.close()
+        for caminho in temporarios:
+            try: os.remove(caminho)
+            except Exception: pass
+
 
 
 @app.route("/solicitar-documentos-integrados-modal", methods=["GET"])
@@ -13388,7 +12058,6 @@ def solicitar_documentos_integrados():
     if not aluno_id:
         return jsonify({"success": False, "message": "Não autenticado"}), 401
 
-    init_documentos_integrados_db()
     data = request.get_json(silent=True) or {}
     tipo = data.get("tipo", "integrado")
     ids = [int(x) for x in data.get("disciplinas_ids", []) if str(x).isdigit()]
@@ -13431,157 +12100,81 @@ def solicitar_documentos_integrados():
 
 @app.route("/historico-documentos-integrados")
 def historico_documentos_integrados():
-    aluno_id = session.get("aluno_id")
-    if not aluno_id:
-        return jsonify({"success": False, "message": "Não autenticado"}), 401
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT * FROM solicitacoes_documentos_integrados
-        WHERE aluno_id=%s ORDER BY id DESC
-    """, (aluno_id,))
-    rows = cursor.fetchall()
-    resultado = []
-    for row in rows:
-        r = dict(row)
-        ids = [int(x) for x in str(r.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
-        if ids:
-            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id = ANY(%s)", (ids,))
-            rr = cursor.fetchone()
-            r["disciplinas_nomes"] = rr.get("nomes") if rr else ""
-        else:
-            r["disciplinas_nomes"] = ""
-        r["arquivo_url"] = f"/documentos-integrados/{r['id']}/pdf" if r.get("status") == "aprovado" and r.get("pdf_final") else None
-        resultado.append(r)
-    conn.close()
-    return jsonify({"success": True, "solicitacoes": resultado})
+    aluno_id=session.get("aluno_id")
+    if not aluno_id: return jsonify({"success":False,"message":"Não autenticado"}),401
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("""SELECT s.id,s.tipo_solicitacao,s.tipos_documentos,s.disciplinas_ids,s.status,s.mensagem_status,s.codigo_pacote,s.nome_arquivo,s.hash_pdf,s.data_solicitacao,s.data_preparacao,s.data_aprovacao,s.arquivo_r2_key,
+        COALESCE((SELECT STRING_AGG(d.nome,', ' ORDER BY d.nome) FROM disciplinas d WHERE d.id=ANY(string_to_array(NULLIF(s.disciplinas_ids,''),',')::int[])),'') AS disciplinas_nomes
+        FROM solicitacoes_documentos_integrados s WHERE s.aluno_id=%s ORDER BY s.id DESC LIMIT 200""",(aluno_id,)); rows=[]
+    for row in cursor.fetchall():
+        r=dict(row); r["arquivo_url"]=f"/documentos-integrados/{r['id']}/pdf" if r.get("status")=="aprovado" and r.get("arquivo_r2_key") else None; rows.append(r)
+    conn.close(); return jsonify({"success":True,"solicitacoes":rows})
+
 
 
 @app.route("/meus-documentos-integrados-api")
 def meus_documentos_integrados_api():
-    aluno_id = session.get("aluno_id")
-    if not aluno_id:
-        return jsonify({"success": False, "documentos": []}), 401
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, tipo_solicitacao, codigo_pacote, nome_arquivo, data_aprovacao, hash_pdf,
-               disciplinas_ids, mensagem_status
-        FROM solicitacoes_documentos_integrados
-        WHERE aluno_id=%s AND status='aprovado' AND pdf_final IS NOT NULL
-        ORDER BY id DESC
-    """, (aluno_id,))
-    rows = cursor.fetchall()
-    docs = []
-    for row in rows:
-        ids = [int(x) for x in str(row.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
-        nomes = ""
-        if ids:
-            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id=ANY(%s)", (ids,))
-            x = cursor.fetchone()
-            nomes = x.get("nomes") if x else ""
-        titulo = "Pacote Integrado: Histórico + Declaração + Plano" if row["tipo_solicitacao"] == "integrado" else {
-            "historico": "Histórico Escolar",
-            "conclusao": "Declaração de Conclusão",
-            "plano_ensino": "Plano de Ensino"
-        }.get(row["tipo_solicitacao"], "Documentos Acadêmicos")
-        docs.append({
-            "id": row["id"], "tipo": "pacote_integrado", "titulo": titulo,
-            "disciplina_nome": nomes, "data_envio": row.get("data_aprovacao") or "",
-            "mensagem": "Documento conferido e aprovado pela Secretaria/MEW.",
-            "status": "enviado", "url": f"/documentos-integrados/{row['id']}/pdf"
-        })
-    conn.close()
-    return jsonify({"success": True, "documentos": docs})
+    aluno_id=session.get("aluno_id")
+    if not aluno_id: return jsonify({"success":False,"documentos":[]}),401
+    conn=get_db_connection(); cursor=conn.cursor()
+    cursor.execute("""SELECT s.id,s.tipo_solicitacao,s.codigo_pacote,s.nome_arquivo,s.data_aprovacao,s.hash_pdf,s.disciplinas_ids,s.mensagem_status,s.arquivo_r2_key,
+        COALESCE((SELECT STRING_AGG(d.nome,', ' ORDER BY d.nome) FROM disciplinas d WHERE d.id=ANY(string_to_array(NULLIF(s.disciplinas_ids,''),',')::int[])),'') AS disciplinas_nomes
+        FROM solicitacoes_documentos_integrados s WHERE s.aluno_id=%s AND s.status='aprovado' AND (s.arquivo_r2_key IS NOT NULL OR s.pdf_final IS NOT NULL) ORDER BY s.id DESC LIMIT 200""",(aluno_id,)); docs=[]
+    for row in cursor.fetchall():
+        titulo="Pacote Integrado: Histórico + Declaração + Plano" if row["tipo_solicitacao"]=="integrado" else {"historico":"Histórico Escolar","conclusao":"Declaração de Conclusão","plano_ensino":"Plano de Ensino"}.get(row["tipo_solicitacao"],"Documentos Acadêmicos")
+        docs.append({"id":row["id"],"tipo":"pacote_integrado","titulo":titulo,"disciplina_nome":row.get("disciplinas_nomes") or "","data_envio":row.get("data_aprovacao") or "","mensagem":"Documento conferido e aprovado pela Secretaria/MEW.","status":"enviado","url":f"/documentos-integrados/{row['id']}/pdf"})
+    conn.close(); return jsonify({"success":True,"documentos":docs})
+
 
 
 @app.route("/documentos-integrados/<int:solicitacao_id>/pdf")
 def aluno_pdf_documentos_integrados(solicitacao_id):
-    aluno_id = session.get("aluno_id")
-    if not aluno_id:
-        return redirect(url_for("login"))
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT pdf_final, nome_arquivo FROM solicitacoes_documentos_integrados
-        WHERE id=%s AND aluno_id=%s AND status='aprovado'
-    """, (solicitacao_id, aluno_id))
-    row = cursor.fetchone()
-    conn.close()
-    if not row or not row.get("pdf_final"):
-        return "Documento ainda não disponível.", 404
-    return send_file(BytesIO(bytes(row["pdf_final"])), mimetype="application/pdf", as_attachment=False,
-                     download_name=row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf")
+    aluno_id=session.get("aluno_id")
+    if not aluno_id: return redirect(url_for("login"))
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("SELECT arquivo_r2_key,pdf_final,nome_arquivo FROM solicitacoes_documentos_integrados WHERE id=%s AND aluno_id=%s AND status='aprovado'",(solicitacao_id,aluno_id)); row=cursor.fetchone(); conn.close()
+    if not row: return "Documento ainda não disponível.",404
+    if row.get("arquivo_r2_key"): return redirect(r2_presigned_url(row["arquivo_r2_key"],download_name=row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf"))
+    if row.get("pdf_final") is not None: return send_file(BytesIO(bytes(row["pdf_final"])),mimetype="application/pdf",as_attachment=False,download_name=row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf")
+    return "Documento ainda não disponível.",404
+
 
 
 @app.route("/mew/documentos-integrados")
 def mew_documentos_integrados():
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra
-        FROM solicitacoes_documentos_integrados s
-        JOIN alunos a ON a.id=s.aluno_id
-        ORDER BY CASE s.status WHEN 'pendente' THEN 1 WHEN 'erro' THEN 2 WHEN 'aguardando_aprovacao' THEN 3 ELSE 4 END, s.id DESC
-    """)
-    rows = cursor.fetchall()
-    solicitacoes = []
-    for row in rows:
-        r = dict(row)
-        ids = [int(x) for x in str(r.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
-        if ids:
-            cursor.execute("SELECT STRING_AGG(nome, ', ' ORDER BY nome) AS nomes FROM disciplinas WHERE id=ANY(%s)", (ids,))
-            x = cursor.fetchone()
-            r["disciplinas_nomes"] = x.get("nomes") if x else ""
-        else:
-            r["disciplinas_nomes"] = ""
-        solicitacoes.append(r)
-    conn.close()
-    return render_template("mew/documentos_integrados.html", solicitacoes=solicitacoes)
+    if not session.get("mew_admin"): return redirect("/mew/login")
+    page=max(1,request.args.get("page",1,type=int) or 1); per_page=50; offset=(page-1)*per_page
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("SELECT COUNT(*) AS total FROM solicitacoes_documentos_integrados"); total=int((cursor.fetchone() or {}).get("total") or 0)
+    cursor.execute("""SELECT s.id,s.aluno_id,s.tipo_solicitacao,s.tipos_documentos,s.disciplinas_ids,s.status,s.mensagem_status,s.codigo_pacote,s.nome_arquivo,s.hash_pdf,s.data_solicitacao,s.data_preparacao,s.data_aprovacao,s.arquivo_r2_key,a.nome AS aluno_nome,a.ra AS aluno_ra,
+        COALESCE((SELECT STRING_AGG(d.nome,', ' ORDER BY d.nome) FROM disciplinas d WHERE d.id=ANY(string_to_array(NULLIF(s.disciplinas_ids,''),',')::int[])),'') AS disciplinas_nomes
+        FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id
+        ORDER BY CASE s.status WHEN 'pendente' THEN 1 WHEN 'erro' THEN 2 WHEN 'aguardando_aprovacao' THEN 3 ELSE 4 END,s.id DESC LIMIT %s OFFSET %s""",(per_page,offset)); rows=cursor.fetchall(); conn.close()
+    return render_template("mew/documentos_integrados.html",solicitacoes=rows,page=page,total_pages=max(1,(total+per_page-1)//per_page),total_solicitacoes=total)
+
 
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/conferir")
 def mew_conferir_documentos_integrados(solicitacao_id):
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    init_documentos_integrados_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra
-        FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id
-        WHERE s.id=%s
-    """, (solicitacao_id,))
-    s = cursor.fetchone()
-    conn.close()
-    if not s:
-        return "Solicitação não encontrada", 404
-    if s.get("status") in ("pendente", "erro") or not s.get("pdf_previa"):
-        _gerar_previa_solicitacao_integrada(solicitacao_id)
-        conn = get_db_connection(); cursor = conn.cursor()
-        cursor.execute("""SELECT s.*, a.nome AS aluno_nome, a.ra AS aluno_ra FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id WHERE s.id=%s""", (solicitacao_id,))
-        s = cursor.fetchone(); conn.close()
-    return render_template("mew/conferir_documentos_integrados.html", solicitacao=s)
+    if not session.get("mew_admin"): return redirect("/mew/login")
+    def buscar():
+        conn=get_db_connection(); cur=conn.cursor(); cur.execute("""SELECT s.id,s.aluno_id,s.tipo_solicitacao,s.tipos_documentos,s.disciplinas_ids,s.status,s.mensagem_status,s.codigo_pacote,s.nome_arquivo,s.hash_pdf,s.data_solicitacao,s.data_preparacao,s.data_aprovacao,s.arquivo_r2_key,(s.pdf_previa IS NOT NULL) AS tem_pdf_previa,a.nome AS aluno_nome,a.ra AS aluno_ra FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id WHERE s.id=%s""",(solicitacao_id,)); row=cur.fetchone(); conn.close(); return row
+    sol=buscar()
+    if not sol: return "Solicitação não encontrada",404
+    if sol.get("status") in ("pendente","erro") or not (sol.get("arquivo_r2_key") or sol.get("tem_pdf_previa")):
+        _gerar_previa_solicitacao_integrada(solicitacao_id); sol=buscar()
+    return render_template("mew/conferir_documentos_integrados.html",solicitacao=sol)
+
 
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/pdf-previa")
 def mew_pdf_previa_integrada(solicitacao_id):
-    if not session.get("mew_admin"):
-        return "Não autorizado", 403
-    init_documentos_integrados_db()
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT pdf_previa, nome_arquivo FROM solicitacoes_documentos_integrados WHERE id=%s", (solicitacao_id,))
-    row = cursor.fetchone(); conn.close()
-    if not row or not row.get("pdf_previa"):
-        return "Prévia não disponível", 404
-    return send_file(BytesIO(bytes(row["pdf_previa"])), mimetype="application/pdf", as_attachment=False,
-                     download_name="PREVIA_" + (row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf"))
+    if not session.get("mew_admin"): return "Não autorizado",403
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("SELECT arquivo_r2_key,pdf_previa,nome_arquivo FROM solicitacoes_documentos_integrados WHERE id=%s",(solicitacao_id,)); row=cursor.fetchone(); conn.close()
+    if not row: return "Prévia não disponível",404
+    nome="PREVIA_"+(row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf")
+    if row.get("arquivo_r2_key"): return redirect(r2_presigned_url(row["arquivo_r2_key"],download_name=nome))
+    if row.get("pdf_previa") is not None: return send_file(BytesIO(bytes(row["pdf_previa"])),mimetype="application/pdf",as_attachment=False,download_name=nome)
+    return "Prévia não disponível",404
+
 
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/regerar", methods=["POST"])
@@ -13596,32 +12189,23 @@ def mew_regerar_documentos_integrados(solicitacao_id):
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/aprovar", methods=["POST"])
 def mew_aprovar_documentos_integrados(solicitacao_id):
-    if not session.get("mew_admin"):
-        return redirect("/mew/login")
-    init_documentos_integrados_db()
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT pdf_previa FROM solicitacoes_documentos_integrados WHERE id=%s", (solicitacao_id,))
-    row = cursor.fetchone()
-    if not row or not row.get("pdf_previa"):
-        conn.close()
-        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Gere+a+prévia+antes+de+aprovar")
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    pdf = bytes(row["pdf_previa"])
-    cursor.execute("""
-        UPDATE solicitacoes_documentos_integrados
-        SET pdf_final=%s, status='aprovado', data_aprovacao=%s,
-            mensagem_status='Conferido e aprovado pelo MEW. Disponível na plataforma do aluno.'
-        WHERE id=%s
-    """, (psycopg2.Binary(pdf), agora, solicitacao_id))
-    conn.commit(); conn.close()
-    return redirect("/mew/documentos-integrados?sucesso=Documento+aprovado+e+liberado+ao+aluno")
+    if not session.get("mew_admin"): return redirect("/mew/login")
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("SELECT arquivo_r2_key,pdf_previa,nome_arquivo FROM solicitacoes_documentos_integrados WHERE id=%s",(solicitacao_id,)); row=cursor.fetchone()
+    if not row: conn.close(); return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Solicitação+não+encontrada")
+    key=row.get("arquivo_r2_key")
+    # Legado: antes de aprovar, tira a prévia do BYTEA e manda para o R2.
+    if not key and row.get("pdf_previa") is not None:
+        if not r2_is_configured(): conn.close(); return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Configure+o+Cloudflare+R2")
+        key=make_key("documentos-integrados",row.get("nome_arquivo") or f"documentos_{solicitacao_id}.pdf",solicitacao_id); r2_upload_bytes(bytes(row["pdf_previa"]),key,"application/pdf")
+    if not key: conn.close(); return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Gere+a+prévia+antes+de+aprovar")
+    agora=datetime.now().strftime("%d/%m/%Y %H:%M:%S"); cursor.execute("""UPDATE solicitacoes_documentos_integrados SET arquivo_r2_key=%s,pdf_previa=NULL,pdf_final=NULL,status='aprovado',data_aprovacao=%s,mensagem_status='Conferido e aprovado pelo MEW. Disponível na plataforma do aluno.' WHERE id=%s""",(key,agora,solicitacao_id)); conn.commit(); conn.close(); return redirect("/mew/documentos-integrados?sucesso=Documento+aprovado+e+liberado+ao+aluno")
+
 
 
 @app.route("/mew/plano-ensino/<int:documento_id>/vincular", methods=["POST"])
 def mew_vincular_plano_disciplina(documento_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
-    init_documentos_integrados_db()
     disciplina_id = request.form.get("disciplina_id", type=int)
     if not disciplina_id:
         return redirect("/mew/planos-ensino?erro=Selecione+uma+disciplina")
@@ -13649,7 +12233,6 @@ def _recibo_pagamento_html(aluno, valor, pagamento_id, data_pagamento, disciplin
 
 def enviar_boas_vindas_titan(aluno_id, referencia, pagamento_id=None):
     """Envia e-mail apenas se as variáveis TITAN_* estiverem configuradas."""
-    init_documentos_integrados_db()
     host = os.getenv("TITAN_SMTP_HOST", "smtp.titan.email").strip()
     port = int(os.getenv("TITAN_SMTP_PORT", "465"))
     usuario = os.getenv("TITAN_SMTP_USER", "").strip()
@@ -13682,7 +12265,7 @@ def enviar_boas_vindas_titan(aluno_id, referencia, pagamento_id=None):
 
     data_pagamento = datetime.now().strftime("%d/%m/%Y %H:%M")
     recibo_html = _recibo_pagamento_html(aluno, aluno.get("valor_total"), pagamento_id, data_pagamento, disciplinas)
-    recibo_pdf = HTML(string=recibo_html, base_url=request.host_url if request else None).write_pdf()
+    recibo_pdf = render_html_to_pdf_bytes(recibo_html, request.host_url if request else None)
 
     from email.message import EmailMessage
     from email.utils import formataddr
@@ -13713,7 +12296,6 @@ def enviar_boas_vindas_titan(aluno_id, referencia, pagamento_id=None):
 
 
 def _dados_contrato_render(contrato_id):
-    init_contratos_db()
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -13723,6 +12305,8 @@ def _dados_contrato_render(contrato_id):
             c.status AS contrato_status,
             c.assinatura_base64,
             c.foto_assinatura_base64,
+            c.assinatura_r2_key, c.assinatura_mime,
+            c.foto_assinatura_r2_key, c.foto_assinatura_mime,
             c.ip_assinatura,
             c.user_agent_assinatura,
             c.aceite_contrato,
@@ -13863,8 +12447,8 @@ def _dados_contrato_render(contrato_id):
         "numero_processo": f"SIGEU-{contrato_id:08d}",
         "contrato_status": aluno["contrato_status"],
         "assinado": aluno["contrato_status"] == "assinado",
-        "assinatura_base64": aluno["assinatura_base64"] or "",
-        "foto_assinatura_base64": aluno.get("foto_assinatura_base64") or "",
+        "assinatura_base64": (r2_presigned_url(aluno.get("assinatura_r2_key")) if aluno.get("assinatura_r2_key") else (aluno.get("assinatura_base64") or "")),
+        "foto_assinatura_base64": (r2_presigned_url(aluno.get("foto_assinatura_r2_key")) if aluno.get("foto_assinatura_r2_key") else (aluno.get("foto_assinatura_base64") or "")),
         "ip_assinatura": aluno.get("ip_assinatura") or "",
         "user_agent_assinatura": aluno.get("user_agent_assinatura") or "",
         "aceite_contrato": bool(aluno.get("aceite_contrato")),
@@ -13876,7 +12460,6 @@ def _dados_contrato_render(contrato_id):
 
 @app.route("/contrato/registro/<int:contrato_id>")
 def visualizar_contrato_registro(contrato_id):
-    init_contratos_db()
     dados = _dados_contrato_render(contrato_id)
     if not dados:
         return "Contrato não encontrado.", 404
@@ -13911,78 +12494,44 @@ def visualizar_contrato_aluno(aluno_id):
 
 
 def gerar_pdf_contrato_assinado(contrato_id, salvar=True):
-    """Renderiza o contrato assinado e devolve o PDF definitivo em bytes."""
-    dados = _dados_contrato_render(contrato_id)
-    if not dados:
-        raise ValueError("Contrato não encontrado.")
-    if not dados.get("assinado"):
-        raise ValueError("O contrato ainda não foi assinado.")
-
-    html_final = render_template("contrato_padrao.html", **dados)
-    pdf_bytes = HTML(string=html_final, base_url=request.url_root).write_pdf()
-
+    """Renderiza em arquivo temporário e armazena o PDF definitivo no R2."""
+    if not r2_is_configured(): raise R2NotConfigured("Cloudflare R2 não configurado.")
+    dados=_dados_contrato_render(contrato_id)
+    if not dados: raise ValueError("Contrato não encontrado.")
+    if not dados.get("assinado"): raise ValueError("O contrato ainda não foi assinado.")
+    html_final=render_template("contrato_padrao.html",**dados)
+    key=make_key("contratos/pdfs",f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf",contrato_id)
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+        render_html_to_pdf_file(html_final,tmp.name,request.url_root)
+        with open(tmp.name,"rb") as fh: r2_upload_fileobj(fh,key,"application/pdf",{"contrato_id":contrato_id,"hash":dados.get("hash_assinado","")})
     if salvar:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE contratos_alunos
-            SET pdf_assinado = %s,
-                arquivo_assinado_path = %s
-            WHERE id = %s
-        """, (
-            psycopg2.Binary(pdf_bytes),
-            f"/contrato/pdf/{contrato_id}",
-            contrato_id
-        ))
-        conn.commit()
-        conn.close()
+        conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("UPDATE contratos_alunos SET pdf_assinado_r2_key=%s,pdf_assinado=NULL,arquivo_assinado_path=%s WHERE id=%s",(key,f"/contrato/pdf/{contrato_id}",contrato_id)); conn.commit(); conn.close()
+    return key,dados
 
-    return pdf_bytes, dados
 
 
 @app.route("/contrato/pdf/<int:contrato_id>")
 def contrato_pdf_assinado(contrato_id):
-    init_contratos_db()
+    dados=_dados_contrato_render(contrato_id)
+    if not dados: return "Contrato não encontrado.",404
+    if not session.get("mew_admin") and session.get("aluno_id")!=dados["aluno_id"]: return "Acesso não autorizado.",403
+    if not dados.get("assinado"): return "O contrato ainda não foi assinado.",409
+    conn=get_db_connection(); cursor=conn.cursor(); cursor.execute("SELECT pdf_assinado_r2_key,pdf_assinado FROM contratos_alunos WHERE id=%s",(contrato_id,)); reg=cursor.fetchone(); conn.close()
+    if reg and reg.get("pdf_assinado_r2_key"):
+        return redirect(r2_presigned_url(reg["pdf_assinado_r2_key"],download_name=f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf"))
+    # Compatibilidade com contratos antigos ainda não migrados.
+    if reg and reg.get("pdf_assinado") is not None:
+        return send_file(BytesIO(bytes(reg["pdf_assinado"])),mimetype="application/pdf",as_attachment=False,download_name=f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf")
+    key,_=gerar_pdf_contrato_assinado(contrato_id,salvar=True)
+    return redirect(r2_presigned_url(key,download_name=f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf"))
 
-    dados = _dados_contrato_render(contrato_id)
-    if not dados:
-        return "Contrato não encontrado.", 404
-
-    if not session.get("mew_admin") and session.get("aluno_id") != dados["aluno_id"]:
-        return "Acesso não autorizado.", 403
-
-    if not dados.get("assinado"):
-        return "O contrato ainda não foi assinado.", 409
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT pdf_assinado FROM contratos_alunos WHERE id = %s", (contrato_id,))
-    registro = cursor.fetchone()
-    conn.close()
-
-    pdf_bytes = None
-    if registro and registro.get("pdf_assinado") is not None:
-        pdf_bytes = bytes(registro["pdf_assinado"])
-
-    if not pdf_bytes:
-        pdf_bytes, dados = gerar_pdf_contrato_assinado(contrato_id, salvar=True)
-
-    nome_seguro = re.sub(r"[^A-Za-z0-9_-]", "_", str(dados.get("ra") or contrato_id))
-    return send_file(
-        BytesIO(pdf_bytes),
-        mimetype="application/pdf",
-        as_attachment=False,
-        download_name=f"Contrato_SIGEU_{nome_seguro}.pdf"
-    )
 
 
 if __name__ == "__main__":
-    # Inicializa o banco de dados PostgreSQL
+    # Em desenvolvimento local, faz a mesma migração usada pelo Procfile do Render.
     init_db()
     init_contratos_db()
     init_pagamentos_db()
     init_documentos_integrados_db()
-    
-    # Só roda localmente
     app.run(debug=True)
 

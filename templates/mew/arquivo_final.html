@@ -556,7 +556,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <td>
                             {% if projeto['corrigido'] %}
                                 <span class="status corrigido">Corrigido</span>
-                            {% elif projeto['arquivo_path'] %}
+                            {% elif projeto['arquivo_r2_key'] or projeto['arquivo_path'] %}
                                 <span class="status recebido">Recebido</span>
                             {% elif projeto['liberado'] %}
                                 <span class="status liberado">Aguardando envio</span>
@@ -569,11 +569,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                             <div class="atividade-resumo">
                                 <strong>{{ projeto['titulo_atividade'] or 'Projeto Final' }}</strong>
 
-                                {% if projeto['arquivo_atividade_path'] %}
+                                {% if projeto['arquivo_atividade_r2_key'] or projeto['arquivo_atividade_path'] %}
                                 <div style="margin-top:8px;">
                                     <a
                                         class="btn btn-secondary"
-                                        href="{{ url_for('static', filename=projeto['arquivo_atividade_path']) }}"
+                                        href="/projeto-final/arquivo-atividade/{{ projeto['id'] }}"
                                         target="_blank"
                                     >
                                         <i class="fas fa-file"></i> Arquivo da atividade
@@ -641,10 +641,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </td>
 
                         <td>
-                            {% if projeto['arquivo_path'] %}
+                            {% if projeto['arquivo_r2_key'] or projeto['arquivo_path'] %}
                                 <a
                                     class="btn btn-secondary"
-                                    href="{{ url_for('static', filename=projeto['arquivo_path']) }}"
+                                    href="/projeto-final/arquivo-aluno/{{ projeto['id'] }}"
                                     target="_blank"
                                 >
                                     <i class="fas fa-download"></i> Abrir envio
@@ -656,7 +656,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </td>
 
                         <td>
-                            {% if projeto['arquivo_path'] %}
+                            {% if projeto['arquivo_r2_key'] or projeto['arquivo_path'] %}
                                 <form
                                     method="POST"
                                     action="/mew/corrigir-projeto-final/{{ projeto['id'] }}"

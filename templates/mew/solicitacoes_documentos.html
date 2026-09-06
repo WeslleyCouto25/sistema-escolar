@@ -292,6 +292,13 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <p>Não há solicitações de documentos pendentes.</p>
                 </div>
                 {% endif %}
+                {% if total_pages|default(1) > 1 %}
+                <div style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap;margin-top:18px;">
+                    {% if page > 1 %}<a class="btn btn-secondary" href="?page={{ page-1 }}">← Anterior</a>{% endif %}
+                    <span style="padding:9px 12px;border:1px solid #c9d0d5;background:#fff;font-weight:700;">Página {{ page }} de {{ total_pages }}</span>
+                    {% if page < total_pages %}<a class="btn btn-secondary" href="?page={{ page+1 }}">Próxima →</a>{% endif %}
+                </div>
+                {% endif %}
             </div>
         </main>
     </div>

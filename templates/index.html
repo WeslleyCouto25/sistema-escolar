@@ -1301,15 +1301,21 @@ a.whatsapp-course-btn:hover {
 
             <div class="image-grid">
                 <div>
-                    <img src="{{ url_for('static', filename='img/index1.png') }}" alt="Estudantes"
-                        class="campus-image">
+                    <picture>
+                        <source srcset="{{ url_for('static', filename='img/index1.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename='img/index1.png') }}" alt="Estudantes"
+                            class="campus-image" loading="lazy" decoding="async">
+                    </picture>
                     <p style="text-align: center; margin-top: 15px; color: var(--medium-gray);">
                         Biblioteca moderna com acervo atualizado
                     </p>
                 </div>
                 <div>
-                    <img src="{{ url_for('static', filename='img/img2.png') }}" alt="Estudantes"
-                        class="campus-image">
+                    <picture>
+                        <source srcset="{{ url_for('static', filename='img/img2.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename='img/img2.png') }}" alt="Estudantes"
+                            class="campus-image" loading="lazy" decoding="async">
+                    </picture>
                     <p style="text-align: center; margin-top: 15px; color: var(--medium-gray);">
                         Laboratórios equipados para prática profissional
                     </p>
@@ -1709,9 +1715,12 @@ a.whatsapp-course-btn:hover {
                     <div style="text-align: center;">
                         <a href="https://emec.mec.gov.br/emec/consulta-cadastro/detalhamento/d96957f455f6405d14c6542552b0f6eb/MTkzMjU="
                             target="_blank">
-                            <img src="{{ url_for('static', filename='img/consultamec.png') }}"
-                                alt="Clique para consultar o status da FACOP Certificadora no MEC" width="120"
-                                style="cursor: pointer;">
+                            <picture>
+                                <source srcset="{{ url_for('static', filename='img/consultamec.webp') }}" type="image/webp">
+                                <img src="{{ url_for('static', filename='img/consultamec.png') }}"
+                                    alt="Clique para consultar o status da FACOP Certificadora no MEC" width="120"
+                                    loading="lazy" decoding="async" style="cursor: pointer;">
+                            </picture>
                         </a>
                     </div>
 

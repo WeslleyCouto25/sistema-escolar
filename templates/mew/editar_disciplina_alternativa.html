@@ -200,7 +200,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
     <div class="mew-card">
         <h2 class="mew-title">Anexos enviados</h2>
-        <div style="padding:15px;" class="table-responsive"><table class="table"><thead><tr><th>Aluno</th><th>Arquivo</th><th>Status</th><th>Nota</th><th>Envio</th></tr></thead><tbody>{% for x in anexos %}<tr><td>{{ x.aluno_nome }}<br><small>RA {{ x.aluno_ra }}</small></td><td>{% if x.url_arquivo %}<a target="_blank" href="{{ x.url_arquivo }}">{{ x.nome_arquivo or 'Abrir arquivo' }}</a>{% else %}-{% endif %}</td><td>{{ x.status or 'pendente' }}</td><td>{{ x.nota if x.nota is not none else '-' }}</td><td>{{ x.data_envio or '-' }}</td></tr>{% else %}<tr><td colspan="5">Nenhum anexo enviado.</td></tr>{% endfor %}</tbody></table></div>
+        <div style="padding:15px;" class="table-responsive"><table class="table"><thead><tr><th>Aluno</th><th>Arquivo</th><th>Status</th><th>Nota</th><th>Envio</th></tr></thead><tbody>{% for x in anexos %}<tr><td>{{ x.aluno_nome }}<br><small>RA {{ x.aluno_ra }}</small></td><td>{% if x.r2_key or x.url_arquivo %}<a target="_blank" href="/anexo-disciplina-alternativa/{{ x.id }}">{{ x.nome_arquivo or 'Abrir arquivo' }}</a>{% else %}-{% endif %}</td><td>{{ x.status or 'pendente' }}</td><td>{{ x.nota if x.nota is not none else '-' }}</td><td>{{ x.data_envio or '-' }}</td></tr>{% else %}<tr><td colspan="5">Nenhum anexo enviado.</td></tr>{% endfor %}</tbody></table></div>
     </div>
     {% else %}<div class="alert alert-error">Disciplina não encontrada.</div>{% endif %}
     <a class="btn btn-secondary" href="/mew/disciplinas-alternativas">Voltar</a>
