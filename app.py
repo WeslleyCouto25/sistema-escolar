@@ -270,14 +270,14 @@ def get_mercadopago_sdk():
     return mercadopago.SDK(token)
 
 
-def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_id=None, base_url=None):
+def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_id=None, base_url=None, item_title=None, metadata_extra=None):
     valor = round(float(valor_total), 2)
     external_reference = f"SIGEU-ALUNO-{aluno_id}-{int(time.time())}-{secrets.token_hex(3)}"
     base_url = (base_url or "https://campusvirtualfacop.com.br").rstrip("/")
     preference_data = {
         "items": [{
             "id": f"aluno-{aluno_id}",
-            "title": f"Serviços educacionais - aluno {nome}",
+            "title": item_title or f"Serviços educacionais - aluno {nome}",
             "quantity": 1,
             "currency_id": "BRL",
             "unit_price": valor
@@ -293,7 +293,8 @@ def criar_preferencia_mercadopago(aluno_id, nome, email, valor_total, contrato_i
         "notification_url": f"{base_url}/webhook/mercadopago",
         "metadata": {
             "aluno_id": str(aluno_id),
-            "contrato_id": str(contrato_id) if contrato_id else ""
+            "contrato_id": str(contrato_id) if contrato_id else "",
+            **({str(k): str(v) for k, v in (metadata_extra or {}).items() if v is not None})
         }
     }
     sdk = get_mercadopago_sdk()
@@ -852,938 +853,89 @@ def calcular_data_liberacao_final(aluno_id, disciplina_id):
     return None
 
 def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disciplina, ano_manual=None):
-    """
-    Gera HTML da declaração de conclusão de disciplina
-    """
-    from datetime import datetime
-
+    # Declaração acadêmica P&B, sem assinatura manuscrita simulada.
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Buscar dados adicionais do aluno
-    cursor.execute("""
+    cursor.execute('''
         SELECT nome_pai, nome_mae, naturalidade, nacionalidade,
                data_nascimento, sexo, estado_civil, curso_referencia
         FROM dados_pessoais
         WHERE aluno_id = %s
-    """, (aluno_id,))
-
-    dados_adicionais = cursor.fetchone()
-
-    # Buscar informações específicas da disciplina (nota final, período)
-    cursor.execute("""
+    ''', (aluno_id,))
+    dados_adicionais = cursor.fetchone() or {}
+    cursor.execute('''
         SELECT nf.media_final, nf.status, nf.data_realizacao,
                addd.data_inicio, addd.data_fim_previsto
         FROM notas_finais nf
-        LEFT JOIN aluno_disciplina_datas addd ON nf.aluno_id = addd.aluno_id AND nf.disciplina_id = addd.disciplina_id
+        LEFT JOIN aluno_disciplina_datas addd
+          ON nf.aluno_id = addd.aluno_id AND nf.disciplina_id = addd.disciplina_id
         WHERE nf.aluno_id = %s AND nf.disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    info_final = cursor.fetchone()
-
+    ''', (aluno_id, disciplina_id))
+    info_final = cursor.fetchone() or {}
     conn.close()
 
-    # Dados do aluno
-    nome_aluno = dados_aluno.get('nome', '')
-    ra_aluno = dados_aluno.get('ra', '')
-    cpf_aluno = dados_aluno.get('cpf_formatado', '')
+    nome_aluno = str(dados_aluno.get('nome') or '')
+    ra_aluno = str(dados_aluno.get('ra') or '')
+    cpf_aluno = str(dados_aluno.get('cpf_formatado') or '')
+    nome_disciplina = str(dados_disciplina.get('nome') or '')
+    carga_horaria = int(dados_disciplina.get('carga') or dados_disciplina.get('carga_horaria') or 80)
+    nota = info_final.get('media_final')
+    nota_final = f"{float(nota):.2f}" if nota is not None else "N/I"
+    frequencia = dados_disciplina.get('frequencia')
+    if frequencia is None:
+        frequencia = dados_aluno.get('frequencia')
+    try:
+        frequencia_txt = f"{float(frequencia):.0f}%" if frequencia is not None else "N/I"
+    except Exception:
+        frequencia_txt = escape(str(frequencia or 'N/I'))
+    data_conclusao = str(info_final.get('data_realizacao') or datetime.now().strftime('%d/%m/%Y')).split(' ')[0]
+    unidade_curricular = str(dados_adicionais.get('curso_referencia') or dados_aluno.get('curso_referencia') or 'Disciplinas / Unidades Curriculares')
+    docente = str(dados_disciplina.get('docente') or 'Docente / responsável acadêmico')
 
-    # Dados da disciplina
-    nome_disciplina = dados_disciplina.get('nome', '')
-    classe_nome_disciplina = 'disciplina-nome longo' if len(nome_disciplina) > 40 else 'disciplina-nome'
-    carga_horaria = dados_disciplina.get('carga', 80)
-
-    # Determinar nota e status
-    nota_final = "N/I"
-    status = "Aprovado"
-    data_conclusao = datetime.now().strftime("%d/%m/%Y")
-    periodo = ""
-
-    if info_final:
-        if info_final['media_final']:
-            nota_final = f"{float(info_final['media_final']):.2f}"
-        if info_final['status']:
-            status = "Aprovado" if info_final['status'] == 'aprovado' else "Reprovado"
-        if info_final['data_realizacao']:
-            data_conclusao = info_final['data_realizacao'].split(' ')[0] if ' ' in info_final['data_realizacao'] else info_final['data_realizacao']
-
-        # Determinar período (semestre/ano)
-        if info_final['data_inicio']:
-            try:
-                data_obj = datetime.strptime(info_final['data_inicio'], "%d/%m/%Y")
-                ano = data_obj.year
-                mes = data_obj.month
-                semestre = "1º" if mes <= 6 else "2º"
-                periodo = f"{semestre} semestre de {ano}"
-            except:
-                periodo = f"ano {datetime.now().year}"
-        else:
-            periodo = f"ano {datetime.now().year}"
-
-    # Data atual
-    data_atual = datetime.now().strftime("%d de %B de %Y")
-    # Mapeamento de meses em português
-    meses_pt = {
-        'January': 'janeiro', 'February': 'fevereiro', 'March': 'março',
-        'April': 'abril', 'May': 'maio', 'June': 'junho',
-        'July': 'julho', 'August': 'agosto', 'September': 'setembro',
-        'October': 'outubro', 'November': 'novembro', 'December': 'dezembro'
-    }
-    for eng, pt in meses_pt.items():
-        data_atual = data_atual.replace(eng, pt)
-
-    # Ano para o documento
-    ano_documento = ano_manual if ano_manual else datetime.now().year
-
-    # HTML CORRIGIDO - MUDEI AQUI PARA USAR {{ qrcode_base64 }}
-    html = '''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>DECLARAÇÃO DE CONCLUSÃO - ''' + nome_disciplina + '''</title>
-
-<style>
-/* TIPOGRAFIA INSTITUCIONAL - ARIAL/CALIBRI */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    padding: 0;
-    background: #c9c9c9;
-    font-family: "Arial Nova", "Arial", "Calibri", "Segoe UI", sans-serif;
-    font-size: 10.5pt;
-    color: #1a1a1a;
-    line-height: 1.4;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-}
-
-/* FOLHA A4 COM MARGENS PRECISAS */
-.folha {
-    width: 210mm;
-    height: 297mm;
-    margin: 0 auto;
-    background: #fefefe;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 0 20px rgba(0,0,0,0.3);
-    padding: 15mm 20mm 25mm 20mm;
-}
-
-/* BORDA DE SEGURANÇA - ESTILO PAPEL MOEDA */
-.borda-seguranca {
-    position: absolute;
-    top: 8mm;
-    left: 8mm;
-    right: 8mm;
-    bottom: 8mm;
-    border: 0.5pt solid #3f464b;
-    pointer-events: none;
-}
-
-.borda-seguranca::before {
-    content: "";
-    position: absolute;
-    top: 2mm;
-    left: 2mm;
-    right: 2mm;
-    bottom: 2mm;
-    border: 0.3pt dashed #3f464b;
-    opacity: 0.5;
-}
-
-/* CANTONEIRAS DE SEGURANÇA */
-.cantoneira {
-    position: absolute;
-    width: 15mm;
-    height: 15mm;
-    border: 2pt solid #3f464b;
-    z-index: 100;
-}
-
-.cantoneira.top-left {
-    top: 6mm;
-    left: 6mm;
-    border-right: none;
-    border-bottom: none;
-}
-
-.cantoneira.top-right {
-    top: 6mm;
-    right: 6mm;
-    border-left: none;
-    border-bottom: none;
-}
-
-.cantoneira.bottom-left {
-    bottom: 6mm;
-    left: 6mm;
-    border-right: none;
-    border-top: none;
-}
-
-.cantoneira.bottom-right {
-    bottom: 6mm;
-    right: 6mm;
-    border-left: none;
-    border-top: none;
-}
-
-/* MARCA D'ÁGUA PRINCIPAL - SELO INSTITUCIONAL */
-.marca-dagua-principal {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 72pt;
-    color: rgba(26, 35, 126, 0.03);
-    text-transform: uppercase;
-    letter-spacing: 15px;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
-    font-weight: 900;
-}
-
-/* MARCA D'ÁGUA SECUNDÁRIA - PATTERN GEOMÉTRICO */
-.marca-dagua-pattern {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image:
-        repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
-        repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* MICROTEXTO DE SEGURANÇA NA BORDA */
-.microtexto-borda {
-    position: absolute;
-    font-family: "Arial", sans-serif;
-    font-size: 5pt;
-    color: rgba(26,35,126,0.3);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    white-space: nowrap;
-    z-index: 2;
-}
-
-.microtexto-borda.top {
-    top: 5mm;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.microtexto-borda.bottom {
-    bottom: 5mm;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.microtexto-borda.left {
-    left: 3mm;
-    top: 50%;
-    transform: translateY(-50%) rotate(-90deg);
-    transform-origin: center;
-}
-
-.microtexto-borda.right {
-    right: 3mm;
-    top: 50%;
-    transform: translateY(-50%) rotate(90deg);
-    transform-origin: center;
-}
-
-/* FAIXA SUPERIOR IDENTIFICADORA */
-.faixa-identificadora {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4mm;
-    background: repeating-linear-gradient(
-        90deg,
-        #3f464b 0px,
-        #3f464b 5mm,
-        #ffffff 5mm,
-        #ffffff 10mm,
-        #3f464b 10mm,
-        #3f464b 15mm
-    );
-    z-index: 10;
-}
-
-/* CABEÇALHO INSTITUCIONAL */
-.cabecalho {
-    position: relative;
-    z-index: 5;
-    border-bottom: 1.5pt solid #3f464b;
-    padding-bottom: 4mm;
-    margin-bottom: 10mm;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.logo-area {
-    display: flex;
-    align-items: center;
-    gap: 5mm;
-}
-
-.logo-area img {
-    width: 25mm;
-    height: auto;
-    opacity: 0.9;
-}
-
-.instituicao-info {
-    flex: 1;
-}
-
-.instituicao-nome {
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 14pt;
-    color: #3f464b;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    line-height: 1.2;
-    margin-top: 8mm;
-}
-
-.instituicao-sub {
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #444;
-    margin-top: 2mm;
-    line-height: 1.3;
-}
-
-/* SELO DE AUTENTICIDADE NO CABEÇALHO */
-.selo-autenticidade {
-    width: 22mm;
-    height: 22mm;
-    border: 1.5pt solid #3f464b;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-family: "Arial", sans-serif;
-    font-size: 6pt;
-    color: #3f464b;
-    text-align: center;
-    line-height: 1.1;
-    position: relative;
-    background: radial-gradient(circle, rgba(26,35,126,0.05) 0%, transparent 70%);
-}
-
-.selo-autenticidade::before {
-    content: "";
-    display: inline-block;
-    width: 24px;
-    height: 16px;
-    margin-bottom: 1mm;
-    margin-right: 4px;
-    vertical-align: middle;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Crect x='0' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='4' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='7' y='0' width='3' height='16' fill='%231a237e'/%3E%3Crect x='12' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='15' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='19' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='22' y='0' width='2' height='16' fill='%231a237e'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-size: contain;
-}
-
-/* NÚMERO DE CONTROLE NO CANTO */
-.numero-controle-box {
-    position: absolute;
-    top: 12mm;
-    right: 12mm;
-    border: 0.5pt solid #3f464b;
-    padding: 2mm 4mm;
-    font-family: "Courier New", monospace;
-    font-size: 7pt;
-    color: #3f464b;
-    background: rgba(26,35,126,0.03);
-    z-index: 20;
-}
-
-.numero-controle-box::before {
-    content: "Nº CONTROLE: ";
-    font-weight: bold;
-}
-
-/* TÍTULO DO DOCUMENTO */
-.titulo-documento {
-    text-align: center;
-    margin: 1mm 0 10mm 0;
-    position: relative;
-    z-index: 5;
-}
-
-.titulo-principal {
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 18pt;
-    color: #3f464b;
-    text-transform: uppercase;
-    letter-spacing: 4px;
-    margin-bottom: 3mm;
-    position: relative;
-    display: inline-block;
-    padding: 0 15mm;
-}
-
-/* LINHAS DECORATIVAS LATERAIS DO TÍTULO */
-.titulo-principal::before,
-.titulo-principal::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    width: 10mm;
-    height: 1pt;
-    background: #3f464b;
-}
-
-.titulo-principal::before {
-    left: 0;
-}
-
-.titulo-principal::after {
-    right: 0;
-}
-
-.titulo-sub {
-    font-family: "Arial", sans-serif;
-    font-size: 9pt;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    border-top: 0.5pt solid #ccc;
-    border-bottom: 0.5pt solid #ccc;
-    padding: 2mm 0;
-    display: inline-block;
-}
-
-/* TEXTO DE ABERTURA */
-.texto-abertura {
-    text-align: justify;
-    margin-bottom: 8mm;
-    position: relative;
-    z-index: 5;
-    font-size: 10.5pt;
-    line-height: 1.6;
-    text-indent: 15mm;
-}
-
-.destaque {
-    font-weight: bold;
-    color: #3f464b;
-    font-family: "Arial Black", "Arial", sans-serif;
-}
-
-/* BOX DE IDENTIFICAÇÃO - ESTILO FICHA CRIMINAL */
-.box-identificacao {
-    border: 1pt solid #3f464b;
-    margin: 8mm 0;
-    position: relative;
-    z-index: 5;
-    background: rgba(26,35,126,0.02);
-}
-
-.box-identificacao-header {
-    background: #3f464b;
-    color: #fff;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 8pt;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    padding: 1mm 4mm;
-    text-align: center;
-}
-
-.box-identificacao-content {
-    padding: 3mm;
-}
-
-.linha-dado {
-    display: flex;
-    margin-bottom: 3mm;
-    border-bottom: 0.3pt dotted #999;
-    padding-bottom: 2mm;
-}
-
-.linha-dado:last-child {
-    margin-bottom: 0;
-    border-bottom: none;
-}
-
-.rotulo {
-    width: 25mm;
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #3f464b;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.valor {
-    flex: 1;
-    font-family: "Arial", sans-serif;
-    font-size: 11pt;
-    color: #000;
-    font-weight: bold;
-    padding-left: 3mm;
-}
-
-/* BOX DE DISCIPLINA */
-.box-disciplina {
-    border: 1pt solid #3f464b;
-    border-left: 4pt solid #3f464b;
-    margin: 8mm 0;
-    padding: 5mm;
-    position: relative;
-    z-index: 5;
-    background: #fff;
-}
-
-.box-disciplina::before {
-    content: "DADOS DA DISCIPLINA";
-    position: absolute;
-    top: -3mm;
-    left: 5mm;
-    background: #fff;
-    padding: 0 3mm;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 7pt;
-    color: #3f464b;
-    letter-spacing: 1px;
-}
-
-.disciplina-nome {
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 12pt;
-    color: #3f464b;
-    text-align: center;
-    margin: 3mm 0 5mm 0;
-    text-transform: uppercase;
-    line-height: 1.3;
-    word-break: break-word;
-    hyphens: auto;
-    max-width: 100%;
-}
-.disciplina-nome.longo {
-    font-size: 10pt;
-    line-height: 1.2;
-}
-
-.disciplina-dados {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 3mm;
-    font-size: 9pt;
-}
-
-.dado-item {
-    text-align: center;
-    border-right: 0.5pt solid #ddd;
-    padding: 2mm;
-}
-
-.dado-item:last-child {
-    border-right: none;
-}
-
-.dado-label {
-    font-size: 7pt;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 1mm;
-    line-height: 1.2;
-
-}
-
-.dado-valor {
-    font-weight: bold;
-    color: #3f464b;
-    font-size: 10pt;
-}
-
-/* TEXTO DECLARATÓRIO */
-.texto-declaratorio2 {
-    text-align: justify;
-    margin: 3mm 0;
-    position: relative;
-    z-index: 5;
-    font-size: 10.5pt;
-    line-height: 1.6;
-    text-indent: 15mm;
-    margin-left: 27mm;
-
-}
-
-.texto-declaratorio1 {
-    text-align: justify;
-    margin: 3mm 0;
-    position: relative;
-    z-index: 5;
-    font-size: 10.5pt;
-    line-height: 1.6;
-    text-indent: 15mm;
-}
-/* SELO DE AUTENTICAÇÃO GRANDE */
-.selo-grande {
-    position: absolute;
-    bottom: 45mm;
-    right: 15mm;
-    width: 35mm;
-    height: 35mm;
-    border: 2pt solid rgba(26,35,126,0.3);
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-family: "Arial", sans-serif;
-    font-size: 6pt;
-    color: rgba(26,35,126,0.4);
-    text-align: center;
-    line-height: 1.2;
-    transform: rotate(-15deg);
-    z-index: 3;
-    pointer-events: none;
-}
-
-.selo-grande::before {
-    content: "AUTENTICIDADE";
-    font-weight: bold;
-    font-size: 7pt;
-    margin-bottom: 2mm;
-    letter-spacing: 1px;
-}
-
-.selo-grande::after {
-    content: "★ ★ ★";
-    font-size: 8pt;
-    margin-top: 2mm;
-}
-
-/* DATA E LOCAL */
-.data-local {
-    text-align: right;
-    margin: 20mm 0 10mm 0;
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #333;
-    position: relative;
-    z-index: 5;
-    font-style: italic;
-}
-
-/* ASSINATURA */
-.assinatura-area {
-    margin-top: 20mm;
-    text-align: center;
-    position: relative;
-    z-index: 5;
-    page-break-inside: avoid;
-}
-
-.assinatura-linha {
-    width: 70mm;
-    height: 0;
-    border-top: 0.5pt solid #000;
-    margin: 0 auto 3mm auto;
-    position: relative;
-}
-
-.assinatura-linha::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: -2mm;
-    transform: translateX(-50%);
-    width: 20mm;
-    height: 4mm;
-    border-left: 0.5pt solid #999;
-    border-right: 0.5pt solid #999;
-}
-
-.assinatura-nome {
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 11pt;
-    color: #3f464b;
-    margin-bottom: 1mm;
-}
-
-.assinatura-cargo {
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* QR CODE AREA */
-.qr-code-box {
-    position: absolute;
-    bottom: 23mm;
-    left: 15mm;
-    width: 30mm;
-    height: 30mm;
-    border: 0.5pt solid #ccc;
-    background: #fafafa;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 5;
-}
-
-.qr-code-label {
-    font-size: 6pt;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 2mm;
-}
-
-#qr-code-placeholder {
-    width: 20mm;
-    height: 20mm;
-    background: #e0e0e0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 6pt;
-    color: #999;
-}
-
-/* RODAPÉ TÉCNICO */
-.rodape-tecnico {
-    position: absolute;
-    bottom: 17mm;
-    left: 50mm;
-    right: 15mm;
-    font-family: "Arial", sans-serif;
-    font-size: 6.5pt;
-    color: #666;
-    text-align: center;
-    line-height: 1.4;
-    z-index: 5;
-    border-top: 0.3pt solid #ddd;
-    padding-top: 3mm;
-}
-
-.rodape-tecnico strong {
-    color: #3f464b;
-}
-
-/* MICROTEXTOS DE SEGURANÇA */
-.microtexto-seguranca {
-    position: absolute;
-    font-family: "Arial", sans-serif;
-    font-size: 5pt;
-    color: rgba(0,0,0,0.15);
-    z-index: 2;
-    letter-spacing: 0.5px;
-}
-
-.micro-1 { top: 30mm; left: 10mm; transform: rotate(90deg); }
-.micro-2 { top: 50mm; right: 10mm; transform: rotate(-90deg); }
-.micro-3 { bottom: 80mm; left: 12mm; }
-.micro-4 { bottom: 100mm; right: 50mm; }
-
-/* PRINT STYLES */
-@media print {
-    body {
-        background: #fff;
-    }
-
-    .folha {
-        box-shadow: none;
-        margin: 0;
-    }
-}
-</style>
-</head>
-
-<body>
-<div class="folha">
-    <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
-    <div class="borda-seguranca"></div>
-    <div class="cantoneira top-left"></div>
-    <div class="cantoneira top-right"></div>
-    <div class="cantoneira bottom-left"></div>
-    <div class="cantoneira bottom-right"></div>
-
-    <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educ - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
-    <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | F142485-1/-Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
-    <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
-    <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-
-    <!-- MARCAS D'ÁGUA -->
-    <div class="marca-dagua-principal">FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
-    <div class="marca-dagua-pattern"></div>
-
-    <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
-    <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
-    <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</div>
-    <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-
-    <!-- FAIXA IDENTIFICADORA -->
-    <div class="faixa-identificadora"></div>
-
-    <!-- NÚMERO DE CONTROLE -->
-    <div class="numero-controle-box">DOC-''' + ra_aluno + '''-''' + periodo + '''-''' + nota_final + '''</div>
-
-    <!-- CABEÇALHO -->
-    <div class="cabecalho">
-        <div class="logo-area">
-            <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
-            <div class="instituicao-info">
-                <div class="instituicao-nome">FACOP - SiGEu</div>
-                <div class="instituicao-sub">
-                    Faculdade do Centro Oeste Paulista 04.344.730/0001-60.<br>
-                    Credenciada pela Portaria MEC nº 887 de 26/07/2017<br>
-                    Polo educacional - Grupo Educacional Unificado LTDA
-                </div>
-            </div>
-        </div>
-        <div class="selo-autenticidade">
-            FCP-SiGEu<br>e-SIGEU-GTP-2026
-        </div>
-    </div>
-
-    <!-- TÍTULO -->
-    <div class="titulo-documento">
-        <div class="titulo-principal">Declaração</div>
-        <div class="titulo-sub">Conclusão de Disciplina Isolada</div>
-    </div>
-
-    <!-- TEXTO DE ABERTURA -->
-    <div class="texto-abertura">
-        A <span class="destaque">FACULDADE DO CENTRO OESTE PAULISTA (FACOP)</span>,
-        instituição de ensino superior devidamente credenciada pelo Ministério da Educação,
-        no âmbito do Convênio Educacional <span class="destaque">FACOP/SiGEu – Grupo Educacional Unificado LTDA</span>,
-        inscrita no CNPJ sob o nº 04.344.730/0001-60,
-        <strong>DECLARA</strong> para os devidos fins de direito que:
-    </div>
-
-    <!-- BOX DE IDENTIFICAÇÃO DO ALUNO -->
-    <div class="box-identificacao">
-        <div class="box-identificacao-header">Dados do Discente</div>
-        <div class="box-identificacao-content">
-            <div class="linha-dado">
-                <div class="rotulo">Nome:</div>
-                <div class="valor">''' + nome_aluno + '''</div>
-            </div>
-            <div class="linha-dado">
-                <div class="rotulo">RA:</div>
-                <div class="valor">''' + ra_aluno + '''</div>
-            </div>
-            <div class="linha-dado">
-                <div class="rotulo">CPF:</div>
-                <div class="valor">''' + cpf_aluno + '''</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- BOX DE DADOS DA DISCIPLINA -->
-    <div class="box-disciplina">
-        <div class="''' + classe_nome_disciplina + '''">''' + nome_disciplina + '''</div>
-        <div class="disciplina-dados">
-            <div class="dado-item">
-                <div class="dado-label">Modalidade</div>
-                <div class="dado-valor">Disciplina Isolada</div>
-            </div>
-            <div class="dado-item">
-                <div class="dado-label">Período</div>
-                <div class="dado-valor">''' + periodo + '''</div>
-            </div>
-            <div class="dado-item">
-                <div class="dado-label">Carga Horária</div>
-                <div class="dado-valor">''' + str(carga_horaria) + '''h</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- TEXTO DECLARATÓRIO -->
-    <div class="texto-declaratorio1">
-        Concluiu com <strong>aproveitamento</strong> a disciplina acima referenciada,
-        com resultado final <span class="destaque">''' + status + '''</span> e nota
-        <span class="destaque">''' + nota_final + ''' </span>(média), atendendo integralmente aos critérios
-        de avaliação estabelecidos no Regimento Geral da Instituição e na legislação
-        educacional vigente (Lei nº 9.394/1996 - LDBEN e alterações subsequentes).
-    </div>
-
-    <div class="texto-declaratorio2">
-        A frequência e o aproveitamento encontram-se devidamente registrados nos sistemas
-        acadêmicos da instituição, podendo esta declaração ser utilizada para fins de
-        comprovação de conclusão de componente curricular, aproveitamento de estudos
-        ou quaisquer outros fins que se fizerem necessários, conforme determinação legal.
-    </div>
-
-    <!-- SELO GRANDE DE AUTENTICAÇÃO -->
-    <div class="selo-grande">
-        VALIDADO<br>
-        ELETRONICAMENTE<br>
-        ''' + data_atual + '''
-    </div>
-
-    <!-- DATA E LOCAL -->
-    <div class="data-local">
-        São Paulo – SP, ''' + data_atual + '''.
-    </div>
-
-    <!-- QR CODE - AGORA USA O TEMPLATE COM {{ qrcode_base64 }} -->
-    <div class="qr-code-box">
-    <div class="qr-code-label">Validação Digital</div>
-    <div id="qr-code-placeholder">
-        <!-- Símbolo simples de código de barras usando SVG -->
-        <svg width="60" height="40" viewBox="0 0 60 40" style="opacity: 0.6;">
-            <rect x="2" y="5" width="4" height="30" fill="#3f464b"/>
-            <rect x="8" y="5" width="2" height="30" fill="#3f464b"/>
-            <rect x="12" y="5" width="6" height="30" fill="#3f464b"/>
-            <rect x="20" y="5" width="3" height="30" fill="#3f464b"/>
-            <rect x="25" y="5" width="2" height="30" fill="#3f464b"/>
-            <rect x="30" y="5" width="5" height="30" fill="#3f464b"/>
-            <rect x="37" y="5" width="2" height="30" fill="#3f464b"/>
-            <rect x="42" y="5" width="4" height="30" fill="#3f464b"/>
-            <rect x="48" y="5" width="3" height="30" fill="#3f464b"/>
-            <rect x="53" y="5" width="2" height="30" fill="#3f464b"/>
-            <rect x="57" y="5" width="1" height="30" fill="#3f464b"/>
-        </svg>
-    </div>
-</div>
-
-    <!-- RODAPÉ TÉCNICO -->
-    <div class="rodape-tecnico">
-        <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06, 14.063/20 e nº 9.394/96 e nº 5.154/2004.<br>
-        Este documento possui validade jurídica sem assinatura física mediante validação pelo QR Code acima.<br>
-        Para verificar autenticidade:<strong> https://campusvirtualfacop.com.br/validar-documento</strong> | Protocolo: ''' + ra_aluno + '''-''' + periodo + '''
-    </div>
-</div>
-</body>
-</html>'''
-
-    # 👇 NOVO CÓDIGO - substitui TODO o bloco antigo
     codigo_autenticacao = f"{ra_aluno}-{disciplina_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    dados_qr = f"https://campusvirtualfacop.com.br/validar-documento/DECL-{codigo_autenticacao}"
+    codigo = f"DECL-{codigo_autenticacao}"
+    dados_qr = f"https://campusvirtualfacop.com.br/validar-documento/{codigo}"
     qrcode_base64 = gerar_qrcode_base64(dados_qr)
+    hash_visual = hashlib.sha256(f"{codigo}|{nome_aluno}|{nome_disciplina}|{nota_final}".encode('utf-8')).hexdigest()
 
-    from flask import render_template_string
-    return render_template_string(html, qrcode_base64=qrcode_base64)
+    return f'''<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
+    <title>Declaração de Conclusão - {escape(nome_disciplina)}</title>
+    <style>
+    @page{{size:A4;margin:17mm}}
+    *{{box-sizing:border-box}}
+    body{{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;line-height:1.55;margin:0;font-size:10.5pt}}
+    .doc{{border:1px solid #000;padding:16mm 13mm;background:#fff;min-height:255mm}}
+    .cab{{border-bottom:2px solid #000;padding-bottom:9px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start}}
+    .brand{{font-size:14pt;font-weight:700;letter-spacing:.2px}} .sub{{font-size:8.5pt;margin-top:3px}}
+    .cert{{font-size:7.7pt;text-align:right;max-width:52%;line-height:1.35}} .cert b{{font-size:9pt}}
+    h1{{text-align:center;font-size:20pt;margin:23mm 0 16mm;line-height:1.2;letter-spacing:.2px}}
+    p{{text-align:justify;font-size:11.3pt;margin:0 0 10px}}
+    .dados{{border:1px solid #000;margin:15px 0;padding:8px 10px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}}
+    .dados .wide{{grid-column:1/-1}}
+    .assinatura{{margin:20mm auto 9mm;text-align:center;max-width:88mm}}
+    .assinatura .linha{{border-top:1px solid #000;margin-bottom:5px}}
+    .assinatura strong{{display:block;font-size:11pt}} .assinatura span{{display:block;font-size:8.5pt;margin-top:2px}}
+    .assinatura small{{display:block;font-size:6.8pt;margin-top:5px}}
+    .auth{{margin-top:13px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
+    .auth img{{width:78px;height:78px}} .hash{{font-family:monospace;font-size:6.4pt;word-break:break-all;margin-top:4px}}
+    .rodape{{margin-top:9px;border-top:1px solid #000;padding-top:6px;font-size:6.6pt;text-align:center}}
+    @media print{{body,.doc{{background:#fff}}}}
+    </style></head><body><div class="doc">
+      <div class="cab">
+        <div><div class="brand">GRUPO EDUCACIONAL UNIFICADO</div><div class="sub">SIGEU Educacional • Sistema Integrado de Gestão Educacional</div></div>
+        <div class="cert"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista LTDA<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887 de 26/07/2017</div>
+      </div>
+      <h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
+      <p>O <b>GRUPO EDUCACIONAL UNIFICADO</b>, por meio do <b>SIGEU Educacional</b>, declara, para os devidos fins, que <b>{escape(nome_aluno)}</b>, CPF {escape(cpf_aluno)}, matrícula/RA <b>{escape(ra_aluno)}</b>, concluiu com aproveitamento o componente curricular <b>{escape(nome_disciplina)}</b>, com carga horária de <b>{carga_horaria} horas</b>, frequência acadêmica registrada de <b>{frequencia_txt}</b> e média final <b>{nota_final}</b>.</p>
+      <p>A conclusão foi registrada em {escape(data_conclusao)}. O docente/responsável acadêmico registrado para o componente é <b>{escape(docente)}</b>.</p>
+      <p>A identificação da <b>FACOP CERTIFICADORA</b> é apresentada separadamente no cabeçalho, preservando os dados institucionais e de certificação vinculados ao registro acadêmico.</p>
+      <div class="dados"><div><b>Unidade Curricular:</b> {escape(unidade_curricular)}</div><div><b>Situação:</b> APROVADO</div><div class="wide"><b>Documento:</b> emissão acadêmica eletrônica autenticada por código, QR Code e hash.</div></div>
+      <div class="assinatura"><div class="linha"></div><strong>Tatiane Costa Lourenço</strong><span>Secretaria Acadêmica</span><small>Registro eletrônico institucional vinculado ao código e ao hash deste documento.</small></div>
+      <div class="auth"><img src="{qrcode_base64}" alt="QR Code"><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class="hash">SHA-256: {hash_visual}</div></div></div>
+      <div class="rodape">GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA</div>
+    </div></body></html>'''
 
-# ↓↓↓ COLOQUE AQUI ↓↓↓
+
 def verificar_acesso_disciplina(aluno_id, disciplina_id):
     """Verifica se o aluno pode acessar a disciplina baseado na data"""
     from datetime import datetime
@@ -3494,14 +2646,22 @@ def webhook_mercadopago():
         aluno_id_email = cobranca["aluno_id"]
         conn.close()
 
-        # E-mail transacional: não bloqueia o webhook caso o Titan ainda não esteja configurado.
+        # E-mail transacional. Compras iniciadas pela nova home seguem primeiro para
+        # conferência documental; matrículas criadas pelo MEW mantêm o fluxo antigo.
         if status_mp == "approved":
             try:
-                enviar_boas_vindas_titan(
-                    aluno_id_email,
-                    referencia=f"mp:{payment_id}:boas_vindas",
-                    pagamento_id=str(payment_id)
-                )
+                solicitacao_publica = _solicitacao_publica_por_cobranca(cobranca["id"])
+                if solicitacao_publica:
+                    novo_pagamento = _marcar_solicitacao_publica_pago(solicitacao_publica["id"], str(payment_id))
+                    if novo_pagamento:
+                        enviar_email_pagamento_publico(solicitacao_publica["id"])
+                        enviar_alerta_admin_matricula_publica(solicitacao_publica["id"], fase="pagamento")
+                else:
+                    enviar_boas_vindas_titan(
+                        aluno_id_email,
+                        referencia=f"mp:{payment_id}:boas_vindas",
+                        pagamento_id=str(payment_id)
+                    )
             except Exception as email_erro:
                 print(f"Aviso: pagamento aprovado, mas o e-mail Titan não foi enviado: {email_erro}")
 
@@ -3513,9 +2673,18 @@ def webhook_mercadopago():
 
 @app.route("/pagamento/mercadopago/sucesso")
 def pagamento_mercadopago_sucesso():
+    token = _token_solicitacao_publica_retorno_mp()
+    if token:
+        payment_id = request.args.get("payment_id") or request.args.get("collection_id")
+        if payment_id:
+            try:
+                _sincronizar_pagamento_publico(token, str(payment_id))
+            except Exception as exc:
+                print(f"Aviso: retorno do Mercado Pago aguardando webhook: {exc}")
+        return redirect(url_for("matricula_publica_documentos", token=token))
     return render_template_string("""
     <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
-      <h1 style='color:#15803d'>✅ Pagamento recebido</h1>
+      <h1 style='color:#15803d'>Pagamento recebido</h1>
       <p>O Mercado Pago informou que o pagamento foi aprovado. O status também será confirmado automaticamente pelo sistema.</p>
       <a href='/dashboard'>Ir para o ambiente do aluno</a>
     </div>""")
@@ -3523,18 +2692,24 @@ def pagamento_mercadopago_sucesso():
 
 @app.route("/pagamento/mercadopago/pendente")
 def pagamento_mercadopago_pendente():
+    token = _token_solicitacao_publica_retorno_mp()
+    if token:
+        return redirect(url_for("matricula_publica_documentos", token=token))
     return render_template_string("""
     <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
-      <h1>⏳ Pagamento pendente</h1><p>Assim que o Mercado Pago aprovar, o sistema atualizará o status automaticamente.</p>
+      <h1>Pagamento pendente</h1><p>Assim que o Mercado Pago aprovar, o sistema atualizará o status automaticamente.</p>
       <a href='/'>Voltar</a>
     </div>""")
 
 
 @app.route("/pagamento/mercadopago/falha")
 def pagamento_mercadopago_falha():
+    token = _token_solicitacao_publica_retorno_mp()
+    if token:
+        return redirect(url_for("matricula_publica_contratar", token=token))
     return render_template_string("""
     <div style='font-family:Arial;max-width:680px;margin:70px auto;text-align:center'>
-      <h1 style='color:#b91c1c'>❌ Pagamento não concluído</h1><p>Nenhuma baixa financeira foi realizada.</p>
+      <h1 style='color:#b91c1c'>Pagamento não concluído</h1><p>Nenhuma baixa financeira foi realizada.</p>
       <a href='/'>Voltar</a>
     </div>""")
 
@@ -6369,1029 +5544,45 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
     data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
     data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
 
-    # HTML COMPLETO COM QUEBRA DE PÁGINA ANTES DO RESUMO ACADÊMICO
+    # HTML institucional final: preto e branco, sem padrões geométricos, mantendo os dados completos.
+    # O campo de banco continua se chamando curso_referencia para compatibilidade, mas é exibido como Unidade Curricular.
     html = f'''<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>HISTÓRICO ESCOLAR - {dados_aluno.get('nome','')}</title>
-
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>HISTÓRICO ACADÊMICO - {dados_aluno.get('nome','')}</title>
 <style>
-/* TIPOGRAFIA INSTITUCIONAL - ARIAL/CALIBRI */
-* {{
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}}
-
-body {{
-    margin: 0;
-    padding: 0;
-    background: #c9c9c9;
-    font-family: "Arial Nova", "Arial", "Calibri", "Segoe UI", sans-serif;
-    font-size: 10.5pt;
-    color: #1a1a1a;
-    line-height: 1.4;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-}}
-
-/* FOLHA A4 COM MARGENS PRECISAS */
-.folha {{
-    width: 210mm;
-    min-height: 297mm;
-    margin: 0 auto;
-    background: #fefefe;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 0 20px rgba(0,0,0,0.3);
-    padding: 15mm 20mm 25mm 20mm;
-    page-break-after: always;
-}}
-
-/* BORDA DE SEGURANÇA - ESTILO PAPEL MOEDA */
-.borda-seguranca {{
-    position: absolute;
-    top: 8mm;
-    left: 8mm;
-    right: 8mm;
-    bottom: 8mm;
-    border: 0.5pt solid #3f464b;
-    pointer-events: none;
-}}
-
-.borda-seguranca::before {{
-    content: "";
-    position: absolute;
-    top: 2mm;
-    left: 2mm;
-    right: 2mm;
-    bottom: 2mm;
-    border: 0.3pt dashed #3f464b;
-    opacity: 0.5;
-}}
-
-/* CANTONEIRAS DE SEGURANÇA */
-.cantoneira {{
-    position: absolute;
-    width: 15mm;
-    height: 15mm;
-    border: 2pt solid #3f464b;
-    z-index: 100;
-}}
-
-.cantoneira.top-left {{
-    top: 6mm;
-    left: 6mm;
-    border-right: none;
-    border-bottom: none;
-}}
-
-.cantoneira.top-right {{
-    top: 6mm;
-    right: 6mm;
-    border-left: none;
-    border-bottom: none;
-}}
-
-.cantoneira.bottom-left {{
-    bottom: 6mm;
-    left: 6mm;
-    border-right: none;
-    border-top: none;
-}}
-
-.cantoneira.bottom-right {{
-    bottom: 6mm;
-    right: 6mm;
-    border-left: none;
-    border-top: none;
-}}
-
-/* MARCA D'ÁGUA PRINCIPAL - SELO INSTITUCIONAL */
-.marca-dagua-principal {{
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-45deg);
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 72pt;
-    color: rgba(26, 35, 126, 0.03);
-    text-transform: uppercase;
-    letter-spacing: 15px;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 1;
-    font-weight: 900;
-}}
-
-/* MARCA D'ÁGUA SECUNDÁRIA - PATTERN GEOMÉTRICO */
-.marca-dagua-pattern {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image:
-        repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px),
-        repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26,35,126,0.015) 35px, rgba(26,35,126,0.015) 70px);
-    pointer-events: none;
-    z-index: 1;
-}}
-
-/* MICROTEXTO DE SEGURANÇA NA BORDA */
-.microtexto-borda {{
-    position: absolute;
-    font-family: "Arial", sans-serif;
-    font-size: 5pt;
-    color: rgba(26,35,126,0.3);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    white-space: nowrap;
-    z-index: 2;
-}}
-
-.microtexto-borda.top {{
-    top: 5mm;
-    left: 50%;
-    transform: translateX(-50%);
-}}
-
-.microtexto-borda.bottom {{
-    bottom: 5mm;
-    left: 50%;
-    transform: translateX(-50%);
-}}
-
-.microtexto-borda.left {{
-    left: 3mm;
-    top: 50%;
-    transform: translateY(-50%) rotate(-90deg);
-    transform-origin: center;
-}}
-
-.microtexto-borda.right {{
-    right: 3mm;
-    top: 50%;
-    transform: translateY(-50%) rotate(90deg);
-    transform-origin: center;
-}}
-
-/* FAIXA SUPERIOR IDENTIFICADORA */
-.faixa-identificadora {{
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4mm;
-    background: repeating-linear-gradient(
-        90deg,
-        #3f464b 0px,
-        #3f464b 5mm,
-        #ffffff 5mm,
-        #ffffff 10mm,
-        #3f464b 10mm,
-        #3f464b 15mm
-    );
-    z-index: 10;
-}}
-
-/* CABEÇALHO INSTITUCIONAL */
-.cabecalho {{
-    position: relative;
-    z-index: 5;
-    border-bottom: 1.5pt solid #3f464b;
-    padding-bottom: 4mm;
-    margin-bottom: 10mm;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}}
-
-.logo-area {{
-    display: flex;
-    align-items: center;
-    gap: 5mm;
-}}
-
-.logo-area img {{
-    width: 25mm;
-    height: auto;
-    opacity: 0.9;
-}}
-
-.instituicao-info {{
-    flex: 1;
-}}
-
-.instituicao-nome {{
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 14pt;
-    color: #3f464b;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    line-height: 1.2;
-    margin-top: 8mm;
-}}
-
-.instituicao-sub {{
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #444;
-    margin-top: 2mm;
-    line-height: 1.3;
-}}
-
-/* SELO DE AUTENTICIDADE NO CABEÇALHO */
-.selo-autenticidade {{
-    width: 22mm;
-    height: 22mm;
-    border: 1.5pt solid #3f464b;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-family: "Arial", sans-serif;
-    font-size: 6pt;
-    color: #3f464b;
-    text-align: center;
-    line-height: 1.1;
-    position: relative;
-    background: radial-gradient(circle, rgba(26,35,126,0.05) 0%, transparent 70%);
-}}
-
-.selo-autenticidade::before {{
-    content: "";
-    display: inline-block;
-    width: 24px;
-    height: 16px;
-    margin-bottom: 1mm;
-    margin-right: 4px;
-    vertical-align: middle;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Crect x='0' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='4' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='7' y='0' width='3' height='16' fill='%231a237e'/%3E%3Crect x='12' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='15' y='0' width='2' height='16' fill='%231a237e'/%3E%3Crect x='19' y='0' width='1' height='16' fill='%231a237e'/%3E%3Crect x='22' y='0' width='2' height='16' fill='%231a237e'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-size: contain;
-}}
-
-/* NÚMERO DE CONTROLE NO CANTO */
-.numero-controle-box {{
-    position: absolute;
-    top: 12mm;
-    right: 12mm;
-    border: 0.5pt solid #3f464b;
-    padding: 2mm 4mm;
-    font-family: "Courier New", monospace;
-    font-size: 7pt;
-    color: #3f464b;
-    background: rgba(26,35,126,0.03);
-    z-index: 20;
-}}
-
-.numero-controle-box::before {{
-    content: "Nº CONTROLE: ";
-    font-weight: bold;
-}}
-
-/* TÍTULO DO DOCUMENTO */
-.titulo-documento {{
-    text-align: center;
-    margin: 1mm 0 10mm 0;
-    position: relative;
-    z-index: 5;
-}}
-
-.titulo-principal {{
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 18pt;
-    color: #3f464b;
-    text-transform: uppercase;
-    letter-spacing: 4px;
-    margin-bottom: 3mm;
-    position: relative;
-    display: inline-block;
-    padding: 0 15mm;
-}}
-
-/* LINHAS DECORATIVAS LATERAIS DO TÍTULO */
-.titulo-principal::before,
-.titulo-principal::after {{
-    content: "";
-    position: absolute;
-    top: 50%;
-    width: 10mm;
-    height: 1pt;
-    background: #3f464b;
-}}
-
-.titulo-principal::before {{
-    left: 0;
-}}
-
-.titulo-principal::after {{
-    right: 0;
-}}
-
-.titulo-sub {{
-    font-family: "Arial", sans-serif;
-    font-size: 9pt;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    border-top: 0.5pt solid #ccc;
-    border-bottom: 0.5pt solid #ccc;
-    padding: 2mm 0;
-    display: inline-block;
-}}
-
-/* TEXTO DE ABERTURA */
-.texto-abertura {{
-    text-align: justify;
-    margin-bottom: 8mm;
-    position: relative;
-    z-index: 5;
-    font-size: 10.5pt;
-    line-height: 1.6;
-    text-indent: 15mm;
-}}
-
-.destaque {{
-    font-weight: bold;
-    color: #3f464b;
-    font-family: "Arial Black", "Arial", sans-serif;
-}}
-
-/* BOX DE IDENTIFICAÇÃO - ESTILO FICHA CRIMINAL */
-.box-identificacao {{
-    border: 1pt solid #3f464b;
-    margin: 8mm 0;
-    position: relative;
-    z-index: 5;
-    background: rgba(26,35,126,0.02);
-}}
-
-.box-identificacao-header {{
-    background: #3f464b;
-    color: #fff;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 8pt;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    padding: 1mm 4mm;
-    text-align: center;
-}}
-
-.box-identificacao-content {{
-    padding: 3mm;
-}}
-
-.linha-dado {{
-    display: flex;
-    margin-bottom: 3mm;
-    border-bottom: 0.3pt dotted #999;
-    padding-bottom: 2mm;
-}}
-
-.linha-dado:last-child {{
-    margin-bottom: 0;
-    border-bottom: none;
-}}
-
-.rotulo {{
-    width: 25mm;
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #3f464b;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}}
-
-.valor {{
-    flex: 1;
-    font-family: "Arial", sans-serif;
-    font-size: 11pt;
-    color: #000;
-    font-weight: bold;
-    padding-left: 3mm;
-}}
-
-/* BOX DE DADOS PESSOAIS ESTENDIDOS */
-.box-dados-pessoais {{
-    border: 1pt solid #3f464b;
-    margin: 8mm 0;
-    padding: 5mm;
-    position: relative;
-    z-index: 5;
-    background: #fff;
-}}
-
-.box-dados-pessoais::before {{
-    content: "DADOS PESSOAIS COMPLETOS";
-    position: absolute;
-    top: -3mm;
-    left: 5mm;
-    background: #fff;
-    padding: 0 3mm;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 7pt;
-    color: #3f464b;
-    letter-spacing: 1px;
-}}
-
-.dados-grid {{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3mm;
-    margin-top: 2mm;
-}}
-
-.dado-item-historico {{
-    margin-bottom: 2mm;
-}}
-
-.dado-label-historico {{
-    font-size: 7pt;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}}
-
-.dado-valor-historico {{
-    font-weight: bold;
-    color: #000;
-    font-size: 10pt;
-    border-bottom: 0.5pt dotted #ccc;
-    padding-bottom: 1mm;
-}}
-
-/* TABELA DE DISCIPLINAS */
-.tabela-disciplinas {{
-    width: 100%;
-    border-collapse: collapse;
-    margin: 8mm 0;
-    font-size: 8pt;
-    z-index: 5;
-    position: relative;
-}}
-
-.tabela-disciplinas th {{
-    background: #3f464b;
-    color: white;
-    font-weight: bold;
-    padding: 4px;
-    text-align: center;
-    font-size: 7pt;
-    text-transform: uppercase;
-}}
-
-.tabela-disciplinas td {{
-    border: 1px solid #3f464b;
-    padding: 4px;
-    vertical-align: middle;
-}}
-
-.tabela-disciplinas tr:nth-child(even) {{
-    background: rgba(26,35,126,0.02);
-}}
-
-/* BOX DE RESUMO */
-.box-resumo {{
-    border: 1pt solid #3f464b;
-    border-left: 4pt solid #3f464b;
-    margin: 8mm 0;
-    padding: 5mm;
-    position: relative;
-    z-index: 5;
-    background: #fff;
-}}
-
-.box-resumo::before {{
-    content: "RESUMO ACADÊMICO";
-    position: absolute;
-    top: -3mm;
-    left: 5mm;
-    background: #fff;
-    padding: 0 3mm;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 7pt;
-    color: #3f464b;
-    letter-spacing: 1px;
-}}
-
-.resumo-grid {{
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 3mm;
-}}
-
-.resumo-item {{
-    text-align: center;
-    border-right: 0.5pt solid #ddd;
-    padding: 2mm;
-}}
-
-.resumo-item:last-child {{
-    border-right: none;
-}}
-
-.resumo-label {{
-    font-size: 7pt;
-    color: #666;
-    text-transform: uppercase;
-    margin-bottom: 1mm;
-}}
-
-.resumo-valor {{
-    font-weight: bold;
-    color: #3f464b;
-    font-size: 12pt;
-}}
-
-.resumo-detalhe {{
-    font-size: 7pt;
-    color: #999;
-}}
-
-/* BOX DE SISTEMA DE AVALIAÇÃO */
-.box-avaliacao {{
-    border: 1pt solid #3f464b;
-    margin: 8mm 0;
-    padding: 5mm;
-    position: relative;
-    z-index: 5;
-    background: #f9f9f9;
-}}
-
-.box-avaliacao::before {{
-    content: "SISTEMA DE AVALIAÇÃO";
-    position: absolute;
-    top: -3mm;
-    left: 5mm;
-    background: #f9f9f9;
-    padding: 0 3mm;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 7pt;
-    color: #3f464b;
-    letter-spacing: 1px;
-}}
-
-.box-avaliacao2::before {{
-    content: "OBSERVAÇÕES";
-    position: absolute;
-    top: -3mm;
-    left: 5mm;
-    background: #f9f9f9;
-    padding: 0 3mm;
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 7pt;
-    color: #3f464b;
-    letter-spacing: 1px;
-}}
-/* SELO GRANDE DE AUTENTICAÇÃO */
-.selo-grande {{
-    position: absolute;
-    bottom: 45mm;
-    right: 15mm;
-    width: 35mm;
-    height: 35mm;
-    border: 2pt solid rgba(26,35,126,0.3);
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-family: "Arial", sans-serif;
-    font-size: 6pt;
-    color: rgba(26,35,126,0.4);
-    text-align: center;
-    line-height: 1.2;
-    transform: rotate(-15deg);
-    z-index: 3;
-    pointer-events: none;
-}}
-
-.selo-grande::before {{
-    content: "AUTENTICIDADE";
-    font-weight: bold;
-    font-size: 7pt;
-    margin-bottom: 2mm;
-    letter-spacing: 1px;
-}}
-
-.selo-grande::after {{
-    content: "★ ★ ★";
-    font-size: 8pt;
-    margin-top: 2mm;
-}}
-
-/* DATA E LOCAL */
-.data-local {{
-    text-align: right;
-    margin: 15mm 0 10mm 0;
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #333;
-    position: relative;
-    z-index: 5;
-    font-style: italic;
-}}
-
-/* ASSINATURA */
-.assinatura-area {{
-    margin-top: 15mm;
-    text-align: center;
-    position: relative;
-    z-index: 5;
-    page-break-inside: avoid;
-}}
-
-.assinatura-linha {{
-    width: 70mm;
-    height: 0;
-    border-top: 0.5pt solid #000;
-    margin: 0 auto 3mm auto;
-    position: relative;
-}}
-
-.assinatura-linha::before {{
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: -2mm;
-    transform: translateX(-50%);
-    width: 20mm;
-    height: 4mm;
-    border-left: 0.5pt solid #999;
-    border-right: 0.5pt solid #999;
-}}
-
-.assinatura-nome {{
-    font-family: "Arial Black", "Arial", sans-serif;
-    font-size: 11pt;
-    color: #3f464b;
-    margin-bottom: 1mm;
-}}
-
-.assinatura-cargo {{
-    font-family: "Arial", sans-serif;
-    font-size: 8pt;
-    color: #555;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}}
-
-/* QR CODE AREA */
-.qr-code-box {{
-    position: absolute;
-    bottom: 23mm;
-    left: 15mm;
-    width: 30mm;
-    height: 30mm;
-    border: 0.5pt solid #ccc;
-    background: #fafafa;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 5;
-}}
-
-.qr-code-label {{
-    font-size: 6pt;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 2mm;
-}}
-
-#qr-code-placeholder {{
-    width: 20mm;
-    height: 20mm;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}}
-
-/* RODAPÉ TÉCNICO */
-.rodape-tecnico {{
-    position: absolute;
-    bottom: 12mm;
-    left: 50mm;
-    right: 15mm;
-    font-family: "Arial", sans-serif;
-    font-size: 6.5pt;
-    color: #666;
-    text-align: center;
-    line-height: 1.4;
-    z-index: 5;
-    border-top: 0.3pt solid #ddd;
-    padding-top: 3mm;
-}}
-
-.rodape-tecnico strong {{
-    color: #3f464b;
-}}
-
-/* MICROTEXTOS DE SEGURANÇA */
-.microtexto-seguranca {{
-    position: absolute;
-    font-family: "Arial", sans-serif;
-    font-size: 5pt;
-    color: rgba(0,0,0,0.15);
-    z-index: 2;
-    letter-spacing: 0.5px;
-}}
-
-.micro-1 {{ top: 30mm; left: 10mm; transform: rotate(90deg); }}
-.micro-2 {{ top: 50mm; right: 10mm; transform: rotate(-90deg); }}
-.micro-3 {{ bottom: 80mm; left: 12mm; }}
-.micro-4 {{ bottom: 100mm; right: 50mm; }}
-
-/* OBSERVAÇÕES */
-.observacoes-texto {{
-    font-size: 7pt;
-    line-height: 1.4;
-    color: #333;
-}}
-
-/* PRINT STYLES */
-@media print {{
-    body {{
-        background: #fff;
-    }}
-
-    .folha {{
-        box-shadow: none;
-        margin: 0;
-    }}
-}}
-</style>
-</head>
-
-<body>
-<!-- PRIMEIRA PÁGINA -->
-<div class="folha">
-    <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
-    <div class="borda-seguranca"></div>
-    <div class="cantoneira top-left"></div>
-    <div class="cantoneira top-right"></div>
-    <div class="cantoneira bottom-left"></div>
-    <div class="cantoneira bottom-right"></div>
-
-    <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
-    <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
-    <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
-    <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-
-    <!-- MARCAS D'ÁGUA -->
-    <div class="marca-dagua-principal">FACOP SiGEu</div>
-    <div class="marca-dagua-pattern"></div>
-
-    <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
-    <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
-    <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
-    <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-
-    <!-- FAIXA IDENTIFICADORA -->
-    <div class="faixa-identificadora"></div>
-
-    <!-- NÚMERO DE CONTROLE -->
-    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
-
-    <!-- CABEÇALHO -->
-    <div class="cabecalho">
-        <div class="logo-area">
-            <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
-            <div class="instituicao-info">
-                <div class="instituicao-nome">FACOP - SiGEu</div>
-                <div class="instituicao-sub">
-                    Faculdade do Centro Oeste Paulista 04.344.730/0001-60.<br>
-                    Credenciada pela Portaria MEC nº 887 de 26/07/2017<br>
-                    Polo educacional - Grupo Educacional Unificado LTDA
-                </div>
-            </div>
-        </div>
-        <div class="selo-autenticidade">
-            FCP-SiGEu<br>e-SIGEU-GTP-2026
-        </div>
-    </div>
-
-    <!-- TÍTULO -->
-    <div class="titulo-documento">
-        <div class="titulo-principal">Histórico Escolar</div>
-        <div class="titulo-sub">COMPONENTES CURRICULARES - {ano_historico}</div>
-    </div>
-
-    <!-- BOX DE IDENTIFICAÇÃO DO ALUNO (SIMPLIFICADO) -->
-    <div class="box-identificacao">
-        <div class="box-identificacao-header">Identificação do Discente</div>
-        <div class="box-identificacao-content">
-            <div class="linha-dado">
-                <div class="rotulo">Nome:</div>
-                <div class="valor">{dados_aluno.get('nome','')}</div>
-            </div>
-            <div class="linha-dado">
-                <div class="rotulo">RA:</div>
-                <div class="valor">{dados_aluno.get('ra','')}</div>
-            </div>
-            <div class="linha-dado">
-                <div class="rotulo">CPF:</div>
-                <div class="valor">{dados_aluno.get('cpf_formatado','')}</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- BOX DE DADOS PESSOAIS COMPLETOS -->
-    <div class="box-dados-pessoais">
-        <div class="dados-grid">
-            <div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Filiação</div>
-                    <div class="dado-valor-historico">{filiacao}</div>
-                </div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Naturalidade</div>
-                    <div class="dado-valor-historico">{naturalidade}</div>
-                </div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Nacionalidade</div>
-                    <div class="dado-valor-historico">{nacionalidade}</div>
-                </div>
-            </div>
-            <div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Data de Nascimento</div>
-                    <div class="dado-valor-historico">{data_nascimento}</div>
-                </div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Sexo</div>
-                    <div class="dado-valor-historico">{sexo_display}</div>
-                </div>
-                <div class="dado-item-historico">
-                    <div class="dado-label-historico">Estado Civil</div>
-                    <div class="dado-valor-historico">{estado_civil}</div>
-                </div>
-            </div>
-        </div>
-        <div style="margin-top: 2mm;">
-            <div class="dado-label-historico">Curso/Referência</div>
-            <div class="dado-valor-historico">{curso_referencia}</div>
-        </div>
-    </div>
-
-    <!-- TABELA DE DISCIPLINAS -->
-    <table class="tabela-disciplinas">
-        <thead>
-            <tr>
-                <th>Período</th>
-                <th>Componente Curricular</th>
-                <th>Sem.</th>
-                <th>C.H.</th>
-                <th>Docente/Titulação</th>
-                <th>Nota Final</th>
-                <th>Frequência</th>
-                <th>Resultado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {linhas}
-            <tr style="background: #f0f0f0; font-weight: bold;">
-                <td colspan="3">Carga Horária Total Aprovada:</td>
-                <td>{carga_total_aprovada}H</td>
-                <td colspan="2">Carga Horária Total Cursada:</td>
-                <td>{carga_total_cursada}H</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
-<!-- SEGUNDA PÁGINA - COMEÇA COM RESUMO ACADÊMICO -->
-<div class="folha">
-    <!-- ELEMENTOS DE SEGURANÇA E BORDA -->
-    <div class="borda-seguranca"></div>
-    <div class="cantoneira top-left"></div>
-    <div class="cantoneira top-right"></div>
-    <div class="cantoneira bottom-left"></div>
-    <div class="cantoneira bottom-right"></div>
-
-    <!-- MICROTEXTOS DE BORDA -->
-    <div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - VALIDAÇÃO DIGITAL OBRIGATÓRIA</div>
-    <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98 <strong> | H{datetime.now().strftime('%Y%m%d')}/Coord. Acad. Tatiane R. G. Lourenço- </strong></div>
-    <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
-    <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
-
-    <!-- MARCAS D'ÁGUA -->
-    <div class="marca-dagua-principal">FACOP SiGEu</div>
-    <div class="marca-dagua-pattern"></div>
-
-    <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
-    <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
-    <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-    <div class="microtexto-seguranca micro-3">FCP Certificadora | SiGEu Educacional</div>
-    <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
-
-    <!-- FAIXA IDENTIFICADORA -->
-    <div class="faixa-identificadora"></div>
-
-    <!-- NÚMERO DE CONTROLE -->
-    <div class="numero-controle-box">HIST-{dados_aluno.get('ra','')}-{ano_historico}</div>
-
-    <!-- CABEÇALHO -->
-    <div class="cabecalho">
-        <div class="logo-area">
-            <img src="/static/img/logo_declaracao.png" alt="Logo Institucional">
-            <div class="instituicao-info">
-                <div class="instituicao-nome">FACOP - SiGEu</div>
-                <div class="instituicao-sub">
-                    Faculdade do Centro Oeste Paulista 04.344.730/0001-60.<br>
-                    Credenciada pela Portaria MEC nº 887 de 26/07/2017<br>
-                    Polo educacional - Grupo Educacional Unificado LTDA
-                </div>
-            </div>
-        </div>
-        <div class="selo-autenticidade">
-            FCP-SiGEu<br>e-SIGEU-GTP-2026
-        </div>
-    </div>
-
-    <!-- TÍTULO -->
-    <div class="titulo-documento">
-        <div class="titulo-principal">Histórico Escolar</div>
-        <div class="titulo-sub">COMPONENTES CURRICULARES - {ano_historico}</div>
-    </div>
-
-    <!-- BOX DE RESUMO ACADÊMICO -->
-    <div class="box-resumo">
-        <div class="resumo-grid">
-            <div class="resumo-item">
-                <div class="resumo-label">Índice de Rendimento Acadêmico (IRA)</div>
-                <div class="resumo-valor">{ira_display}</div>
-            </div>
-            <div class="resumo-item">
-                <div class="resumo-label">Disciplinas Aprovadas</div>
-                <div class="resumo-valor">{ira_info['disciplinas_aprovadas']}</div>
-                <div class="resumo-detalhe">de {len(disciplinas)} cursadas</div>
-            </div>
-            <div class="resumo-item">
-                <div class="resumo-label">Carga Horária Aprovada</div>
-                <div class="resumo-valor">{carga_total_aprovada}H</div>
-                <div class="resumo-detalhe">de {carga_total_cursada}H</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- BOX DE SISTEMA DE AVALIAÇÃO -->
-    <div class="box-avaliacao">
-        <p style="margin: 2mm 0;"><strong>Distribuição dos 100 pontos:</strong> Produção Científica (20%) | Prova I (20%) | Prova II (20%) | Prova III (20%) | Prova IV (20%)</p>
-        <p style="margin: 2mm 0;"><strong>Avaliação Suplementar:</strong> Conteúdo total da disciplina - Valor: 100 pontos (Pré-requisito: Resultado Final ≥ 20 e < 60)</p>
-        <p style="margin: 2mm 0;"><strong>Média Final:</strong> (Resultado Final + Nota Prova Suplementar) / 2 | Mínimo para aprovação: ≥ 60 pontos.</p>
-    </div>
-
-    <!-- BOX DE OBSERVAÇÕES -->
-    <div class="box-avaliacao2">
-        <div class="observacoes-texto">
-            <p><strong>Normativo:</strong> Oferta de disciplina isolada de acordo com o art. 50 da Lei de Diretrizes e Bases da Educação Nacional - LDBEN (Lei nº 9.394/1996). Modalidade de ingresso isolada, respeitados os pré-requisitos exigidos para cada disciplina, conforme registrado no ato da matrícula, vinculada à estrutura curricular de curso reconhecido no convênio institucional FACOP/CERTIFICADORA/SiGEU EDUCACIONAL.</p>
-            <p style="margin-top: 2mm;">Este documento possui validade em todo território nacional e pode ser utilizado para fins de aproveitamento de estudos, comprovação de conclusão de componentes curriculares e demais fins legais.</p>
-        </div>
-    </div>
-
-    <!-- SELO GRANDE DE AUTENTICAÇÃO -->
-    <div class="selo-grande">
-        VALIDADO<br>
-        ELETRONICAMENTE<br>
-        {data_atual}
-    </div>
-
-    <!-- DATA E LOCAL -->
-    <div class="data-local">
-        São Paulo – SP, {data_atual}.
-    </div>
-
-     <!-- QR CODE - JÁ INCLUSO -->
-    <div class="qr-code-box">
-        <div class="qr-code-label">Validação Digital</div>
-        <div id="qr-code-placeholder">
-            <img src="{qr_code_base64}" alt="QR Code de Validação" style="width: 100%; height: 100%; object-fit: contain;">
-        </div>
-    </div>
-
-    <!-- SEÇÃO DE AUTENTICAÇÃO -->
-    <div style="position: absolute; bottom: 17mm; left: 15mm; right: 15mm; background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 8pt; text-align: center; border-top: 1px solid #3f464b;">
-    </div>
-
-    <!-- RODAPÉ TÉCNICO -->
-    <div class="rodape-tecnico">
-        <strong>DOCUMENTO GERADO ELETRONICAMENTE</strong> em conformidade com as Leis nº 11.419/06, 14.063/20 e nº 9.394/96 e nº 5.154/2004.<br>
-        Este documento possui validade jurídica sem assinatura física mediante validação pelo QR Code acima.<br>
-        Para verificar autenticidade: <strong>https://campusvirtualfacop.com.br/validar-documento</strong> | Protocolo: HIST-{dados_aluno.get('ra','')}-{ano_historico}
-    </div>
-</div>
-
-</body>
-</html>'''
+@page {{ size:A4; margin:14mm; }} *{{box-sizing:border-box}}
+body{{margin:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:9.3pt;line-height:1.35}}
+.doc{{background:#fff}}
+.cab{{border-bottom:2px solid #000;padding-bottom:9px;margin-bottom:14px;display:flex;justify-content:space-between;gap:15px;align-items:flex-start}}
+.brand{{font-size:15pt;font-weight:700}} .sub{{font-size:8.5pt;margin-top:3px}}
+.cert{{font-size:7.7pt;text-align:right;max-width:52%;line-height:1.35}} .cert b{{font-size:9pt}}
+h1{{text-align:center;font-size:19pt;margin:16px 0 14px}}
+.dados-tabela{{width:100%;border-collapse:collapse;margin-bottom:13px;font-size:8.8pt}}
+.dados-tabela td{{border:1px solid #000;padding:6px 8px;width:50%;vertical-align:top}}
+table{{width:100%;border-collapse:collapse;font-size:8.1pt}} thead{{display:table-header-group}} tr{{page-break-inside:avoid}}
+th,td{{border:1px solid #000;padding:4px;vertical-align:top}} th{{background:#fff;color:#000;text-transform:uppercase;font-size:7.3pt}}
+.resumo{{margin-top:12px;border:1px solid #000;padding:8px;display:flex;gap:16px;flex-wrap:wrap}}
+.auth{{margin-top:10px;border-top:1px solid #000;padding-top:8px;display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center}}
+.auth img{{width:72px;height:72px}} .hash{{font-family:monospace;font-size:6.5pt;word-break:break-all;margin-top:4px}}
+.obs{{margin-top:11px;border:1px solid #000;padding:8px;font-size:7.6pt}}
+.rodape{{margin-top:9px;border-top:1px solid #000;padding-top:6px;font-size:6.5pt;text-align:center}}
+</style></head><body><div class="doc">
+<div class="cab"><div><div class="brand">GRUPO EDUCACIONAL UNIFICADO</div><div class="sub">SIGEU Educacional • Sistema Integrado de Gestão Educacional</div></div><div class="cert"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista LTDA<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887 de 26/07/2017</div></div>
+<h1>HISTÓRICO ACADÊMICO</h1>
+<table class="dados-tabela">
+<tr><td><b>Aluno:</b> {dados_aluno.get('nome','')}</td><td><b>RA:</b> {dados_aluno.get('ra','')}</td></tr>
+<tr><td><b>CPF:</b> {dados_aluno.get('cpf_formatado','')}</td><td><b>Ano de referência:</b> {ano_historico}</td></tr>
+<tr><td><b>Filiação:</b> {filiacao or 'N/I'}</td><td><b>Data de nascimento:</b> {data_nascimento or 'N/I'}</td></tr>
+<tr><td><b>Naturalidade:</b> {naturalidade or 'N/I'}</td><td><b>Nacionalidade:</b> {nacionalidade or 'N/I'}</td></tr>
+<tr><td><b>Sexo:</b> {sexo_display or 'N/I'}</td><td><b>Estado civil:</b> {estado_civil or 'N/I'}</td></tr>
+<tr><td colspan="2"><b>Unidade Curricular:</b> {curso_referencia or 'Disciplinas / Unidades Curriculares'}</td></tr>
+</table>
+<table><thead><tr><th>Período</th><th>Componente Curricular</th><th>Sem.</th><th>C.H.</th><th>Docente/Titulação</th><th>Nota Final</th><th>Frequência</th><th>Resultado</th></tr></thead><tbody>{linhas}
+<tr><td colspan="3"><b>Carga Horária Total Aprovada</b></td><td><b>{carga_total_aprovada}H</b></td><td colspan="2"><b>Carga Horária Total Cursada</b></td><td colspan="2"><b>{carga_total_cursada}H</b></td></tr></tbody></table>
+<div class="resumo"><span><b>IRA:</b> {ira_display}</span><span><b>Disciplinas aprovadas:</b> {ira_info['disciplinas_aprovadas']}</span><span><b>Carga aprovada:</b> {carga_total_aprovada}H</span><span><b>Carga cursada:</b> {carga_total_cursada}H</span></div>
+<div class="obs"><b>Observação:</b> documento emitido para registro dos componentes curriculares cursados. A FACOP CERTIFICADORA atua na certificação documental conforme a parceria educacional registrada. Os dados acadêmicos e pessoais acima são mantidos conforme cadastro do estudante.</div>
+<div class="auth"><img src="{qr_code_base64}" alt="QR Code"><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {data_emissao}<br><b>Validade:</b> {data_validade}<div class="hash">SHA-256: {hash_documento}</div></div></div>
+<div class="rodape">GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA • Validação eletrônica pelo QR Code e código acima.</div>
+</div></body></html>'''
 
     conn.close()
     return html
@@ -8194,18 +6385,21 @@ def gerar_declaracao_conclusao_route():
         base_url = request.host_url.rstrip('/')
         link_validacao = gerar_link_validacao(codigo, base_url)
 
-        # Gerar HTML da declaração
-        html = gerar_declaracao_conclusao(
-            aluno_id,
-            disciplina_id,
-            aluno_completo,
-            disciplina_selecionada,
-            ano_manual
-        )
-
-        # GERAR QR CODE com o link
+        # GERAR QR CODE com o link e montar a declaração institucional final.
         dados_qr = link_validacao
         qr_code_base64 = gerar_qrcode_base64(dados_qr)
+        status_documental = _status_disciplina_documentos(aluno_id, disciplina_id)
+        if not status_documental.get("id"):
+            return jsonify({"success": False, "message": "Não foi possível carregar os dados documentais da disciplina"})
+        if str(status_documental.get("status_final") or "").strip().lower() != "aprovado":
+            return jsonify({"success": False, "message": "A declaração de conclusão só pode ser gerada para disciplina aprovada."})
+        html_com_qr = _html_declaracao_integrada(
+            aluno_completo,
+            status_documental,
+            codigo,
+            qr_code_base64,
+            hash_documento
+        )
 
         # Criar metadados
         metadados = criar_metadados_documento(aluno_id, 'declaracao_conclusao', codigo, hash_documento)
@@ -8213,45 +6407,6 @@ def gerar_declaracao_conclusao_route():
         # Data atual
         data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
         data_validade = (datetime.now() + timedelta(days=365*5)).strftime("%d/%m/%Y")
-
-        # ADICIONAR QR CODE AO HTML DA DECLARAÇÃO
-        html_com_qr = html.replace(
-            '</body>',
-            f'''
-    <!-- SEÇÃO DE AUTENTICAÇÃO -->
-    <div style="margin-top: 30px; padding: 20px; border-top: 2px solid #3f464b; background: #f9f9f9;">
-
-        <!-- CABEÇALHO DA SEÇÃO -->
-        <div style="text-align: center; margin-bottom: 20px;">
-            <span style="background: #3f464b; color: white; padding: 5px 20px; border-radius: 20px; font-size: 11px; font-weight: bold;">
-                🔐 DOCUMENTO AUTENTICADO DIGITALMENTE
-            </span>
-        </div>
-
-        <!-- QR CODE E INFORMAÇÕES -->
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-                <td style="width: 25%; text-align: center; vertical-align: middle;">
-                    <img src="{qr_code_base64}" style="width: 120px; height: 120px;" alt="QR Code">
-                </td>
-                <td style="width: 75%; padding-left: 20px; vertical-align: middle;">
-                    <p style="margin: 5px 0; font-size: 11px;"><strong>Código:</strong> {codigo}</p>
-                    <p style="margin: 5px 0; font-size: 11px;"><strong>Hash:</strong> {hash_documento[:30]}...</p>
-                    <p style="margin: 5px 0; font-size: 11px;"><strong>Emissão:</strong> {data_emissao}</p>
-                    <p style="margin: 5px 0; font-size: 11px;"><strong>Validade:</strong> {data_validade}</p>
-                </td>
-            </tr>
-        </table>
-
-        <!-- INSTRUÇÕES DE VALIDAÇÃO -->
-        <div style="margin-top: 15px; background: #e8f5e8; padding: 10px; border-radius: 5px; font-size: 10px; text-align: center;">
-            <p style="margin: 2px 0;">📌 Para validar este documento, acesse <strong>{base_url}/validar-documento</strong></p>
-            <p style="margin: 2px 0;">e digite o código acima ou escaneie o QR Code</p>
-        </div>
-    </div>
-    </body>
-    '''
-        )
 
         # Salvar no banco
         conn = get_db_connection()
@@ -8916,7 +7071,7 @@ Para visualizar e baixar o plano de ensino:
 Bons estudos!
 
 Atenciosamente,
-Coordenação Acadêmica SiGEu Educacional - FACOP Certificadora"""
+Coordenação Acadêmica • SIGEU Educacional • FACOP CERTIFICADORA"""
 
     else:
         return f"""Olá {aluno_nome},
@@ -8931,7 +7086,7 @@ Para visualizar e baixar:
 3. Guarde o código de autenticação para validação futura
 
 Atenciosamente,
-Secretaria Acadêmica SiGEu Eduacional - Facop Certificadora"""
+Secretaria Acadêmica • SIGEU Educacional • FACOP CERTIFICADORA"""
 
 # ============================================
 # MEW - GERAR PLANOS DE ENSINO COM IA
@@ -9131,10 +7286,11 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, print-scale=1">
-    <title>Plano de Ensino - {disciplina} | FACOP/CERTIFICADORA/SiGEU EDUCACIONAL</title>
+    <title>Plano de Ensino - {disciplina} | GRUPO EDUCACIONAL UNIFICADO • SIGEU EDUCACIONAL • FACOP CERTIFICADORA</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-        /* ESTILO PROFISSIONAL INSTITUCIONAL - FACOP/CERTIFICADORA/SiGEU EDUCACIONAL */
+        @page {{ size: A4; margin: 0; }}
+        /* ESTILO PROFISSIONAL INSTITUCIONAL - DOCUMENTO ACADÊMICO */
         /* PADRÃO DE CORES: AZUL MARINHO (#3f464b), CINZA, DETALHES DE SEGURANÇA */
         * {{
             margin: 0;
@@ -9517,18 +7673,6 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             gap: 15px;
         }}
 
-        .simulated-signature {{
-            font-family: 'Brush Script MT', cursive, 'Parisienne', 'Lucida Handwriting', sans-serif;
-            font-size: 34px;
-            font-weight: 400;
-            color: #3f464b; /* Azul marinho */
-            margin-right: 5px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-            border-bottom: 2px solid #3f464b; /* Linha azul */
-            padding-bottom: 2px;
-            line-height: 1.1;
-        }}
-
         .date-today {{
             font-size: 16px;
             background: #3f464b; /* Fundo azul marinho */
@@ -9781,32 +7925,126 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 .micro-4 {{ bottom: 100mm; right: 50mm; }}
 
 
+
+        /* PADRÃO FINAL DOS DOCUMENTOS: ACADÊMICO, BRANCO E PRETO */
+        body {{
+            background: #fff !important;
+            color: #000 !important;
+            padding: 20px 0 !important;
+        }}
+        .page {{
+            background: #fff !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            border: 1px solid #000 !important;
+            border-top: 2px solid #000 !important;
+            border-bottom: 2px solid #000 !important;
+        }}
+        .marca-dagua-principal,
+        .marca-dagua-pattern,
+        .watermark,
+        .watermark-text,
+        .cantoneira,
+        .faixa-identificadora,
+        .microtexto-seguranca,
+        .microtexto-borda {{ display: none !important; }}
+        .borda-seguranca {{ border: 1px solid #000 !important; }}
+        .borda-seguranca::before {{ display: none !important; }}
+        .logo-img {{ filter: grayscale(1) contrast(1.15) !important; opacity: 1 !important; }}
+        .header-institution,
+        .signature-area,
+        .footer-validation {{ border-color: #000 !important; }}
+        .institution-name h1,
+        .institution-name h2,
+        .meta-identifiers,
+        .plano-title h3,
+        .conteudo-programatico strong,
+        .secretary-name,
+        .secretary-title,
+        .qr-code-info strong,
+        .page-number {{ color: #000 !important; }}
+        .meta-identifiers,
+        .meta-identifiers span,
+        .info-table,
+        .info-table th,
+        .info-table td,
+        .formula,
+        .digital-signature,
+        .hash-value,
+        .secretary-signature,
+        .date-today,
+        .qr-code-box,
+        .page-number {{
+            background: #fff !important;
+            color: #000 !important;
+            border-color: #000 !important;
+            box-shadow: none !important;
+        }}
+        .info-table th,
+        .info-table th[colspan="2"] {{
+            background: #fff !important;
+            color: #000 !important;
+            border: 1px solid #000 !important;
+        }}
+        .info-table td {{ border: 1px solid #000 !important; }}
+        .plano-title h3::before,
+        .plano-title h3::after {{ background: #000 !important; }}
+        .digital-signature {{ border-left: 4px solid #000 !important; }}
+        .hash-label {{ color: #000 !important; }}
+        .hash-value {{ border: 1px solid #000 !important; }}
+        .formula {{ border-left: 4px solid #000 !important; border-radius: 0 !important; }}
+        .secretary-signature {{ border-bottom: 0 !important; text-align: center; box-shadow: none !important; }}
+        .secretary-name {{ font-family: Arial, sans-serif !important; font-size: 9pt !important; font-style: normal !important; border-bottom: 0 !important; padding-bottom: 3px !important; }}
+        .secretary-title {{ font-size: 10pt !important; color: #000 !important; }}
+        .signature-electronic {{ font-size: 8pt; color: #000; border-top: 1px solid #000; padding-top: 5px; display: block; width: 100%; }}
+        .signature-area {{ display:block !important; margin-top:8mm !important; padding-top:10px !important; border-top:1px solid #000 !important; }}
+        .digital-signature {{ padding:7px 9px !important; font-size:8pt !important; border-left:3px solid #000 !important; }}
+        .hash-label {{ font-size:7pt !important; letter-spacing:1px !important; }}
+        .hash-value {{ font-size:6.7pt !important; line-height:1.2 !important; padding:4px 6px !important; margin-top:4px !important; }}
+        .academic-signature {{ max-width:95mm; margin:8mm auto 0; text-align:center; font-size:8pt; }}
+        .academic-signature-line {{ border-top:1px solid #000; margin-bottom:4px; }}
+        .academic-signature strong {{ display:block; font-size:9.5pt; }}
+        .academic-signature span {{ display:block; margin-top:2px; }}
+        .academic-signature small {{ display:block; margin-top:3px; font-size:6.8pt; }}
+        .info-table * {{ color:#000 !important; background:#fff !important; border-color:#000 !important; box-shadow:none !important; text-shadow:none !important; }}
+        .date-today {{ border: 1px solid #000 !important; padding: 6px 12px !important; }}
+        .btn {{ background:#fff !important; color:#000 !important; border:1px solid #000 !important; }}
+
         /* IMPRESSÃO */
         @media print {{
             body {{
                 background: white;
                 padding: 0;
+                display: block !important;
             }}
             .page {{
                 box-shadow: none;
-                border: 0.5pt solid #3f464b; /* Borda fina */
-                border-top: 8px solid #3f464b;
-                border-bottom: 8px solid #3f464b;
+                border: 1px solid #000;
+                border-top: 2px solid #000;
+                border-bottom: 2px solid #000;
                 background: white;
+                width: 210mm !important;
+                max-width: 210mm !important;
                 padding: 15mm 20mm 25mm 20mm;
-                margin: 0 auto 0 auto;
-                page-break-after: always;
+                margin: 0 !important;
+                page-break-after: auto !important;
+                break-after: auto !important;
             }}
-            .page:last-child {{
-                page-break-after: auto;
+            .page + .page {{
+                page-break-before: always !important;
+                break-before: page !important;
             }}
+            .footer-validation {{ display: none !important; }}
+            .botoes {{ display: none !important; }}
+            .info-table p {{ margin: 0 0 4pt !important; line-height: 1.28 !important; }}
+            .info-table ul {{ margin: 2pt 0 4pt 16pt !important; line-height: 1.28 !important; }}
             .watermark {{
                 opacity: 0.03;
                 print-color-adjust: exact;
             }}
             .digital-signature {{
-                background: #3f464b !important;
-                color: white !important;
+                background: #fff !important;
+                color: #000 !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }}
@@ -9814,14 +8052,14 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 display: none;
             }}
             .info-table th {{
-                background: #3f464b !important;
-                color: white !important;
+                background: #fff !important;
+                color: #000 !important;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }}
             .info-table th[colspan="2"] {{
-                background: #3f464b !important;
-                color: white !important;
+                background: #fff !important;
+                color: #000 !important;
             }}
         }}
     </style>
@@ -9837,36 +8075,36 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
 
 <!-- MARCAS D'ÁGUA -->
-<div class="marca-dagua-principal">FACOP SiGEu</div>
+<div class="marca-dagua-principal">FACOP CERTIFICADORA</div>
 <div class="marca-dagua-pattern"></div>
 
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
 <div class="faixa-identificadora"></div>
-        <div class="page-number">PÁGINA 1/3</div>
+        <div class="page-number">PÁGINA 1/4</div>
         <div class="plano-content">
             <!-- CABEÇALHO INSTITUCIONAL -->
             <div class="header-institution">
                 <div class="logo-area">
-                    <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
+                    <img src="/static/img/logo_declaracao.png" alt="Logo institucional" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1>FACOP Certificado | SiGEU Educacional</h1>
-                        <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
+                        <h1>GRUPO EDUCACIONAL UNIFICADO</h1>
+                        <h2>SIGEU Educacional • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
                 <div class="meta-identifiers">
-    <div style="font-size:12px; margin-top: 5px;">PLANO INSTITUCIONAL • VÁLIDO PARA TODOS OS ALUNOS</div>
+    <div style="font-size:10px; margin-top: 2px;"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887/2017</div>
     <span>PLANO-{disciplina.replace(' ', '-')} • GERAL</span>
 </div>
             </div>
@@ -9914,36 +8152,36 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
 
 <!-- MARCAS D'ÁGUA -->
-<div class="marca-dagua-principal">FACOP SiGEu</div>
+<div class="marca-dagua-principal">FACOP CERTIFICADORA</div>
 <div class="marca-dagua-pattern"></div>
 
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
 <div class="faixa-identificadora"></div>
-        <div class="page-number">PÁGINA 2/3</div>
+        <div class="page-number">PÁGINA 2/4</div>
         <div class="plano-content">
             <!-- CABEÇALHO INSTITUCIONAL -->
             <div class="header-institution">
                 <div class="logo-area">
-                    <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
+                    <img src="/static/img/logo_declaracao.png" alt="Logo institucional" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1>FACOP Certificadora/SiGEU Educacional</h1>
-                        <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
+                        <h1>GRUPO EDUCACIONAL UNIFICADO</h1>
+                        <h2>SIGEU Educacional • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
                 <div class="meta-identifiers">
-                    <div style="font-size:12px; margin-top: 5px;">VALIDADO POR PORTARIA MEC • 2026</div>
+                    <div style="font-size:10px; margin-top: 2px;"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887/2017</div>
                     <span>{codigo}</span>
                 </div>
             </div>
@@ -9971,36 +8209,36 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 <div class="cantoneira bottom-right"></div>
 
 <!-- MICROTEXTOS DE BORDA -->
-<div class="microtexto-borda top">DOCUMENTO OFICIAL - FCP Certificadora | SiGEu Educacional - PLANO DE ENSINO</div>
+<div class="microtexto-borda top">DOCUMENTO OFICIAL - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA - PLANO DE ENSINO</div>
 <div class="microtexto-borda bottom">ESTE DOCUMENTO É DE PROPRIEDADE DA INSTITUIÇÃO - REPRODUÇÃO PROIBIDA - LEI 9.610/98</div>
 <div class="microtexto-borda left">SISTEMA DE GESTÃO EDUCACIONAL UNIFICADO - SiGEu</div>
 <div class="microtexto-borda right">MINISTÉRIO DA EDUCAÇÃO - MEC - PROCESSO Nº 887/2017</div>
 
 <!-- MARCAS D'ÁGUA -->
-<div class="marca-dagua-principal">FACOP SiGEu</div>
+<div class="marca-dagua-principal">FACOP CERTIFICADORA</div>
 <div class="marca-dagua-pattern"></div>
 
 <!-- MICROTEXTOS DE SEGURANÇA ESPALHADOS -->
 <div class="microtexto-seguranca micro-1">DOCUMENTO OFICIAL - NÃO TRANSFERÍVEL</div>
 <div class="microtexto-seguranca micro-2">VALIDAÇÃO ELETRÔNICA OBRIGATÓRIA</div>
-<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - FCP Certificadora | SiGEu Educacional</div>
+<div class="microtexto-seguranca micro-3">SISTEMA ACADÊMICO - GRUPO EDUCACIONAL UNIFICADO | SiGEU Educacional | FACOP CERTIFICADORA</div>
 <div class="microtexto-seguranca micro-4">AUTENTICIDADE VERIFICÁVEL</div>
 
 <!-- FAIXA IDENTIFICADORA -->
 <div class="faixa-identificadora"></div>
-        <div class="page-number">PÁGINA 3/3</div>
+        <div class="page-number">PÁGINA 3/4</div>
         <div class="plano-content">
             <!-- CABEÇALHO INSTITUCIONAL -->
             <div class="header-institution">
                 <div class="logo-area">
-                    <img src="/static/img/logo_declaracao.png" alt="Logo FACOP/SiGEU" class="logo-img" onerror="this.style.display='none'">
+                    <img src="/static/img/logo_declaracao.png" alt="Logo institucional" class="logo-img" onerror="this.style.display='none'">
                     <div class="institution-name">
-                        <h1> SiGEU EDUC • FACOP CTF</h1>
-                        <h2>Faculdade do Centro Oeste Paulista • Sistema Integrado de Gestão Educacional</h2>
+                        <h1>GRUPO EDUCACIONAL UNIFICADO</h1>
+                        <h2>SIGEU Educacional • Sistema Integrado de Gestão Educacional</h2>
                     </div>
                 </div>
                 <div class="meta-identifiers">
-                    <div style="font-size:12px; margin-top: 5px;">VALIDADO POR PORTARIA MEC • 2026</div>
+                    <div style="font-size:10px; margin-top: 2px;"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887/2017</div>
                     <span>{codigo}</span>
                 </div>
             </div>
@@ -10022,6 +8260,29 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 <tr><td colspan="2">{SISTEMA_AVALIACAO_FIXO}</td></tr>
             </table>
 
+        </div>
+    </div>
+
+    <!-- PÁGINA 4 - BIBLIOGRAFIA E AUTENTICAÇÃO -->
+    <div class="page">
+        <div class="borda-seguranca"></div>
+        <div class="page-number">PÁGINA 4/4</div>
+        <div class="plano-content">
+            <div class="header-institution">
+                <div class="logo-area">
+                    <img src="/static/img/logo_declaracao.png" alt="Logo institucional" class="logo-img" onerror="this.style.display='none'">
+                    <div class="institution-name">
+                        <h1>GRUPO EDUCACIONAL UNIFICADO</h1>
+                        <h2>SIGEU Educacional • Sistema Integrado de Gestão Educacional</h2>
+                    </div>
+                </div>
+                <div class="meta-identifiers">
+                    <div style="font-size:10px; margin-top: 2px;"><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887/2017</div>
+                    <span>{codigo}</span>
+                </div>
+            </div>
+            <div class="plano-title"><h3>PLANO DE ENSINO</h3></div>
+
             <!-- 7) BIBLIOGRAFIA -->
             <table class="info-table">
                 <tr><th colspan="2">7) BIBLIOGRAFIA</th></tr>
@@ -10037,7 +8298,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
             <div class="qr-code-box">
                 <img src="{qr_code_base64}" class="qr-code-image" alt="QR Code">
                 <div class="qr-code-info">
-                    <p><strong>📌 DOCUMENTO AUTENTICADO DIGITALMENTE</strong></p>
+                    <p><strong>DOCUMENTO AUTENTICADO ELETRONICAMENTE</strong></p>
                     <p><strong>Código:</strong> {codigo}</p>
                     <p><strong>Hash:</strong> {hash_completa[:30]}...</p>
                     <p><strong>Data de Emissão:</strong> {data_formatada}</p>
@@ -10045,36 +8306,17 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 </div>
             </div>
 
-            <!-- ÁREA DE AUTENTICAÇÃO -->
+            <!-- REGISTRO E RESPONSÁVEL ACADÊMICO -->
             <div class="signature-area">
-                <div class="signature-block">
-                    <div class="digital-signature">
-                        <span class="hash-label">🔐 ASSINATURA DIGITAL • SHA-256</span>
-                        <div class="hash-value">
-                            {hash_completa}
-                        </div>
-                        <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-size:13px; background:#2b3034; padding:4px 14px; border-radius:18px;">⏻ integridade verificada</span>
-                            <span style="font-size:16px;">🕒 {data_formatada}</span>
-                        </div>
-                    </div>
-                    <div style="margin-top: 12px; color: #1d513b; font-size: 13px; font-weight: 600;">
-                        << registro eletrônico de integridade • SHA-256 • SIGEU Educacional >>
-                    </div>
+                <div class="digital-signature">
+                    <span class="hash-label">REGISTRO ELETRÔNICO DE INTEGRIDADE • SHA-256</span>
+                    <div class="hash-value">{hash_completa}</div>
                 </div>
-
-                <div class="stamp-date">
-                    <div class="secretary-signature">
-                        <div class="secretary-name">DEAP • FCP CTFC/SiGEU Educ</div>
-                        <div class="secretary-title">DEPARTAMENTO EDUCACIONAL</div>
-                        <div class="signature-line">
-                            <span class="simulated-signature">{docente}</span>
-                            <span style="font-size:28px; color:#0f402e;"><path xmlns="http://www.w3.org/2000/svg" d="M232,168H63.86c2.66-5.24,5.33-10.63,8-16.11,15,1.65,32.58-8.78,52.66-31.14,5,13.46,14.45,30.93,30.58,31.25,9.06.18,18.11-5.2,27.42-16.37C189.31,143.75,203.3,152,232,152a8,8,0,0,0,0-16c-30.43,0-39.43-10.45-40-16.11a7.67,7.67,0,0,0-5.46-7.75,8.14,8.14,0,0,0-9.25,3.49c-12.07,18.54-19.38,20.43-21.92,20.37-8.26-.16-16.66-19.52-19.54-33.42a8,8,0,0,0-14.09-3.37C101.54,124.55,88,133.08,79.57,135.29,88.06,116.42,94.4,99.85,98.46,85.9c6.82-23.44,7.32-39.83,1.51-50.1-3-5.38-9.34-11.8-22.06-11.8C61.85,24,49.18,39.18,43.14,65.65c-3.59,15.71-4.18,33.21-1.62,48s7.87,25.55,15.59,31.94c-3.73,7.72-7.53,15.26-11.23,22.41H24a8,8,0,0,0,0,16H37.41c-11.32,21-20.12,35.64-20.26,35.88a8,8,0,1,0,13.71,8.24c.15-.26,11.27-18.79,24.7-44.12H232a8,8,0,0,0,0-16ZM58.74,69.21C62.72,51.74,70.43,40,77.91,40c5.33,0,7.1,1.86,8.13,3.67,3,5.33,6.52,24.19-21.66,86.39C56.12,118.78,53.31,93,58.74,69.21Z"/></span>
-                        </div>
-                        <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
-                            <span class="date-today">{data_formatada}</span>
-                        </div>
-                    </div>
+                <div class="academic-signature">
+                    <div class="academic-signature-line"></div>
+                    <strong>{docente}</strong>
+                    <span>Docente / Responsável Acadêmico</span>
+                    <small>Registro eletrônico vinculado ao código e ao hash deste plano.</small>
                 </div>
             </div>
 
@@ -10088,9 +8330,9 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
     </div>
 
     <div class="botoes no-print">
-        <button onclick="window.print()" class="btn">🖨 IMPRIMIR PDF (3 PÁGINAS)</button>
-        <a href="/mew/gerar-plano-ensino" class="btn">➕ NOVO PLANO</a>
-        <a href="/mew/planos-ensino" class="btn">📋 LISTAR PLANOS</a>
+        <button onclick="window.print()" class="btn">IMPRIMIR PDF (4 PÁGINAS)</button>
+        <a href="/mew/gerar-plano-ensino" class="btn">NOVO PLANO</a>
+        <a href="/mew/planos-ensino" class="btn">LISTAR PLANOS</a>
     </div>
 </body>
 </html>'''
@@ -11852,7 +10094,18 @@ def _dados_aluno_documentos(aluno_id):
 
 
 def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_documento):
+    """Histórico acadêmico institucional em preto e branco, preservando os dados cadastrais."""
     resumo = _calcular_ira_automatico(disciplinas)
+
+    def _v(valor, padrao="N/I"):
+        valor = "" if valor is None else str(valor).strip()
+        return escape(valor or padrao)
+
+    pai = (aluno.get("nome_pai") or "").strip()
+    mae = (aluno.get("nome_mae") or "").strip()
+    filiacao = " e ".join([x for x in (pai, mae) if x]) or "N/I"
+    unidade_curricular = aluno.get("curso_referencia") or "Disciplinas / Unidades Curriculares"
+
     linhas = []
     for d in disciplinas:
         nota = d.get("media_final")
@@ -11863,41 +10116,101 @@ def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_document
         inicio = d.get("data_inicio") or "N/I"
         linhas.append(f"""
         <tr>
-          <td>{escape(d['nome'])}</td><td>{d['carga_horaria']}h</td><td>{escape(d['docente'])}</td>
-          <td>{nota_txt}</td><td>{d['frequencia']:.0f}%</td><td>{status_txt}</td><td>{inicio}</td>
+          <td>{escape(d.get('nome') or '')}</td>
+          <td>{int(d.get('carga_horaria') or 80)}h</td>
+          <td>{escape(d.get('docente') or 'Docente responsável')}</td>
+          <td>{nota_txt}</td>
+          <td>{float(d.get('frequencia') or 0):.0f}%</td>
+          <td>{escape(status_txt)}</td>
+          <td>{escape(str(inicio))}</td>
         </tr>""")
+
     return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
+    <title>Histórico Acadêmico - {escape(aluno.get('nome') or '')}</title>
     <style>
-    @page {{ size:A4; margin:16mm; }} body{{font-family:Arial,sans-serif;color:#222629;font-size:10.5pt}}
-    .cab{{border-bottom:3px solid #3f464b;padding-bottom:12px;margin-bottom:18px}} h1{{font-size:20pt;color:#3f464b;margin:0}}
-    .sub{{color:#555;margin-top:5px}} .dados{{display:grid;grid-template-columns:1fr 1fr;gap:7px;background:#f5f7fa;padding:12px;margin:14px 0}}
-    table{{width:100%;border-collapse:collapse;font-size:8.8pt}} th,td{{border:1px solid #aab3bd;padding:6px}} th{{background:#3f464b;color:#fff}}
-    .resumo{{margin-top:18px;padding:12px;border:1px solid #c8d0d8}} .auth{{margin-top:18px;display:flex;gap:16px;align-items:center;border-top:1px solid #bbb;padding-top:12px}}
-    .auth img{{width:90px;height:90px}} .hash{{font-family:monospace;font-size:7pt;word-break:break-all}}
-    </style></head><body>
-    <div class='cab'><h1>HISTÓRICO ACADÊMICO</h1><div class='sub'>SIGEU Educacional • documento eletrônico autenticado</div></div>
-    <div class='dados'><div><b>Aluno:</b> {escape(aluno.get('nome',''))}</div><div><b>RA:</b> {escape(aluno.get('ra',''))}</div>
-    <div><b>CPF:</b> {escape(aluno.get('cpf_formatado',''))}</div><div><b>Curso/Referência:</b> {escape(aluno.get('curso_referencia') or 'Disciplinas/Unidades Curriculares')}</div></div>
-    <table><thead><tr><th>Disciplina</th><th>CH</th><th>Docente</th><th>Média</th><th>Frequência</th><th>Situação</th><th>Início</th></tr></thead>
-    <tbody>{''.join(linhas)}</tbody></table>
-    <div class='resumo'><b>IRA automático:</b> {resumo['ira']:.2f}/10 &nbsp; • &nbsp; <b>Disciplinas:</b> {resumo['total_disciplinas']} &nbsp; • &nbsp; <b>Carga horária:</b> {resumo['carga_total']}h</div>
-    <div class='auth'><img src='{qr_code}'><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>{hash_documento}</div></div></div>
-    </body></html>"""
+    @page {{ size:A4; margin:14mm; }}
+    *{{box-sizing:border-box}}
+    body{{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;font-size:9.5pt;line-height:1.35;margin:0}}
+    .doc{{width:100%;background:#fff}}
+    .cab{{border-bottom:2px solid #000;padding:0 0 9px;margin-bottom:13px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start}}
+    .brand{{font-size:15pt;font-weight:700;letter-spacing:.3px}} .sub{{font-size:8.5pt;margin-top:3px}}
+    .cert{{font-size:7.8pt;text-align:right;line-height:1.35;max-width:52%}} .cert b{{font-size:9pt}}
+    h1{{font-size:19pt;text-align:center;margin:16px 0 14px;letter-spacing:.5px}}
+    .dados-tabela{{width:100%;border-collapse:collapse;margin-bottom:13px;font-size:9pt}}
+    .dados-tabela td{{border:1px solid #000;padding:6px 8px;width:50%;vertical-align:top}}
+    table{{width:100%;border-collapse:collapse;font-size:8.4pt;page-break-inside:auto}}
+    thead{{display:table-header-group}} tr{{page-break-inside:avoid}}
+    th,td{{border:1px solid #000;padding:5px;vertical-align:top}} th{{background:#fff;color:#000;text-transform:uppercase;font-size:7.7pt;text-align:left}}
+    .resumo{{margin-top:12px;border:1px solid #000;padding:8px;display:flex;gap:18px;flex-wrap:wrap}}
+    .auth{{margin-top:14px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
+    .auth img{{width:78px;height:78px}} .hash{{font-family:monospace;font-size:6.7pt;word-break:break-all;margin-top:4px}}
+    .rodape{{margin-top:10px;border-top:1px solid #000;padding-top:6px;font-size:6.7pt;text-align:center}}
+    @media print{{body,.doc{{background:#fff}}}}
+    </style></head><body><div class='doc'>
+      <div class='cab'>
+        <div><div class='brand'>GRUPO EDUCACIONAL UNIFICADO</div><div class='sub'>SIGEU Educacional • Sistema Integrado de Gestão Educacional</div></div>
+        <div class='cert'><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista LTDA<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887 de 26/07/2017</div>
+      </div>
+      <h1>HISTÓRICO ACADÊMICO</h1>
+      <table class='dados-tabela'>
+        <tr><td><b>Aluno:</b> {_v(aluno.get('nome'))}</td><td><b>RA:</b> {_v(aluno.get('ra'))}</td></tr>
+        <tr><td><b>CPF:</b> {_v(aluno.get('cpf_formatado'))}</td><td><b>RG:</b> {_v(aluno.get('rg'))}</td></tr>
+        <tr><td><b>Data de nascimento:</b> {_v(aluno.get('data_nascimento'))}</td><td><b>Nacionalidade:</b> {_v(aluno.get('nacionalidade'), 'Brasileira')}</td></tr>
+        <tr><td><b>Naturalidade:</b> {_v(aluno.get('naturalidade'))}</td><td><b>Estado civil:</b> {_v(aluno.get('estado_civil'))}</td></tr>
+        <tr><td colspan='2'><b>Filiação:</b> {_v(filiacao)}</td></tr>
+        <tr><td colspan='2'><b>Unidade Curricular:</b> {_v(unidade_curricular, 'Disciplinas / Unidades Curriculares')}</td></tr>
+      </table>
+      <table><thead><tr><th>Componente Curricular</th><th>CH</th><th>Docente</th><th>Média</th><th>Frequência</th><th>Situação</th><th>Início</th></tr></thead>
+      <tbody>{''.join(linhas)}</tbody></table>
+      <div class='resumo'><span><b>IRA:</b> {resumo['ira']:.2f}/10</span><span><b>Disciplinas:</b> {resumo['total_disciplinas']}</span><span><b>Aprovadas:</b> {resumo['disciplinas_aprovadas']}</span><span><b>Carga horária:</b> {resumo['carga_total']}h</span></div>
+      <div class='auth'><img src='{qr_code}' alt='QR Code'><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>SHA-256: {escape(hash_documento)}</div></div></div>
+      <div class='rodape'>Documento eletrônico autenticado. Validação pelo código, QR Code e hash de integridade.</div>
+    </div></body></html>"""
 
 
 def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
+    """Declaração institucional em P&B com assinatura eletrônica tipográfica, sem assinatura simulada."""
     nota = d.get("media_final") if d.get("media_final") is not None else d.get("nota_final")
     nota_txt = f"{float(nota):.2f}" if nota is not None else "N/I"
     data_conclusao = d.get("data_realizacao") or datetime.now().strftime("%d/%m/%Y")
     data_conclusao = str(data_conclusao).split(" ")[0]
-    return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
-    <style>@page{{size:A4;margin:20mm}}body{{font-family:Arial,sans-serif;color:#222629;line-height:1.65}}.box{{border:1px solid #9ba7b4;padding:24px;min-height:230mm;position:relative}}h1{{text-align:center;color:#3f464b;font-size:20pt;margin:15mm 0 20mm}}p{{text-align:justify;font-size:12pt}}.rod{{position:absolute;bottom:20mm;left:24px;right:24px;border-top:1px solid #bbb;padding-top:12px;display:flex;align-items:center;gap:15px}}.rod img{{width:86px}}.hash{{font-size:7pt;font-family:monospace;word-break:break-all}}</style></head><body>
-    <div class='box'><div><b>SIGEU EDUCACIONAL</b><br><small>Declaração acadêmica eletrônica</small></div><h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
-    <p>Declaramos, para os devidos fins, que <b>{escape(aluno.get('nome',''))}</b>, CPF {escape(aluno.get('cpf_formatado',''))}, matrícula/RA <b>{escape(aluno.get('ra',''))}</b>, concluiu com aproveitamento a disciplina <b>{escape(d['nome'])}</b>, com carga horária de <b>{d['carga_horaria']} horas</b>, frequência acadêmica registrada de <b>{d['frequencia']:.0f}%</b> e média final <b>{nota_txt}</b>.</p>
-    <p>A conclusão foi registrada em {escape(data_conclusao)}. Docente/Responsável acadêmico registrado: <b>{escape(d['docente'])}</b>.</p>
-    <p>Documento emitido eletronicamente mediante solicitação do acadêmico, com código e hash para verificação de integridade.</p>
-    <div class='rod'><img src='{qr_code}'><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>{hash_documento}</div></div></div></div></body></html>"""
+    unidade_curricular = aluno.get("curso_referencia") or "Disciplinas / Unidades Curriculares"
 
+    return f"""<!doctype html><html lang='pt-br'><head><meta charset='utf-8'>
+    <title>Declaração de Conclusão - {escape(d.get('nome') or '')}</title>
+    <style>
+    @page{{size:A4;margin:14mm}}
+    *{{box-sizing:border-box}} body{{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;line-height:1.55;margin:0;font-size:10.5pt}}
+    .doc{{border:1px solid #000;padding:12mm 11mm;background:#fff;min-height:0}}
+    .cab{{border-bottom:2px solid #000;padding-bottom:9px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start}}
+    .brand{{font-size:14pt;font-weight:700}} .sub{{font-size:8.5pt;margin-top:3px}}
+    .cert{{font-size:7.7pt;text-align:right;max-width:52%;line-height:1.35}} .cert b{{font-size:9pt}}
+    h1{{text-align:center;font-size:20pt;margin:14mm 0 10mm;line-height:1.2}}
+    p{{text-align:justify;font-size:11.5pt;margin:0 0 11px}}
+    .dados{{border:1px solid #000;margin:12px 0;padding:8px 10px}}
+    .dados div{{margin:3px 0}}
+    .assinatura{{margin:12mm auto 8mm;text-align:center;max-width:88mm}}
+    .assinatura .linha{{border-top:1px solid #000;margin-bottom:5px}}
+    .assinatura strong{{display:block;font-size:11pt}} .assinatura span{{display:block;font-size:8.5pt;margin-top:2px}}
+    .assinatura small{{display:block;font-size:6.8pt;margin-top:5px}}
+    .auth{{margin-top:14px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
+    .auth img{{width:78px;height:78px}} .hash{{font-family:monospace;font-size:6.5pt;word-break:break-all;margin-top:4px}}
+    .rodape{{margin-top:7px;border-top:1px solid #000;padding-top:5px;font-size:6.6pt;text-align:center}}
+    @media print{{body,.doc{{background:#fff}}}}
+    </style></head><body><div class='doc'>
+      <div class='cab'>
+        <div><div class='brand'>GRUPO EDUCACIONAL UNIFICADO</div><div class='sub'>SIGEU Educacional • Sistema Integrado de Gestão Educacional</div></div>
+        <div class='cert'><b>FACOP CERTIFICADORA</b><br>Faculdade do Centro Oeste Paulista LTDA<br>CNPJ 04.344.730/0001-60 • Portaria MEC nº 887 de 26/07/2017</div>
+      </div>
+      <h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
+      <p>O <b>GRUPO EDUCACIONAL UNIFICADO</b>, por meio do <b>SIGEU Educacional</b>, declara, para os devidos fins, que <b>{escape(aluno.get('nome') or '')}</b>, CPF {escape(aluno.get('cpf_formatado') or '')}, matrícula/RA <b>{escape(aluno.get('ra') or '')}</b>, concluiu com aproveitamento o componente curricular <b>{escape(d.get('nome') or '')}</b>, com carga horária de <b>{int(d.get('carga_horaria') or 80)} horas</b>, frequência acadêmica registrada de <b>{float(d.get('frequencia') or 0):.0f}%</b> e média final <b>{nota_txt}</b>.</p>
+      <p>A conclusão foi registrada em {escape(data_conclusao)}. O docente/responsável acadêmico registrado para o componente é <b>{escape(d.get('docente') or 'N/I')}</b>.</p>
+      <p>A certificação documental, quando aplicável, é realizada pela <b>FACOP CERTIFICADORA</b> — Faculdade do Centro Oeste Paulista LTDA, CNPJ 04.344.730/0001-60, credenciada pela Portaria MEC nº 887 de 26/07/2017, no âmbito da parceria educacional registrada no sistema.</p>
+      <div class='dados'><div><b>Unidade Curricular:</b> {escape(str(unidade_curricular))}</div><div><b>Situação:</b> APROVADO</div><div class='wide'><b>Documento:</b> emissão acadêmica eletrônica autenticada por código, QR Code e hash.</div></div>
+      <div class='assinatura'><div class='linha'></div><strong>Tatiane Costa Lourenço</strong><span>Secretaria Acadêmica</span><small>Assinatura eletrônica institucional vinculada ao código e ao hash deste documento.</small></div>
+      <div class='auth'><img src='{qr_code}' alt='QR Code'><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>SHA-256: {escape(hash_documento)}</div></div></div>
+      <div class='rodape'>GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA</div>
+    </div></body></html>"""
 
 def _html_para_pdf(html_texto, base_url=None):
     return render_html_to_pdf_bytes(html_texto, base_url or request.host_url)
@@ -12524,6 +10837,1086 @@ def contrato_pdf_assinado(contrato_id):
         return send_file(BytesIO(bytes(reg["pdf_assinado"])),mimetype="application/pdf",as_attachment=False,download_name=f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf")
     key,_=gerar_pdf_contrato_assinado(contrato_id,salvar=True)
     return redirect(r2_presigned_url(key,download_name=f"Contrato_SIGEU_{dados.get('ra') or contrato_id}.pdf"))
+
+
+# ============================================
+# MATRÍCULA PÚBLICA POR DISCIPLINA
+# Home -> confirmação acadêmica -> prévia do plano -> contratação -> Mercado Pago
+# -> documentos privados no R2 -> conferência MEW -> liberação.
+# ============================================
+
+_PUBLIC_AI_HITS = {}
+_PUBLIC_AI_HITS_LOCK = threading.Lock()
+
+def _consumir_limite_ia_publica():
+    """Proteção simples contra abuso da IA pública: até 20 chamadas por IP a cada 10 min."""
+    ip = (request.headers.get("CF-Connecting-IP") or request.headers.get("X-Forwarded-For") or request.remote_addr or "desconhecido").split(",")[0].strip()
+    agora = time.time()
+    janela = 600
+    limite = 20
+    with _PUBLIC_AI_HITS_LOCK:
+        recentes = [t for t in _PUBLIC_AI_HITS.get(ip, []) if agora - t < janela]
+        if len(recentes) >= limite:
+            _PUBLIC_AI_HITS[ip] = recentes
+            return False
+        recentes.append(agora)
+        _PUBLIC_AI_HITS[ip] = recentes
+    return True
+
+def _limpar_texto_publico(valor, max_len=4000):
+    texto = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", str(valor or ""))
+    texto = texto.replace("<", " ").replace(">", " ")
+    return re.sub(r"[ \t]+", " ", texto).strip()[:max_len]
+
+def _sanitizar_conteudo_plano_publico(conteudo):
+    seguro = {}
+    for chave, valor in (conteudo or {}).items():
+        texto = str(valor or "")
+        # Somente as quebras <br> produzidas pelo gerador são preservadas; qualquer outro HTML é neutralizado.
+        texto = texto.replace("<br>", "__SIGEU_BR__").replace("<br/>", "__SIGEU_BR__").replace("<br />", "__SIGEU_BR__")
+        texto = str(escape(texto)).replace("__SIGEU_BR__", "<br>")
+        seguro[chave] = texto
+    return seguro
+
+def _preco_disciplina_publica(carga_horaria):
+    try:
+        carga = int(carga_horaria)
+    except Exception:
+        return None
+    if carga not in (60, 80, 120):
+        return None
+    bruto = (os.getenv(f"DISCIPLINA_PRECO_{carga}") or "").strip()
+    if not bruto:
+        return None
+    try:
+        if "," in bruto:
+            bruto = bruto.replace(".", "").replace(",", ".")
+        return round(float(bruto), 2)
+    except Exception:
+        return None
+
+
+def _moeda_br(valor):
+    if valor is None:
+        return "Valor não configurado"
+    return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _pedido_token_publico(sol):
+    return str((sol or {}).get("pedido_token") or (sol or {}).get("token") or "").strip()
+
+
+def _itens_pedido_publico(sol=None, token=None):
+    if sol is None:
+        sol = _get_solicitacao_publica(token=token)
+    if not sol:
+        return []
+    pedido = _pedido_token_publico(sol)
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT * FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s ORDER BY COALESCE(item_ordem,id),id",
+            (pedido,),
+        )
+        return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def _preco_total_pedido_publico(itens):
+    total = 0.0
+    faltantes = []
+    for item in itens or []:
+        preco = _preco_disciplina_publica(item.get("carga_horaria"))
+        if not preco or preco <= 0:
+            faltantes.append(int(item.get("carga_horaria") or 0))
+        else:
+            total += float(preco)
+    return (round(total, 2) if not faltantes else None), sorted(set(faltantes))
+
+
+def _formatar_docente_publico(nome, titulacao=None):
+    """Formata um docente REAL já cadastrado no MEW; não fabrica identidade acadêmica."""
+    nome = _limpar_texto_publico(nome, 180)
+    titulo = _limpar_texto_publico(titulacao, 120).lower()
+    if not nome:
+        return "Docente Responsável — Coordenação Acadêmica SIGEU"
+    if re.match(r"^prof(?:a|essor|essora)?\.?\s", nome, re.I):
+        return nome
+    if "dout" in titulo or titulo in {"dr", "dr."}:
+        prefixo = "Prof. Dr."
+    elif "mestr" in titulo or titulo in {"me", "me."}:
+        prefixo = "Prof. Me."
+    elif "espec" in titulo or "pós" in titulo or "pos" in titulo:
+        prefixo = "Prof. Esp."
+    else:
+        prefixo = "Prof."
+    return f"{prefixo} {nome}"
+
+
+def _selecionar_docente_publico(cursor, pedido_token, disciplina_nome=None, carga_horaria=None, aluno_id=None):
+    """Seleciona automaticamente entre docentes reais/ativos, evitando repetição no mesmo pedido."""
+    # Se a disciplina já existe e tem docente, preserva a associação institucional existente.
+    if disciplina_nome:
+        cursor.execute(
+            """SELECT doc.id,doc.nome,doc.titulacao
+               FROM disciplinas d
+               JOIN LATERAL (
+                   SELECT dd.docente_id FROM disciplina_docente dd
+                   WHERE dd.disciplina_id=d.id ORDER BY dd.id DESC LIMIT 1
+               ) ult ON TRUE
+               JOIN docentes doc ON doc.id=ult.docente_id
+               WHERE LOWER(TRIM(d.nome))=LOWER(TRIM(%s))
+                 AND COALESCE(d.carga_horaria,80)=%s
+                 AND COALESCE(doc.ativo,1)=1
+               ORDER BY d.id LIMIT 1""",
+            (disciplina_nome, int(carga_horaria or 80)),
+        )
+        existente = cursor.fetchone()
+        if existente:
+            return existente["id"], _formatar_docente_publico(existente["nome"], existente.get("titulacao"))
+
+    excluidos = set()
+    if pedido_token:
+        cursor.execute(
+            "SELECT DISTINCT docente_id FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s AND docente_id IS NOT NULL",
+            (pedido_token,),
+        )
+        excluidos.update(int(r["docente_id"]) for r in cursor.fetchall() if r.get("docente_id"))
+    if aluno_id:
+        cursor.execute(
+            """SELECT DISTINCT dd.docente_id
+               FROM aluno_disciplina ad
+               JOIN disciplina_docente dd ON dd.disciplina_id=ad.disciplina_id
+               WHERE ad.aluno_id=%s""",
+            (aluno_id,),
+        )
+        excluidos.update(int(r["docente_id"]) for r in cursor.fetchall() if r.get("docente_id"))
+
+    cursor.execute(
+        """SELECT d.id,d.nome,d.titulacao,COUNT(dd.id) AS uso
+           FROM docentes d
+           LEFT JOIN disciplina_docente dd ON dd.docente_id=d.id
+           WHERE COALESCE(d.ativo,1)=1
+           GROUP BY d.id,d.nome,d.titulacao
+           ORDER BY COUNT(dd.id) ASC,d.id ASC"""
+    )
+    candidatos = cursor.fetchall()
+    escolhido = next((r for r in candidatos if int(r["id"]) not in excluidos), None)
+    if escolhido is None and candidatos:
+        escolhido = candidatos[0]
+    if not escolhido:
+        return None, "Docente Responsável — Coordenação Acadêmica SIGEU"
+    return escolhido["id"], _formatar_docente_publico(escolhido["nome"], escolhido.get("titulacao"))
+
+
+def _resumo_pedido_publico(token):
+    sol = _get_solicitacao_publica(token=token)
+    if not sol:
+        return None, [], None, []
+    itens = _itens_pedido_publico(sol=sol)
+    total, faltantes = _preco_total_pedido_publico(itens)
+    return sol, itens, total, faltantes
+
+
+def _termo_contratacao_publica():
+    return """Ao prosseguir, declaro que li e concordo com as condições da contratação das unidades curriculares selecionadas neste pedido. Estou ciente de que a matrícula administrativa, a organização, a execução e o acompanhamento acadêmico e operacional dos serviços contratados são realizados pelo GRUPO EDUCACIONAL UNIFICADO, por meio do SIGEU Educacional. A FACULDADE DO CENTRO OESTE PAULISTA LTDA. (FACOP) atua como FACOP CERTIFICADORA nos termos da parceria aplicável, realizando certificação e/ou emissão dos documentos acadêmicos que lhe couberem, quando aplicável e após o cumprimento dos requisitos acadêmicos, documentais e legais.
+
+A contratação somente produz liberação acadêmica após a confirmação do pagamento e a conferência da documentação enviada. O prazo informado para conferência documental é de até 3 horas após o envio completo, e o início das unidades curriculares será disponibilizado em até 24 horas após a aprovação e liberação acadêmica.
+
+Declaro que os dados pessoais e documentos apresentados são verdadeiros. Ao marcar a caixa de aceite e prosseguir para o pagamento, manifesto minha concordância livre, expressa e inequívoca com estas condições. O contrato acadêmico individual e seus registros eletrônicos serão disponibilizados no fluxo do SIGEU conforme a liberação da matrícula."""
+
+
+def _get_solicitacao_publica(token=None, solicitacao_id=None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        if solicitacao_id is not None:
+            cur.execute("SELECT * FROM solicitacoes_matricula_publica WHERE id=%s", (int(solicitacao_id),))
+        else:
+            cur.execute("SELECT * FROM solicitacoes_matricula_publica WHERE token=%s", (str(token or ""),))
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def _solicitacao_publica_por_cobranca(cobranca_id):
+    if not cobranca_id:
+        return None
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM solicitacoes_matricula_publica WHERE cobranca_id=%s ORDER BY id DESC LIMIT 1", (int(cobranca_id),))
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def _normalizar_disciplina_publica_ia(disciplina, curso_area=None):
+    from openai import OpenAI
+    disciplina = _limpar_texto_publico(disciplina, 180)
+    curso_area = _limpar_texto_publico(curso_area, 180)
+    if len(disciplina) < 2:
+        raise ValueError("Informe o nome da disciplina.")
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY não configurada no Render.")
+    modelo = os.getenv("OPENAI_DISCIPLINA_MODEL") or os.getenv("OPENAI_PLANOS_MODEL", "gpt-5.6-terra")
+    client = OpenAI(api_key=api_key)
+    if curso_area:
+        pedido = f'''Padronize academicamente o nome de uma unidade curricular brasileira sem alterar o seu campo de conhecimento.
+Entrada do interessado: "{disciplina}". Curso/área informado: "{curso_area}".
+Retorne SOMENTE JSON válido com: nome_sugerido, curso_area, departamento_sugerido, ementa_base.
+- nome_sugerido: nomenclatura acadêmica curta e convencional em português.
+- curso_area: preserve o curso/área informado, apenas corrigindo grafia quando necessário.
+- departamento_sugerido: rótulo amplo e técnico, por exemplo "Departamento de Ciências e Engenharias".
+- ementa_base: 4 a 6 frases objetivas cobrindo o núcleo da disciplina, suficiente para gerar um plano de ensino.
+Não cite instituição, MEC, reconhecimento, autorização ou certificação. Não invente fatos administrativos.'''
+    else:
+        pedido = f'''Padronize academicamente o título da disciplina brasileira escrita como "{disciplina}".
+Retorne SOMENTE JSON válido com as chaves nome_sugerido e pergunta_curso.
+A pergunta_curso deve ser exatamente no sentido de: "Sua disciplina é [nome]. De qual curso ou área ela faz parte?".
+Não acrescente instituição, grau, modalidade ou carga horária.'''
+    resp = client.responses.create(
+        model=modelo,
+        input=[
+            {"role": "system", "content": "Responda somente JSON válido, sem markdown. Normalize nomenclatura acadêmica com cautela e nunca invente dados institucionais."},
+            {"role": "user", "content": pedido},
+        ],
+    )
+    texto = (getattr(resp, "output_text", "") or "").strip()
+    if texto.startswith("```"):
+        texto = texto.strip("`").strip()
+        if texto.lower().startswith("json"):
+            texto = texto[4:].strip()
+    ini, fim = texto.find("{"), texto.rfind("}")
+    if ini >= 0 and fim > ini:
+        texto = texto[ini:fim + 1]
+    dados = json.loads(texto)
+    nome = _limpar_texto_publico(dados.get("nome_sugerido") or disciplina, 180)
+    dados["nome_sugerido"] = nome
+    if dados.get("curso_area") is not None:
+        dados["curso_area"] = _limpar_texto_publico(dados.get("curso_area"), 180)
+    if dados.get("departamento_sugerido") is not None:
+        dados["departamento_sugerido"] = _limpar_texto_publico(dados.get("departamento_sugerido"), 180)
+    if dados.get("ementa_base") is not None:
+        dados["ementa_base"] = _limpar_texto_publico(dados.get("ementa_base"), 4000)
+    return dados
+
+
+def _buscar_disciplina_catalogo(nome):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) LIMIT 1",
+            (nome,),
+        )
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+@app.route("/api/publico/sugerir-disciplina", methods=["POST"])
+def api_publico_sugerir_disciplina():
+    if not _consumir_limite_ia_publica():
+        return jsonify({"success": False, "message": "Muitas consultas em pouco tempo. Aguarde alguns minutos e tente novamente."}), 429
+    try:
+        dados = request.get_json(silent=True) or {}
+        resultado = _normalizar_disciplina_publica_ia(dados.get("disciplina"))
+        match = _buscar_disciplina_catalogo(resultado["nome_sugerido"])
+        return jsonify({
+            "success": True,
+            "nome_sugerido": resultado["nome_sugerido"],
+            "pergunta_curso": resultado.get("pergunta_curso") or f"Sua disciplina é {resultado['nome_sugerido']}. De qual curso ou área ela faz parte?",
+            "catalogo": dict(match) if match else None,
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@app.route("/api/publico/gerar-previa-plano", methods=["POST"])
+def api_publico_gerar_previa_plano():
+    if not _consumir_limite_ia_publica():
+        return jsonify({"success": False, "message": "Muitas gerações em pouco tempo. Aguarde alguns minutos e tente novamente."}), 429
+    try:
+        dados = request.get_json(silent=True) or {}
+        disciplina_informada = (dados.get("disciplina") or "").strip()
+        curso_area = (dados.get("curso_area") or "").strip()
+        pedido_recebido = _limpar_texto_publico(dados.get("pedido_token"), 160)
+        carga = int(dados.get("carga_horaria") or 0)
+        if carga not in (60, 80, 120):
+            return jsonify({"success": False, "message": "Escolha 60, 80 ou 120 horas."}), 400
+        if not disciplina_informada or not curso_area:
+            return jsonify({"success": False, "message": "Informe a disciplina e o curso/área."}), 400
+
+        normalizado = _normalizar_disciplina_publica_ia(disciplina_informada, curso_area)
+        nome = normalizado["nome_sugerido"]
+        ementa = str(normalizado.get("ementa_base") or "").strip()
+        departamento = str(normalizado.get("departamento_sugerido") or curso_area).strip()
+        if not ementa:
+            raise ValueError("Não foi possível preparar a ementa-base da disciplina.")
+
+        # Pedido/carrinho: várias disciplinas podem ser reunidas antes do checkout.
+        conn = get_db_connection(); cur = conn.cursor()
+        try:
+            if pedido_recebido:
+                cur.execute(
+                    "SELECT * FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s ORDER BY id",
+                    (pedido_recebido,),
+                )
+                existentes = cur.fetchall()
+                if not existentes:
+                    raise ValueError("O pedido informado não foi encontrado. Inicie uma nova seleção.")
+                if len(existentes) >= 30:
+                    raise ValueError("Este pedido já atingiu o limite de 30 disciplinas.")
+                if any(r.get("cobranca_id") or r.get("data_aceite") or r.get("data_pagamento") for r in existentes):
+                    raise ValueError("Este pedido já entrou na etapa de contratação e não aceita novas disciplinas.")
+                pedido_token = _pedido_token_publico(existentes[0])
+                item_ordem = max(int(r.get("item_ordem") or 0) for r in existentes) + 1
+                if any((r.get("disciplina_confirmada") or "").strip().lower() == nome.strip().lower() and int(r.get("carga_horaria") or 0) == carga for r in existentes):
+                    raise ValueError("Essa disciplina com a mesma carga horária já está na sua seleção.")
+            else:
+                pedido_token = "PED-" + secrets.token_urlsafe(18)
+                item_ordem = 1
+
+            docente_id, docente_nome = _selecionar_docente_publico(cur, pedido_token, nome, carga)
+        finally:
+            conn.close()
+
+        from api_planos import consultar_openai_para_plano
+        conteudo_ia = consultar_openai_para_plano({
+            "disciplina": nome,
+            "ementa": ementa,
+            "carga_horaria": f"{carga} horas",
+        })
+        dados_html = _sanitizar_conteudo_plano_publico(conteudo_ia)
+        plano_dados_salvos = dict(dados_html)
+        modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
+        plano_dados_salvos["modalidade"] = modalidade
+        token = secrets.token_urlsafe(24)
+        codigo = f"PREVIA-{secrets.token_hex(5).upper()}"
+        hash_doc = hashlib.sha256(f"{token}|{nome}|{carga}".encode("utf-8")).hexdigest()
+        base_url = request.host_url.rstrip("/")
+        qr = gerar_qrcode_base64(f"{base_url}/matricula/{token}")
+        html_plano = gerar_html_plano_ensino(
+            disciplina=nome.upper(),
+            codigo=codigo,
+            hash_completa=hash_doc,
+            carga_horaria=f"{carga} horas",
+            modalidade=modalidade,
+            docente=docente_nome,
+            data_formatada=datetime.now().strftime("%d/%m/%Y"),
+            qr_code_base64=qr,
+            **dados_html,
+        )
+        aviso = "<style>.sigeu-previa-aviso{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;background:#fff;border:1px solid #111;color:#111;padding:6px 12px;font:700 10px Arial;letter-spacing:.6px}@media print{.sigeu-previa-aviso{display:block}}</style>"
+        html_plano = html_plano.replace("</head>", aviso + "<meta name='robots' content='noindex,nofollow'></head>", 1)
+        html_plano = html_plano.replace("<body>", "<body><div class='sigeu-previa-aviso'>PRÉVIA DE PLANO DE ENSINO • SEM VALIDADE ACADÊMICA</div>", 1)
+
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO solicitacoes_matricula_publica
+            (token,pedido_token,item_ordem,status,disciplina_digitada,disciplina_confirmada,curso_area,departamento,carga_horaria,ementa_sugerida,plano_html,plano_dados_json,valor_total,docente_id,docente_nome,data_criacao,data_plano)
+            VALUES(%s,%s,%s,'previa',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (token, pedido_token, item_ordem, disciplina_informada, nome, normalizado.get("curso_area") or curso_area, departamento, carga, ementa, html_plano, json.dumps(plano_dados_salvos, ensure_ascii=False), _preco_disciplina_publica(carga), docente_id, docente_nome, agora, agora),
+        )
+        solicitacao_id = cur.fetchone()["id"]
+        conn.commit(); conn.close()
+        return jsonify({
+            "success": True,
+            "id": solicitacao_id,
+            "token": token,
+            "pedido_token": pedido_token,
+            "nome_confirmado": nome,
+            "curso_area": normalizado.get("curso_area") or curso_area,
+            "departamento": departamento,
+            "carga_horaria": carga,
+            "docente": docente_nome,
+            "url": url_for("matricula_publica_resumo", token=token),
+        })
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(exc)}), 500
+
+
+@app.route("/matricula/<token>")
+def matricula_publica_resumo(token):
+    sol, itens, total, faltantes = _resumo_pedido_publico(token)
+    if not sol:
+        return "Solicitação não encontrada.", 404
+    itens_view = []
+    for item in itens:
+        d = dict(item)
+        preco = _preco_disciplina_publica(d.get("carga_horaria"))
+        d["preco"] = preco
+        d["preco_txt"] = _moeda_br(preco)
+        itens_view.append(d)
+    return render_template(
+        "matricula_publica_resumo.html",
+        sol=sol, itens=itens_view, total=total, total_txt=_moeda_br(total), faltantes=faltantes,
+        pedido_token=_pedido_token_publico(sol),
+    )
+
+
+@app.route("/matricula/<token>/finalizar", methods=["GET", "POST"])
+def matricula_publica_finalizar(token):
+    sol, itens, total, faltantes = _resumo_pedido_publico(token)
+    if not sol:
+        return "Solicitação não encontrada.", 404
+    if any(i.get("cobranca_id") or i.get("data_pagamento") for i in itens):
+        return redirect(url_for("matricula_publica_contratar", token=token))
+    if request.method == "POST":
+        quer = (request.form.get("quer_extra") or "0").strip()
+        texto = _limpar_texto_publico(request.form.get("solicitacao_extra"), 3000) if quer == "1" else ""
+        if quer == "1" and len(texto) < 3:
+            return render_template("matricula_publica_finalizar.html", sol=sol, itens=itens, total=total, total_txt=_moeda_br(total), faltantes=faltantes, erro="Conte brevemente o que você gostaria de solicitar."), 400
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        pedido = _pedido_token_publico(sol)
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute(
+            "UPDATE solicitacoes_matricula_publica SET solicitacao_extra=%s,solicitacao_extra_respondida=TRUE,data_solicitacao_extra=%s WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
+            (texto, agora, pedido),
+        )
+        conn.commit(); conn.close()
+        return redirect(url_for("matricula_publica_contratar", token=token))
+    return render_template("matricula_publica_finalizar.html", sol=sol, itens=itens, total=total, total_txt=_moeda_br(total), faltantes=faltantes)
+
+
+@app.route("/matricula/<token>/plano")
+def matricula_publica_plano(token):
+    sol = _get_solicitacao_publica(token=token)
+    if not sol or not sol.get("plano_html"):
+        return "Prévia não encontrada.", 404
+    resp = app.make_response(sol["plano_html"])
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
+def _criar_aluno_pendente_publico(sol, form):
+    nome = (form.get("nome") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    cpf = re.sub(r"\D", "", form.get("cpf") or "")
+    telefone = (form.get("telefone") or "").strip()
+    endereco = (form.get("endereco") or "").strip()
+    cidade = (form.get("cidade") or "").strip()
+    estado = (form.get("estado") or "").strip().upper()[:2]
+    cep = (form.get("cep") or "").strip()
+    if not nome or "@" not in email or len(cpf) != 11 or not telefone or not endereco or not cidade or len(estado) != 2 or not cep:
+        raise ValueError("Preencha corretamente nome, CPF, e-mail, telefone e endereço.")
+    if form.get("aceite_termos") != "1":
+        raise ValueError("É necessário ler e aceitar os termos da contratação.")
+
+    itens = _itens_pedido_publico(sol=sol)
+    total, faltantes = _preco_total_pedido_publico(itens)
+    if not total or total <= 0:
+        if faltantes:
+            raise ValueError("Há carga horária sem preço configurado no Render: " + ", ".join(f"{x}h" for x in faltantes) + ".")
+        raise ValueError("O valor do pedido ainda não está configurado.")
+    pedido = _pedido_token_publico(sol)
+
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        # O carrinho reúne várias disciplinas em uma única matrícula nova.
+        # Matrículas já existentes continuam pelo atendimento/ambiente autenticado, evitando duplicidade de CPF.
+        cur.execute(
+            """SELECT a.id FROM dados_pessoais dp JOIN alunos a ON a.id=dp.aluno_id
+               WHERE regexp_replace(COALESCE(dp.cpf,''),'[^0-9]','','g')=%s LIMIT 1""",
+            (cpf,),
+        )
+        if cur.fetchone():
+            raise ValueError("Já existe cadastro com este CPF. Para uma nova contratação em matrícula existente, utilize o atendimento do SIGEU ou seu ambiente acadêmico.")
+        while True:
+            ra = gerar_ra()
+            cur.execute("SELECT id FROM alunos WHERE ra=%s", (ra,))
+            if not cur.fetchone():
+                break
+        cur.execute("INSERT INTO alunos(nome,email,ra,senha) VALUES(%s,%s,%s,%s) RETURNING id", (nome, email, ra, generate_password_hash(cpf)))
+        aluno_id = cur.fetchone()["id"]
+        cur.execute(
+            "INSERT INTO dados_pessoais(aluno_id,cpf,telefone,endereco,cidade,estado,cep,curso_referencia) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
+            (aluno_id, cpf, telefone, endereco, cidade, estado, cep, sol.get("curso_area") or sol.get("departamento") or ""),
+        )
+
+        cur.execute(
+            "INSERT INTO situacao_financeira(aluno_id,forma_pagamento,status,parcelas_total,parcelas_pagas,valor_total) VALUES(%s,'mercadopago','pendente',1,0,%s)",
+            (aluno_id, total),
+        )
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        cur.execute(
+            """UPDATE solicitacoes_matricula_publica
+               SET status='aguardando_pagamento',nome=%s,email=%s,cpf=%s,telefone=%s,endereco=%s,cidade=%s,estado=%s,cep=%s,
+                   aluno_id=%s,aceite_termos=TRUE,data_aceite=%s
+               WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
+            (nome, email, cpf, telefone, endereco, cidade, estado, cep, aluno_id, agora, pedido),
+        )
+        conn.commit()
+        extra = next((i.get("solicitacao_extra") for i in itens if i.get("solicitacao_extra")), "")
+        if extra:
+            try:
+                destino = (os.getenv("SIGEU_ADMIN_NOTIFICATION_EMAIL") or "claroevandro95@gmail.com").strip()
+                lista = "<br>".join(f"• {escape(i.get('disciplina_confirmada') or '')} — {int(i.get('carga_horaria') or 0)}h" for i in itens)
+                html = f"<html><body style='font-family:Arial;color:#202428'><h2>Solicitação adicional antes do pagamento</h2><p><b>Interessado:</b> {escape(nome)}<br><b>E-mail:</b> {escape(email)}<br><b>Telefone:</b> {escape(telefone)}</p><p><b>Disciplinas selecionadas:</b><br>{lista}</p><p><b>Pedido adicional:</b><br>{escape(extra)}</p><p>O interessado seguirá agora para o Mercado Pago.</p></body></html>"
+                _smtp_enviar(destino, f"SIGEU | Solicitação adicional - {nome}", html)
+            except Exception as exc:
+                print(f"Aviso e-mail solicitação adicional: {exc}")
+        return aluno_id, nome, email, total
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.route("/matricula/<token>/contratar", methods=["GET", "POST"])
+def matricula_publica_contratar(token):
+    sol, itens, total, faltantes = _resumo_pedido_publico(token)
+    if not sol:
+        return "Solicitação não encontrada.", 404
+    pedido = _pedido_token_publico(sol)
+    if not all(bool(i.get("solicitacao_extra_respondida")) for i in itens):
+        return redirect(url_for("matricula_publica_finalizar", token=token))
+
+    itens_view = []
+    for item in itens:
+        d = dict(item)
+        d["preco"] = _preco_disciplina_publica(d.get("carga_horaria"))
+        d["preco_txt"] = _moeda_br(d["preco"])
+        itens_view.append(d)
+
+    if request.method == "GET":
+        return render_template("matricula_publica_contratar.html", sol=sol, itens=itens_view, preco=total, preco_txt=_moeda_br(total), faltantes=faltantes, termos=_termo_contratacao_publica())
+    try:
+        cobranca_id_existente = next((i.get("cobranca_id") for i in itens if i.get("cobranca_id")), None)
+        if cobranca_id_existente:
+            conn = get_db_connection(); cur = conn.cursor()
+            cur.execute("SELECT checkout_url,sandbox_checkout_url FROM pagamentos_mercadopago WHERE id=%s", (cobranca_id_existente,))
+            cob = cur.fetchone(); conn.close()
+            if cob:
+                checkout = (cob.get("sandbox_checkout_url") if str(os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")).startswith("TEST-") else cob.get("checkout_url")) or cob.get("checkout_url") or cob.get("sandbox_checkout_url")
+                if checkout:
+                    return redirect(checkout)
+
+        aluno_id_existente = next((i.get("aluno_id") for i in itens if i.get("aluno_id")), None)
+        if aluno_id_existente:
+            conn = get_db_connection(); cur = conn.cursor()
+            cur.execute("SELECT id,nome,email FROM alunos WHERE id=%s", (aluno_id_existente,))
+            aluno_existente = cur.fetchone(); conn.close()
+            if not aluno_existente:
+                raise ValueError("Cadastro pendente não encontrado. Procure o atendimento do SIGEU.")
+            aluno_id = aluno_existente["id"]; nome = aluno_existente["nome"]; email = aluno_existente["email"]
+            total, faltantes = _preco_total_pedido_publico(itens)
+            if not total:
+                raise ValueError("Há carga horária sem preço configurado no Render.")
+        else:
+            aluno_id, nome, email, total = _criar_aluno_pendente_publico(sol, request.form)
+
+        titulo = (f"{len(itens)} unidades curriculares SIGEU" if len(itens) > 1 else f"Unidade Curricular: {itens[0]['disciplina_confirmada']} - {int(itens[0]['carga_horaria'])}h")
+        cobranca = criar_preferencia_mercadopago(
+            aluno_id=aluno_id,
+            nome=nome,
+            email=email,
+            valor_total=total,
+            contrato_id=None,
+            base_url=request.host_url.rstrip("/"),
+            item_title=titulo,
+            metadata_extra={"solicitacao_matricula_id": sol["id"], "pedido_token": pedido, "tipo": "matricula_publica"},
+        )
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute(
+            "UPDATE solicitacoes_matricula_publica SET cobranca_id=%s WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
+            (cobranca["id"], pedido),
+        )
+        conn.commit(); conn.close()
+        return redirect(cobranca["checkout_url"])
+    except Exception as exc:
+        return render_template("matricula_publica_contratar.html", sol=sol, itens=itens_view, preco=total, preco_txt=_moeda_br(total), faltantes=faltantes, termos=_termo_contratacao_publica(), erro=str(exc)), 400
+
+
+def _token_solicitacao_publica_retorno_mp():
+    external = (request.args.get("external_reference") or "").strip()
+    pref = (request.args.get("preference_id") or "").strip()
+    if not external and not pref:
+        return None
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        if external:
+            cur.execute("SELECT s.token FROM solicitacoes_matricula_publica s JOIN pagamentos_mercadopago p ON p.id=s.cobranca_id WHERE p.external_reference=%s LIMIT 1", (external,))
+        else:
+            cur.execute("SELECT s.token FROM solicitacoes_matricula_publica s JOIN pagamentos_mercadopago p ON p.id=s.cobranca_id WHERE p.preference_id=%s LIMIT 1", (pref,))
+        row = cur.fetchone()
+        return row.get("token") if row else None
+    finally:
+        conn.close()
+
+
+def _assegurar_disciplina_e_plano_publico(solicitacao_id):
+    """Cria/vincula disciplina, docente real cadastrado e plano oficial após o pagamento."""
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol:
+        return None, None
+
+    nome = (sol.get("disciplina_confirmada") or sol.get("disciplina_digitada") or "").strip()
+    carga = int(sol.get("carga_horaria") or 80)
+    if not nome:
+        raise ValueError("Solicitação sem nome de disciplina confirmado.")
+
+    conn = get_db_connection(); cur = conn.cursor()
+    disciplina_id = sol.get("disciplina_id")
+    plano_documento_id = sol.get("plano_documento_id")
+    pedido = _pedido_token_publico(sol)
+    try:
+        if disciplina_id:
+            cur.execute("SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE id=%s", (disciplina_id,))
+            if not cur.fetchone():
+                disciplina_id = None
+
+        if not disciplina_id:
+            cur.execute(
+                "SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND COALESCE(carga_horaria,80)=%s ORDER BY id LIMIT 1",
+                (nome, carga),
+            )
+            disc = cur.fetchone()
+            if disc:
+                disciplina_id = disc["id"]
+            else:
+                cur.execute("INSERT INTO disciplinas (nome,carga_horaria) VALUES(%s,%s) RETURNING id", (nome, carga))
+                disciplina_id = cur.fetchone()["id"]
+                for i in range(1, 5):
+                    cur.execute(
+                        "INSERT INTO capitulos (disciplina_id,titulo,video_url,pdf_url) VALUES(%s,%s,'','') RETURNING id",
+                        (disciplina_id, f"Capítulo {i}"),
+                    )
+                    capitulo_id = cur.fetchone()["id"]
+                    cur.execute("INSERT INTO provas (capitulo_id,questoes_json) VALUES(%s,'[]')", (capitulo_id,))
+            cur.execute("UPDATE solicitacoes_matricula_publica SET disciplina_id=%s WHERE id=%s", (disciplina_id, solicitacao_id))
+
+        # Professor: preserva associação real existente ou usa automaticamente um docente ativo do cadastro MEW.
+        cur.execute(
+            """SELECT doc.id,doc.nome,doc.titulacao
+               FROM disciplina_docente dd JOIN docentes doc ON doc.id=dd.docente_id
+               WHERE dd.disciplina_id=%s AND COALESCE(doc.ativo,1)=1 ORDER BY dd.id DESC LIMIT 1""",
+            (disciplina_id,),
+        )
+        doc_existente = cur.fetchone()
+        if doc_existente:
+            docente_id = doc_existente["id"]
+            docente_nome = _formatar_docente_publico(doc_existente["nome"], doc_existente.get("titulacao"))
+        else:
+            docente_id = sol.get("docente_id")
+            docente_nome = sol.get("docente_nome")
+            if docente_id:
+                cur.execute("SELECT id,nome,titulacao FROM docentes WHERE id=%s AND COALESCE(ativo,1)=1", (docente_id,))
+                drow = cur.fetchone()
+            else:
+                drow = None
+            if not drow:
+                docente_id, docente_nome = _selecionar_docente_publico(cur, pedido, nome, carga, sol.get("aluno_id"))
+                if docente_id:
+                    cur.execute("SELECT id,nome,titulacao FROM docentes WHERE id=%s", (docente_id,))
+                    drow = cur.fetchone()
+            if drow:
+                docente_nome = _formatar_docente_publico(drow["nome"], drow.get("titulacao"))
+                cur.execute(
+                    "INSERT INTO disciplina_docente(disciplina_id,docente_id,ano_semestre) VALUES(%s,%s,%s)",
+                    (disciplina_id, docente_id, datetime.now().strftime("%Y.%m")),
+                )
+            else:
+                docente_id = None
+                docente_nome = "Docente Responsável — Coordenação Acadêmica SIGEU"
+
+        cur.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (docente_nome, disciplina_id))
+        cur.execute(
+            "UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
+            (disciplina_id, docente_id, docente_nome, solicitacao_id),
+        )
+
+        if plano_documento_id:
+            cur.execute("SELECT id FROM documentos_autenticados WHERE id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'", (plano_documento_id,))
+            if not cur.fetchone():
+                plano_documento_id = None
+
+        if not plano_documento_id:
+            try:
+                dados_plano = json.loads(sol.get("plano_dados_json") or "{}")
+            except Exception:
+                dados_plano = {}
+            if dados_plano:
+                modalidade = _limpar_texto_publico(dados_plano.pop("modalidade", None) or "EaD", 40)
+                codigo = gerar_codigo_simples()
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                hash_documento = gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}", "PUBLICO", timestamp)
+                data_formatada = datetime.now().strftime("%d/%m/%Y")
+                data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+                data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+                base_url = (os.getenv("SIGEU_LOGIN_URL") or "").strip().rstrip("/") or request.host_url.rstrip("/")
+                qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+                metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
+                html_oficial = gerar_html_plano_ensino(
+                    disciplina=nome.upper(), codigo=codigo, hash_completa=hash_documento,
+                    carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
+                    data_formatada=data_formatada, qr_code_base64=qr_code_base64, **dados_plano,
+                )
+                cur.execute(
+                    """INSERT INTO documentos_autenticados
+                    (codigo,aluno_id,aluno_nome,aluno_ra,tipo,conteudo_html,data_geracao,qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
+                    VALUES(%s,NULL,'PLANO INSTITUCIONAL','GERAL','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    (codigo, html_oficial, data_emissao, qr_code_base64, hash_documento, data_emissao, data_validade, metadados, disciplina_id),
+                )
+                plano_documento_id = cur.fetchone()["id"]
+                cur.execute("UPDATE solicitacoes_matricula_publica SET plano_documento_id=%s WHERE id=%s", (plano_documento_id, solicitacao_id))
+
+        conn.commit()
+        return disciplina_id, plano_documento_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _marcar_solicitacao_publica_pago(solicitacao_id, payment_id=None):
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol:
+        return False
+    pedido = _pedido_token_publico(sol)
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute(
+        "SELECT id,data_pagamento FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s FOR UPDATE",
+        (pedido,),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        conn.close(); return False
+    novo_pagamento = not any(bool(r.get("data_pagamento")) for r in rows)
+    cur.execute(
+        """UPDATE solicitacoes_matricula_publica
+           SET status=CASE WHEN status IN ('em_analise','documentos_aprovados','liberado') THEN status ELSE 'aguardando_documentos' END,
+               data_pagamento=COALESCE(data_pagamento,%s)
+           WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
+        (agora, pedido),
+    )
+    conn.commit(); conn.close()
+    for row in rows:
+        _assegurar_disciplina_e_plano_publico(row["id"])
+    return novo_pagamento
+
+
+def _sincronizar_pagamento_publico(token, payment_id):
+    sol = _get_solicitacao_publica(token=token)
+    if not sol or not sol.get("cobranca_id"):
+        return False
+    pedido = _pedido_token_publico(sol)
+    sdk = get_mercadopago_sdk()
+    resultado = sdk.payment().get(payment_id)
+    pag = resultado.get("response", {}) if isinstance(resultado, dict) else {}
+    if pag.get("status") != "approved":
+        return False
+    external = pag.get("external_reference")
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute("SELECT external_reference FROM pagamentos_mercadopago WHERE id=%s", (sol["cobranca_id"],))
+    cob = cur.fetchone()
+    if not cob or not external or external != cob.get("external_reference"):
+        conn.close(); return False
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    cur.execute(
+        "UPDATE pagamentos_mercadopago SET payment_id=%s,status='pago',status_mp='approved',data_atualizacao=%s,data_pagamento=COALESCE(data_pagamento,%s) WHERE id=%s",
+        (str(payment_id), agora, agora, sol["cobranca_id"]),
+    )
+    cur.execute(
+        "UPDATE situacao_financeira SET status='pago',parcelas_pagas=parcelas_total WHERE id=(SELECT id FROM situacao_financeira WHERE aluno_id=%s ORDER BY id DESC LIMIT 1)",
+        (sol["aluno_id"],),
+    )
+    cur.execute(
+        "SELECT id,data_pagamento FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
+        (pedido,),
+    )
+    rows = cur.fetchall()
+    novo_pagamento = not any(bool(r.get("data_pagamento")) for r in rows)
+    cur.execute(
+        """UPDATE solicitacoes_matricula_publica SET status=CASE WHEN status IN ('em_analise','documentos_aprovados','liberado') THEN status ELSE 'aguardando_documentos' END,
+           data_pagamento=COALESCE(data_pagamento,%s) WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
+        (agora, pedido),
+    )
+    conn.commit(); conn.close()
+    for row in rows:
+        _assegurar_disciplina_e_plano_publico(row["id"])
+    if novo_pagamento:
+        try:
+            enviar_email_pagamento_publico(sol["id"])
+            enviar_alerta_admin_matricula_publica(sol["id"], fase="pagamento")
+        except Exception as exc:
+            print(f"Aviso e-mail retorno MP: {exc}")
+    return True
+
+
+def _smtp_enviar(destinatario, assunto, html_corpo, texto_corpo=None):
+    host = os.getenv("TITAN_SMTP_HOST", "smtp.titan.email").strip()
+    usuario = (os.getenv("TITAN_SMTP_USER") or "").strip()
+    senha = (os.getenv("TITAN_SMTP_PASSWORD") or "").strip()
+    port = int(os.getenv("TITAN_SMTP_PORT", "465"))
+    from_name = os.getenv("TITAN_FROM_NAME", "SIGEU Educacional").strip()
+    if not usuario or not senha:
+        return False
+    from email.message import EmailMessage
+    from email.utils import formataddr
+    import smtplib
+    msg = EmailMessage()
+    msg["Subject"] = assunto
+    msg["From"] = formataddr((from_name, usuario))
+    msg["To"] = destinatario
+    msg.set_content(texto_corpo or re.sub(r"<[^>]+>", " ", html_corpo))
+    msg.add_alternative(html_corpo, subtype="html")
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+            smtp.login(usuario, senha)
+            smtp.send_message(msg)
+    else:
+        with smtplib.SMTP(host, port, timeout=30) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+            smtp.login(usuario, senha)
+            smtp.send_message(msg)
+    return True
+
+
+def enviar_email_pagamento_publico(solicitacao_id):
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol or not sol.get("email"):
+        return False
+    itens = _itens_pedido_publico(sol=sol)
+    base = ((os.getenv("SIGEU_LOGIN_URL") or request.host_url.rstrip("/")).split("/login")[0].rstrip("/")) if request else "https://campusvirtualfacop.com.br"
+    link = f"{base}/matricula/{sol['token']}/documentos"
+    lista = "".join(f"<li><b>{escape(i.get('disciplina_confirmada') or '')}</b> — {int(i.get('carga_horaria') or 0)}h — {escape(i.get('docente_nome') or 'Docente responsável')}</li>" for i in itens)
+    html = f"""<html><body style='font-family:Arial;color:#1f2326'><h2>Pagamento confirmado</h2><p>Olá, <b>{escape(sol.get('nome') or '')}</b>.</p><p>Recebemos sua contratação das seguintes unidades curriculares:</p><ul>{lista}</ul><p>As disciplinas e seus planos de ensino já foram preparados no SIGEU. Agora envie a documentação para conferência cadastral e acadêmica.</p><p><a href='{link}'>Enviar documentação</a></p><p><b>Prazo de conferência:</b> até 3 horas após o envio completo.<br><b>Início das unidades curriculares:</b> em até 24 horas após a aprovação e liberação acadêmica.</p><p>GRUPO EDUCACIONAL UNIFICADO<br>SIGEU Educacional<br>FACOP CERTIFICADORA</p></body></html>"""
+    return _smtp_enviar(sol["email"], "SIGEU | Pagamento confirmado", html)
+
+
+def enviar_alerta_admin_matricula_publica(solicitacao_id, fase="documentos"):
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol:
+        return False
+    itens = _itens_pedido_publico(sol=sol)
+    total, _ = _preco_total_pedido_publico(itens)
+    destino = (os.getenv("SIGEU_ADMIN_NOTIFICATION_EMAIL") or "claroevandro95@gmail.com").strip()
+    base = request.host_url.rstrip("/") if request else "https://campusvirtualfacop.com.br"
+    etapa = "PAGAMENTO APROVADO" if fase == "pagamento" else "DOCUMENTAÇÃO ENVIADA"
+    acao = "As disciplinas, planos e docentes já foram preparados automaticamente. Aguarde o envio dos documentos." if fase == "pagamento" else "Valide a documentação e clique em liberar. As disciplinas, planos e docentes já estão vinculados."
+    lista = "".join(f"<li><b>{escape(i.get('disciplina_confirmada') or '')}</b> — {int(i.get('carga_horaria') or 0)}h — {escape(i.get('docente_nome') or 'Docente responsável')}</li>" for i in itens)
+    extra = next((i.get("solicitacao_extra") for i in itens if i.get("solicitacao_extra")), "")
+    extra_html = f"<p><b>Solicitação adicional:</b><br>{escape(extra)}</p>" if extra else ""
+    html = f"""<html><body style='font-family:Arial;color:#202428'><h2>{etapa} — nova contratação SIGEU</h2><p><b>Aluno:</b> {escape(sol.get('nome') or '')}<br><b>E-mail:</b> {escape(sol.get('email') or '')}<br><b>Valor total:</b> {_moeda_br(total)}</p><p><b>Unidades curriculares:</b></p><ul>{lista}</ul>{extra_html}<p>{acao}</p><p><a href='{base}/mew/solicitacoes-matricula'>Abrir solicitações no MEW</a></p></body></html>"""
+    return _smtp_enviar(destino, f"SIGEU | {etapa} - {len(itens)} disciplina(s)", html)
+
+
+@app.route("/matricula/<token>/documentos", methods=["GET", "POST"])
+def matricula_publica_documentos(token):
+    sol = _get_solicitacao_publica(token=token)
+    if not sol:
+        return "Solicitação não encontrada.", 404
+    itens = _itens_pedido_publico(sol=sol)
+    pedido = _pedido_token_publico(sol)
+    cobranca_id = next((i.get("cobranca_id") for i in itens if i.get("cobranca_id")), None)
+    pago = False
+    if cobranca_id:
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute("SELECT status FROM pagamentos_mercadopago WHERE id=%s", (cobranca_id,))
+        cob = cur.fetchone(); conn.close()
+        pago = bool(cob and cob.get("status") == "pago")
+    if request.method == "POST":
+        if not pago:
+            return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=False, erro="O pagamento ainda está em confirmação."), 409
+        if not r2_is_configured():
+            return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=True, erro="Armazenamento R2 não configurado."), 500
+        arquivos = [f for f in request.files.getlist("documentos") if f and f.filename]
+        if not arquivos:
+            return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=True, erro="Selecione pelo menos um documento."), 400
+        if len(arquivos) > 8:
+            return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=True, erro="Envie no máximo 8 arquivos por solicitação."), 400
+        permitidas = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+        enviados = []
+        for arq in arquivos:
+            nome = secure_filename(arq.filename or "documento")
+            ext = Path(nome).suffix.lower()
+            if ext not in permitidas:
+                return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=True, erro=f"Formato não permitido: {nome}. Use PDF, JPG, PNG ou WEBP."), 400
+            ctype = arq.mimetype or guess_content_type(nome)
+            key = make_key("matriculas/documentos", nome, pedido)
+            r2_upload_fileobj(arq.stream, key, ctype, {"pedido_token": pedido, "aluno_id": sol.get("aluno_id") or ""})
+            enviados.append({"nome": nome, "key": key, "content_type": ctype})
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        obs = (request.form.get("observacao") or "").strip()[:1500]
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute(
+            """UPDATE solicitacoes_matricula_publica SET status='em_analise',documentos_json=%s,observacao_aluno=%s,data_documentos=%s
+               WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
+            (json.dumps(enviados, ensure_ascii=False), obs, agora, pedido),
+        )
+        conn.commit(); conn.close()
+        try:
+            enviar_alerta_admin_matricula_publica(sol["id"], fase="documentos")
+        except Exception as exc:
+            print(f"Aviso e-mail documentos: {exc}")
+        sol = _get_solicitacao_publica(token=token)
+        itens = _itens_pedido_publico(sol=sol)
+        return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=True, enviado=True)
+    return render_template("matricula_publica_documentos.html", sol=sol, itens=itens, pago=pago)
+
+
+@app.route("/mew/solicitacoes-matricula")
+def mew_solicitacoes_matricula_publica():
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute("SELECT * FROM solicitacoes_matricula_publica ORDER BY id DESC LIMIT 900")
+    rows = cur.fetchall(); conn.close()
+
+    grupos = {}
+    ordem = []
+    for r in rows:
+        d = dict(r)
+        chave = _pedido_token_publico(d)
+        if chave not in grupos:
+            grupos[chave] = []
+            ordem.append(chave)
+        grupos[chave].append(d)
+
+    solicitacoes = []
+    for chave in ordem:
+        itens = sorted(grupos[chave], key=lambda x: (int(x.get("item_ordem") or x.get("id") or 0), int(x.get("id") or 0)))
+        principal = dict(itens[0])
+        docs = []
+        for item in itens:
+            try:
+                cand = json.loads(item.get("documentos_json") or "[]")
+            except Exception:
+                cand = []
+            if cand:
+                docs = cand
+                break
+        for doc in docs:
+            if doc.get("key"):
+                doc["url"] = r2_presigned_url(doc["key"], download_name=doc.get("nome") or "documento", inline=True)
+        total, _ = _preco_total_pedido_publico(itens)
+        principal["documentos"] = docs
+        principal["itens"] = itens
+        principal["valor_txt"] = _moeda_br(total)
+        principal["pedido_token"] = chave
+        principal["solicitacao_extra"] = next((i.get("solicitacao_extra") for i in itens if i.get("solicitacao_extra")), "")
+        # Datas/status são atualizados em bloco; usa o valor mais recente disponível.
+        for campo in ("data_pagamento","data_documentos","data_aprovacao","data_liberacao","observacao_mew"):
+            principal[campo] = next((i.get(campo) for i in reversed(itens) if i.get(campo)), principal.get(campo))
+        principal["status"] = next((i.get("status") for i in reversed(itens) if i.get("status")), principal.get("status"))
+        solicitacoes.append(principal)
+    return render_template("mew/solicitacoes_matricula.html", solicitacoes=solicitacoes)
+
+
+@app.route("/mew/solicitacoes-matricula/<int:solicitacao_id>/aprovar", methods=["POST"])
+def mew_aprovar_documentos_matricula_publica(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol:
+        return redirect("/mew/solicitacoes-matricula?erro=Solicitacao+nao+encontrada")
+    itens = _itens_pedido_publico(sol=sol)
+    pedido = _pedido_token_publico(sol)
+    if not any(i.get("data_pagamento") for i in itens):
+        return redirect("/mew/solicitacoes-matricula?erro=Pagamento+ainda+nao+confirmado")
+    docs_atuais = []
+    for i in itens:
+        try:
+            docs_atuais = json.loads(i.get("documentos_json") or "[]")
+        except Exception:
+            docs_atuais = []
+        if docs_atuais:
+            break
+    if not docs_atuais:
+        return redirect("/mew/solicitacoes-matricula?erro=Nenhum+documento+foi+enviado")
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    obs = (request.form.get("observacao_mew") or "").strip()[:1500]
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute(
+        "UPDATE solicitacoes_matricula_publica SET status='documentos_aprovados',data_aprovacao=%s,observacao_mew=%s WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
+        (agora, obs, pedido),
+    )
+    conn.commit(); conn.close()
+    if sol.get("email"):
+        try:
+            lista = "".join(f"<li><b>{escape(i.get('disciplina_confirmada') or '')}</b> — {int(i.get('carga_horaria') or 0)}h</li>" for i in itens)
+            html = f"<html><body style='font-family:Arial'><h2>Documentação conferida</h2><p>Olá, <b>{escape(sol.get('nome') or '')}</b>. Sua documentação foi aprovada para o pedido abaixo:</p><ul>{lista}</ul><p>A equipe acadêmica está concluindo a liberação. O início acadêmico será disponibilizado em até 24 horas.</p><p>SIGEU Educacional • GRUPO EDUCACIONAL UNIFICADO • FACOP CERTIFICADORA</p></body></html>"
+            _smtp_enviar(sol["email"], "SIGEU | Documentação aprovada", html)
+        except Exception as exc:
+            print(f"Aviso e-mail aprovação: {exc}")
+    return redirect("/mew/solicitacoes-matricula")
+
+
+@app.route("/mew/solicitacoes-matricula/<int:solicitacao_id>/liberar", methods=["POST"])
+def mew_liberar_matricula_publica(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    if not sol or not sol.get("aluno_id"):
+        return redirect("/mew/solicitacoes-matricula?erro=Solicitacao+sem+aluno")
+    itens = _itens_pedido_publico(sol=sol)
+    pedido = _pedido_token_publico(sol)
+    if not itens or any(i.get("status") not in ("documentos_aprovados", "liberado") for i in itens):
+        return redirect("/mew/solicitacoes-matricula?erro=Aprove+a+documentacao+antes+de+liberar")
+    if not any(i.get("data_pagamento") for i in itens):
+        return redirect("/mew/solicitacoes-matricula?erro=Pagamento+ainda+nao+confirmado")
+
+    # Garante disciplina + plano + professor para cada item antes da matrícula do aluno.
+    for item in itens:
+        _assegurar_disciplina_e_plano_publico(item["id"])
+    itens = _itens_pedido_publico(sol=sol)
+
+    inicio = datetime.now() + timedelta(days=1)
+    fim = inicio + timedelta(days=int(os.getenv("DISCIPLINA_PRAZO_DIAS", "60")))
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        for item in itens:
+            disciplina_id = item.get("disciplina_id")
+            if not disciplina_id:
+                raise ValueError(f"Disciplina não preparada: {item.get('disciplina_confirmada')}")
+            cur.execute("SELECT id,nome FROM disciplinas WHERE id=%s", (disciplina_id,))
+            if not cur.fetchone():
+                raise ValueError("Disciplina não encontrada.")
+            cur.execute(
+                "INSERT INTO aluno_disciplina(aluno_id,disciplina_id) VALUES(%s,%s) ON CONFLICT(aluno_id,disciplina_id) DO NOTHING",
+                (sol["aluno_id"], disciplina_id),
+            )
+            cur.execute(
+                """INSERT INTO aluno_disciplina_datas(aluno_id,disciplina_id,data_inicio,data_fim_previsto)
+                VALUES(%s,%s,%s,%s)
+                ON CONFLICT(aluno_id,disciplina_id) DO UPDATE SET data_inicio=EXCLUDED.data_inicio,data_fim_previsto=EXCLUDED.data_fim_previsto""",
+                (sol["aluno_id"], disciplina_id, inicio.strftime("%d/%m/%Y"), fim.strftime("%d/%m/%Y")),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback(); conn.close(); raise
+    conn.close()
+
+    contrato_id = next((i.get("contrato_id") for i in itens if i.get("contrato_id")), None) or criar_contrato_aluno(sol["aluno_id"])
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute(
+        "UPDATE solicitacoes_matricula_publica SET status='liberado',contrato_id=%s,data_liberacao=%s WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
+        (contrato_id, agora, pedido),
+    )
+    cur.execute("SELECT payment_id FROM pagamentos_mercadopago WHERE id=%s", (sol.get("cobranca_id"),))
+    pag = cur.fetchone(); conn.commit(); conn.close()
+    try:
+        enviar_boas_vindas_titan(sol["aluno_id"], referencia=f"matricula-publica:{pedido}:liberada", pagamento_id=str((pag or {}).get("payment_id") or ""))
+    except Exception as exc:
+        print(f"Aviso e-mail liberação: {exc}")
+    return redirect("/mew/solicitacoes-matricula?sucesso=Matricula+liberada")
+
 
 
 

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js">
+
 function getAreaColor(area) {
     const colors = {
         'Saúde': '#2f6f5e',
@@ -1167,6 +1168,29 @@ a.whatsapp-course-btn:hover {
     background: #53676f !important;
 }
 </style>
+
+<style id="sigeu-procure-disciplina-css">
+.disc-search-section{background:#f1f3f4;padding:54px 0;border-top:1px solid #d8dcde;border-bottom:1px solid #d8dcde}
+.disc-search-shell{max-width:940px;margin:0 auto;background:#fff;border:1px solid #cfd4d7;box-shadow:0 8px 26px rgba(0,0,0,.06)}
+.disc-search-head{padding:26px 30px 20px;border-bottom:1px solid #d9dddf}
+.disc-search-kicker{font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:#a85616;margin-bottom:7px}
+.disc-search-title{margin:0;color:#272d31;font-size:2rem;line-height:1.15}
+.disc-search-sub{margin:9px 0 0;color:#667076;line-height:1.55;font-size:.98rem;max-width:760px}
+.disc-search-body{padding:26px 30px 30px}
+.disc-field label{display:block;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.45px;color:#474f54;margin-bottom:7px}
+.disc-row{display:grid;grid-template-columns:1fr auto;gap:10px}
+.disc-input,.disc-select{width:100%;border:1px solid #b8c0c4;background:#fff;color:#20262a;padding:13px 14px;font:inherit;border-radius:0}
+.disc-input:focus,.disc-select:focus{outline:2px solid #5b666c;outline-offset:1px}
+.disc-btn{border:0;border-radius:0;background:#2d3337;color:#fff;font-weight:800;padding:13px 20px;cursor:pointer;white-space:nowrap}
+.disc-btn:hover{background:#1d2225}.disc-btn:disabled{opacity:.55;cursor:wait}
+.disc-step2{display:none;margin-top:22px;padding-top:22px;border-top:1px solid #dde1e3}
+.disc-confirm{background:#f5f6f6;border-left:4px solid #a85616;padding:13px 15px;margin-bottom:18px;color:#333b3f;line-height:1.5}
+.disc-grid2{display:grid;grid-template-columns:1fr 210px;gap:14px;align-items:end}
+.disc-status{display:none;margin-top:16px;padding:12px 14px;background:#f5f6f6;border:1px solid #d5dade;color:#40494e;font-size:.9rem;line-height:1.45}
+.disc-status.error{border-left:4px solid #9b3328;background:#fff4f2;color:#71271f}.disc-status.ok{border-left:4px solid #27623e}
+.disc-note{margin-top:16px;color:#737b80;font-size:.78rem;line-height:1.5}
+@media(max-width:720px){.disc-search-section{padding:32px 0}.disc-search-shell{margin:0 12px}.disc-search-head,.disc-search-body{padding:20px}.disc-row,.disc-grid2{grid-template-columns:1fr}.disc-btn{width:100%}.disc-search-title{font-size:1.6rem}}
+</style>
 </head>
 
 <body>
@@ -1227,6 +1251,7 @@ a.whatsapp-course-btn:hover {
             <nav class="main-nav">
                 <ul class="nav-menu" id="navMenu">
                     <li class="nav-item"><a href="#home" class="nav-link active">Início</a></li>
+                    <li class="nav-item"><a href="#procure-disciplina" class="nav-link">Procure sua disciplina</a></li>
                     <li class="nav-item"><a href="#courses" class="nav-link">Cursos</a></li>
                     <li class="nav-item"><a href="#disciplinas-isoladas" class="nav-link">Disciplinas Isoladas</a></li>
                     <li class="nav-item"><a href="#academic" class="nav-link">Modalidades</a></li>
@@ -1286,6 +1311,50 @@ a.whatsapp-course-btn:hover {
                     <a href="#partnership" class="btn btn-rock">
                         <i class="fas fa-handshake"></i> Conhecer Parceria
                     </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Busca pública de unidade curricular -->
+    <section class="disc-search-section" id="procure-disciplina">
+        <div class="container">
+            <div class="disc-search-shell">
+                <div class="disc-search-head">
+                    <div class="disc-search-kicker">Consulta acadêmica</div>
+                    <h2 class="disc-search-title">Procure sua disciplina</h2>
+                    <p class="disc-search-sub">Digite como você conhece a disciplina. O SIGEU ajusta a nomenclatura acadêmica, confirma a área de referência e prepara uma prévia do plano de ensino antes da contratação.</p>
+                </div>
+                <div class="disc-search-body">
+                    <form id="discSearchForm">
+                        <div class="disc-field">
+                            <label for="disciplinaPublicaInput">Qual disciplina você procura?</label>
+                            <div class="disc-row">
+                                <input class="disc-input" id="disciplinaPublicaInput" name="disciplina" maxlength="180" autocomplete="off" placeholder="Ex.: calculo integral 2, redes 2, filosofia da ciência..." required>
+                                <button class="disc-btn" id="discSuggestBtn" type="submit">Conferir nome</button>
+                            </div>
+                        </div>
+                    </form>
+                    <div class="disc-step2" id="discStep2">
+                        <div class="disc-confirm" id="discConfirmation"></div>
+                        <div class="disc-grid2">
+                            <div class="disc-field">
+                                <label for="discCursoArea">De qual curso ou área ela faz parte?</label>
+                                <input class="disc-input" id="discCursoArea" maxlength="180" placeholder="Ex.: Engenharia de Software, Matemática, Ciências Humanas...">
+                            </div>
+                            <div class="disc-field">
+                                <label for="discCargaHoraria">Carga horária</label>
+                                <select class="disc-select" id="discCargaHoraria">
+                                    <option value="60">60 horas</option>
+                                    <option value="80" selected>80 horas</option>
+                                    <option value="120">120 horas</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="disc-btn" id="discGenerateBtn" type="button" style="margin-top:16px">Gerar prévia do plano de ensino</button>
+                    </div>
+                    <div class="disc-status" id="discPublicStatus" aria-live="polite"></div>
+                    <p class="disc-note">A prévia é informativa e não possui validade acadêmica. A matrícula somente é liberada após contratação, confirmação do pagamento e conferência documental pelo SIGEU.</p>
                 </div>
             </div>
         </div>
@@ -2300,6 +2369,81 @@ function getAreaColor(area) {
     };
     return colors[area] || '#5f666b';
 }
+
+
+// PROCURE SUA DISCIPLINA - fluxo público de prévia e contratação
+(() => {
+    const form = document.getElementById('discSearchForm');
+    const input = document.getElementById('disciplinaPublicaInput');
+    const suggestBtn = document.getElementById('discSuggestBtn');
+    const step2 = document.getElementById('discStep2');
+    const confirmation = document.getElementById('discConfirmation');
+    const curso = document.getElementById('discCursoArea');
+    const carga = document.getElementById('discCargaHoraria');
+    const generateBtn = document.getElementById('discGenerateBtn');
+    const statusBox = document.getElementById('discPublicStatus');
+    let disciplinaSugerida = '';
+    const pedidoToken = new URLSearchParams(window.location.search).get('pedido') || '';
+
+    function status(msg, tipo='') {
+        statusBox.textContent = msg;
+        statusBox.className = 'disc-status' + (tipo ? ' ' + tipo : '');
+        statusBox.style.display = 'block';
+    }
+    function busy(btn, ligado, texto) {
+        if (!btn) return;
+        if (ligado) { btn.dataset.original = btn.textContent; btn.disabled = true; btn.textContent = texto; }
+        else { btn.disabled = false; btn.textContent = btn.dataset.original || btn.textContent; }
+    }
+    if (!form) return;
+    if (pedidoToken) {
+        status('Você está adicionando outra disciplina ao mesmo pedido. Ao gerar a prévia, ela será acrescentada à sua seleção.', 'ok');
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const digitado = (input.value || '').trim();
+        if (digitado.length < 2) return status('Digite o nome da disciplina.', 'error');
+        busy(suggestBtn, true, 'Conferindo...');
+        status('Conferindo a nomenclatura acadêmica...');
+        step2.style.display = 'none';
+        try {
+            const r = await fetch('/api/publico/sugerir-disciplina', {
+                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({disciplina: digitado})
+            });
+            const d = await r.json();
+            if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível conferir a disciplina.');
+            disciplinaSugerida = d.nome_sugerido;
+            confirmation.textContent = d.pergunta_curso || `Sua disciplina é ${disciplinaSugerida}. De qual curso ou área ela faz parte?`;
+            step2.style.display = 'block';
+            status('Nome conferido. Informe agora o curso ou área e escolha a carga horária.', 'ok');
+            setTimeout(() => curso.focus(), 50);
+        } catch (err) {
+            status(err.message || 'Não foi possível conferir a disciplina.', 'error');
+        } finally { busy(suggestBtn, false); }
+    });
+
+    generateBtn.addEventListener('click', async () => {
+        const cursoArea = (curso.value || '').trim();
+        if (!disciplinaSugerida) return status('Primeiro confira o nome da disciplina.', 'error');
+        if (cursoArea.length < 2) return status('Informe o curso ou a área da disciplina.', 'error');
+        busy(generateBtn, true, 'Preparando plano...');
+        status('Preparando a prévia do plano de ensino. Isso pode levar alguns segundos...');
+        try {
+            const r = await fetch('/api/publico/gerar-previa-plano', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({disciplina: disciplinaSugerida, curso_area: cursoArea, carga_horaria: Number(carga.value), pedido_token: pedidoToken})
+            });
+            const d = await r.json();
+            if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível gerar a prévia.');
+            status('Prévia pronta. Abrindo o plano de ensino...', 'ok');
+            window.location.href = d.url;
+        } catch (err) {
+            status(err.message || 'Não foi possível gerar a prévia.', 'error');
+            busy(generateBtn, false);
+        }
+    });
+})();
 
 </script>
 </body>
