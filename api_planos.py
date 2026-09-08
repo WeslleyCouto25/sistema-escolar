@@ -169,9 +169,19 @@ def _formatar_conteudo(unidades):
     return "\n\n".join(blocos)
 
 
-def _validar_e_normalizar(plano):
+def _validar_e_normalizar(plano, numero_unidades=4):
+    """Valida a resposta da IA sem prender o plano a quatro unidades.
+
+    O MEW pode gerar de 1 a 12 unidades. Para manter o documento sempre paginado,
+    o conteúdo de cada unidade é deliberadamente compacto.
+    """
     if not isinstance(plano, dict):
         raise ValueError("A IA não retornou um objeto JSON válido.")
+
+    try:
+        numero_unidades = max(1, min(12, int(numero_unidades or 4)))
+    except Exception:
+        numero_unidades = 4
 
     objetivo_geral = str(plano.get("objetivo_geral") or "").strip()
     objetivos = _lista(plano.get("objetivos_especificos"))
@@ -190,16 +200,22 @@ def _validar_e_normalizar(plano):
         erros.append(f"objetivos_especificos deve ter 5 itens (recebeu {len(objetivos)})")
     if len(ementa) != 20:
         erros.append(f"ementa_expandida deve ter 20 itens (recebeu {len(ementa)})")
-    if not isinstance(unidades, list) or len(unidades) != 4:
-        erros.append("conteudo_programatico deve ter 4 unidades")
+    if not isinstance(unidades, list) or len(unidades) != numero_unidades:
+        erros.append(f"conteudo_programatico deve ter {numero_unidades} unidades")
     else:
-        esperados = [6, 6, 5, 5]
-        for i, (unidade, esperado) in enumerate(zip(unidades, esperados), 1):
+        # Quanto mais unidades, mais compacto cada bloco precisa ser para caber
+        # rigorosamente em 6 posições por página.
+        max_topicos = 5 if numero_unidades <= 6 else 4
+        min_topicos = 3
+        for i, unidade in enumerate(unidades, 1):
             topicos = _lista(unidade.get("topicos") if isinstance(unidade, dict) else None)
-            if len(topicos) != esperado:
-                erros.append(f"unidade {i} deve ter {esperado} tópicos (recebeu {len(topicos)})")
-    if not 10 <= len(habilidades) <= 14:
-        erros.append(f"habilidades deve ter de 10 a 14 itens (recebeu {len(habilidades)})")
+            if not min_topicos <= len(topicos) <= max_topicos:
+                erros.append(
+                    f"unidade {i} deve ter de {min_topicos} a {max_topicos} tópicos "
+                    f"(recebeu {len(topicos)})"
+                )
+    if not 8 <= len(habilidades) <= 12:
+        erros.append(f"habilidades deve ter de 8 a 12 itens (recebeu {len(habilidades)})")
     if len(basica) != 5:
         erros.append(f"bibliografia_basica deve ter 5 obras (recebeu {len(basica)})")
     if len(complementar) != 3:
@@ -208,11 +224,19 @@ def _validar_e_normalizar(plano):
     if erros:
         raise ValueError("; ".join(erros))
 
+    unidades_normalizadas = []
+    for idx, unidade in enumerate(unidades, 1):
+        titulo = str((unidade or {}).get("titulo") or f"UNIDADE {idx}").strip()
+        topicos = _lista((unidade or {}).get("topicos"))
+        unidades_normalizadas.append({"titulo": titulo, "topicos": topicos})
+
     return {
         "objetivo_geral": objetivo_geral,
         "objetivos_especificos": _formatar_objetivos(objetivos),
         "ementa_expandida": _formatar_ementa(ementa),
-        "conteudo_programatico": _formatar_conteudo(unidades),
+        "conteudo_programatico": _formatar_conteudo(unidades_normalizadas),
+        "conteudo_programatico_estruturado": unidades_normalizadas,
+        "numero_unidades": numero_unidades,
         "habilidades": _formatar_habilidades(habilidades),
         "bibliografia_basica": "<br>".join(basica),
         "bibliografia_complementar": "<br>".join(complementar),
@@ -225,6 +249,11 @@ def gerar_prompt_simplificado(dados, correcao=""):
     disciplina = str(dados.get("disciplina") or "").strip()
     ementa_base = str(dados.get("ementa") or "").strip()
     carga = str(dados.get("carga_horaria") or "80 horas").strip()
+    try:
+        numero_unidades = max(1, min(12, int(dados.get("numero_unidades") or 4)))
+    except Exception:
+        numero_unidades = 4
+    topicos_por_unidade = "3 a 5" if numero_unidades <= 6 else "3 a 4"
 
     return f"""
 Você é especialista brasileiro em elaboração de planos de ensino de educação superior.
@@ -235,33 +264,33 @@ DADOS FORNECIDOS:
 - Disciplina: {disciplina}
 - Sugestão de ementa: {ementa_base}
 - Carga horária: {carga}
+- Quantidade EXATA de unidades: {numero_unidades}
 
 REGRAS OBRIGATÓRIAS:
 1. Preserve o sentido da sugestão de ementa, mas desenvolva-a tecnicamente.
 2. Gere 1 objetivo geral.
 3. Gere EXATAMENTE 5 objetivos específicos, iniciados por verbos no infinitivo.
 4. Gere EXATAMENTE 20 tópicos de ementa expandida, sem citações.
-5. Gere EXATAMENTE 4 unidades de conteúdo programático com 6, 6, 5 e 5 tópicos, nessa ordem.
-6. Gere de 10 a 14 habilidades coerentes com a disciplina.
-7. Gere pré-requisitos acadêmicos realistas. Se não forem necessários, escreva explicitamente que não há pré-requisitos formais.
-8. A modalidade deve ser "EaD", salvo se o próprio título/ementa tornar outra modalidade indispensável.
-9. Gere bibliografia básica com EXATAMENTE 5 obras e complementar com EXATAMENTE 3 obras.
-10. As referências devem corresponder a LIVROS/OBRAS REAIS, publicados e reconhecíveis, adequados ao tema e ao contexto brasileiro de ensino superior.
-11. NÃO invente autor, título, editora, edição ou ano. Prefira obras clássicas e consolidadas que você conheça com alta confiança.
-12. Formate cada referência em padrão ABNT aproximado: SOBRENOME, Nome. Título. edição quando conhecida. Cidade: Editora, ano.
-13. Não inclua ISBN, DOI ou URL se não houver segurança absoluta.
-14. Não inclua Markdown, comentários ou explicações fora do JSON.
+5. Gere EXATAMENTE {numero_unidades} unidades de conteúdo programático.
+6. Cada unidade deve ter de {topicos_por_unidade} tópicos curtos e objetivos; cada tópico deve, preferencialmente, caber em uma linha e ter no máximo cerca de 14 palavras.
+7. Os títulos das unidades devem ser curtos. Use “UNIDADE 1 — ...”, “UNIDADE 2 — ...” e assim sucessivamente.
+8. Gere de 8 a 12 habilidades coerentes com a disciplina.
+9. Gere pré-requisitos acadêmicos realistas. Se não forem necessários, escreva explicitamente que não há pré-requisitos formais.
+10. A modalidade deve ser "EaD", salvo se o próprio título/ementa tornar outra modalidade indispensável.
+11. Gere bibliografia básica com EXATAMENTE 5 obras e complementar com EXATAMENTE 3 obras.
+12. As referências devem corresponder a LIVROS/OBRAS REAIS, publicados e reconhecíveis, adequados ao tema e ao contexto brasileiro de ensino superior.
+13. NÃO invente autor, título, editora, edição ou ano. Prefira obras clássicas e consolidadas que você conheça com alta confiança.
+14. Formate cada referência em padrão ABNT aproximado: SOBRENOME, Nome. Título. edição quando conhecida. Cidade: Editora, ano.
+15. Não inclua ISBN, DOI ou URL se não houver segurança absoluta.
+16. Não inclua Markdown, comentários ou explicações fora do JSON.
 
-RETORNE EXATAMENTE UM JSON COM ESTA ESTRUTURA:
+RETORNE EXATAMENTE UM JSON COM ESTA ESTRUTURA (a lista conteudo_programatico deve possuir exatamente {numero_unidades} objetos):
 {{
   "objetivo_geral": "texto",
   "objetivos_especificos": ["item 1", "item 2", "item 3", "item 4", "item 5"],
   "ementa_expandida": ["tópico 1", "tópico 2", "... até 20"],
   "conteudo_programatico": [
-    {{"titulo": "UNIDADE I – TÍTULO", "topicos": ["1", "2", "3", "4", "5", "6"]}},
-    {{"titulo": "UNIDADE II – TÍTULO", "topicos": ["1", "2", "3", "4", "5", "6"]}},
-    {{"titulo": "UNIDADE III – TÍTULO", "topicos": ["1", "2", "3", "4", "5"]}},
-    {{"titulo": "UNIDADE IV – TÍTULO", "topicos": ["1", "2", "3", "4", "5"]}}
+    {{"titulo": "UNIDADE 1 — TÍTULO", "topicos": ["tópico 1", "tópico 2", "tópico 3"]}}
   ],
   "habilidades": ["habilidade 1", "..."],
   "pre_requisitos": "texto",
@@ -299,7 +328,7 @@ def consultar_openai_para_plano(dados):
         texto = getattr(response, "output_text", "") or ""
         try:
             bruto = _json_da_resposta(texto)
-            return _validar_e_normalizar(bruto)
+            return _validar_e_normalizar(bruto, numero_unidades=dados.get("numero_unidades") or 4)
         except Exception as e:
             erro_anterior = str(e)
             if tentativa == 1:

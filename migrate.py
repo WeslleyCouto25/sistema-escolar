@@ -64,6 +64,62 @@ def ensure_extra_schema():
             )
         """)
 
+        # Avisos acadêmicos exibidos ao aluno após o login.
+        # A mensagem pode ser geral ou direcionada a alunos específicos e o fechamento
+        # é registrado por aluno para que ela não reapareça depois do X.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS avisos_academicos (
+                id SERIAL PRIMARY KEY,
+                titulo TEXT NOT NULL,
+                mensagem TEXT,
+                publico_todos BOOLEAN NOT NULL DEFAULT TRUE,
+                media_tipo TEXT,
+                media_url TEXT,
+                media_r2_key TEXT,
+                media_mime TEXT,
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                criado_por TEXT DEFAULT 'MEW',
+                data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS avisos_academicos_destinatarios (
+                aviso_id INTEGER NOT NULL REFERENCES avisos_academicos(id) ON DELETE CASCADE,
+                aluno_id INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+                PRIMARY KEY (aviso_id, aluno_id)
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS avisos_academicos_visualizacoes (
+                aviso_id INTEGER NOT NULL REFERENCES avisos_academicos(id) ON DELETE CASCADE,
+                aluno_id INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+                fechado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (aviso_id, aluno_id)
+            )
+        """)
+
+        # Migração defensiva: se uma versão intermediária dessas tabelas já existir
+        # no PostgreSQL, completa as colunas sem destruir avisos ou visualizações.
+        for sql in [
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS titulo TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS mensagem TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS publico_todos BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS media_tipo TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS media_url TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS media_r2_key TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS media_mime TEXT",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS criado_por TEXT DEFAULT 'MEW'",
+            "ALTER TABLE avisos_academicos ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+            "ALTER TABLE avisos_academicos_visualizacoes ADD COLUMN IF NOT EXISTS fechado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        ]:
+            cur.execute(sql)
+
+        # Registros legados eventualmente criados durante desenvolvimento recebem
+        # um título válido, preservando o conteúdo existente.
+        cur.execute("UPDATE avisos_academicos SET titulo='Aviso acadêmico' WHERE titulo IS NULL OR TRIM(titulo)='' ")
+        cur.execute("ALTER TABLE avisos_academicos ALTER COLUMN titulo SET NOT NULL")
+
         # Funil público de contratação de unidade curricular.
         # Guarda apenas dados do processo e metadados dos documentos; os arquivos ficam no R2.
         cur.execute("""
@@ -167,6 +223,9 @@ def ensure_extra_schema():
             "projetos_finais": [("idx_pf_aluno_disc", "aluno_id, disciplina_id")],
             "disciplina_docente": [("idx_dd_disc", "disciplina_id, id DESC")],
             "anexos_disciplina_alternativa": [("idx_ada_aluno_disc", "aluno_id, disciplina_id")],
+            "avisos_academicos": [("idx_avisos_ativo_id", "ativo, id DESC")],
+            "avisos_academicos_destinatarios": [("idx_aviso_dest_aluno", "aluno_id, aviso_id")],
+            "avisos_academicos_visualizacoes": [("idx_aviso_vis_aluno", "aluno_id, aviso_id")],
             "solicitacoes_matricula_publica": [
                 ("idx_smp_status_id", "status, id DESC"),
                 ("idx_smp_aluno", "aluno_id"),

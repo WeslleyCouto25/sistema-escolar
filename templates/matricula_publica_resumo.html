@@ -15,7 +15,7 @@
 <h1 style="font-size:24px;margin:0 0 6px">Sua seleção</h1>
 <p style="margin:0 0 15px;color:var(--muted);line-height:1.5">Confira as unidades curriculares antes de seguir. Você pode acrescentar quantas precisar antes do pagamento.</p>
 {% for i in itens %}
-<div class="item"><strong>{{ loop.index }}. {{ i.disciplina_confirmada }}</strong><span>{{ i.curso_area }} • {{ i.carga_horaria }}h • {{ i.preco_txt }}</span><span>Docente: {{ i.docente_nome or 'Docente responsável — Coordenação Acadêmica SIGEU' }}</span></div>
+<div class="item"><strong>{{ loop.index }}. {{ i.disciplina_confirmada }}</strong><span>{{ i.curso_area }} • {{ i.carga_horaria }}h • {{ i.preco_txt }}</span><span>Docente: {{ i.docente_nome or 'Docente Titular' }}</span></div>
 {% endfor %}
 <div class="total"><span><small style="color:var(--muted);font-weight:700">TOTAL DA SELEÇÃO</small><br>{{ itens|length }} disciplina(s)</span><b>{{ total_txt }}</b></div>
 <a class="btn alt" href="/?pedido={{ pedido_token }}#procure-disciplina">Sim, desejo mais uma disciplina</a>

@@ -513,11 +513,17 @@ def init_db():
             data_inicio TEXT,
             data_fim_previsto TEXT,
             prova_final_aberta INTEGER DEFAULT 0,
+            frequencia REAL,
+            progresso_manual INTEGER,
             FOREIGN KEY (aluno_id) REFERENCES alunos(id),
             FOREIGN KEY (disciplina_id) REFERENCES disciplinas(id),
             UNIQUE(aluno_id, disciplina_id)
         )
     """)
+    cursor.execute("ALTER TABLE aluno_disciplina_datas ADD COLUMN IF NOT EXISTS frequencia REAL")
+    cursor.execute("ALTER TABLE aluno_disciplina_datas ADD COLUMN IF NOT EXISTS progresso_manual INTEGER")
+    # Notas administrativas aceitam décimos (ex.: 7,5). Instalações antigas usavam INTEGER.
+    cursor.execute("ALTER TABLE notas ALTER COLUMN nota TYPE REAL USING nota::REAL")
 
     # Tabela para controlar liberação da prova final por disciplina
     cursor.execute("""
@@ -764,6 +770,151 @@ def gerar_ra():
     return str(random.randint(10000000, 99999999))
 
 
+def _normalizar_status_academico(valor):
+    """Normaliza o status gravado no banco sem depender de maiúsculas/minúsculas."""
+    texto = str(valor or "").strip().lower()
+    if texto in {"aprovado", "aprovada", "approved"}:
+        return "aprovado"
+    if texto in {"reprovado", "reprovada", "reprovado(a)", "failed"}:
+        return "reprovado"
+    if texto in {"aguardando_final", "aguardando final"}:
+        return "aguardando_final"
+    if texto in {"cursando", "em andamento", "andamento"}:
+        return "cursando"
+    return texto
+
+
+def _capitulos_ordenados(cursor, disciplina_id):
+    cursor.execute(
+        "SELECT id, titulo FROM capitulos WHERE disciplina_id = %s ORDER BY id",
+        (disciplina_id,),
+    )
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def _notas_logicas_disciplina(cursor, aluno_id, disciplina_id, capitulos=None):
+    """Retorna uma nota por unidade, aceitando banco legado (1..4) e IDs reais de capítulos.
+
+    O formato canônico passa a ser o ID real de `capitulos.id`, mas esta função continua lendo
+    registros antigos sem quebrar o histórico do aluno.
+    """
+    capitulos = capitulos if capitulos is not None else _capitulos_ordenados(cursor, disciplina_id)
+    por_id = {int(c["id"]): idx for idx, c in enumerate(capitulos, start=1)}
+    cursor.execute(
+        """
+        SELECT id, capitulo, nota
+        FROM notas
+        WHERE aluno_id = %s AND disciplina_id = %s
+        ORDER BY id
+        """,
+        (aluno_id, disciplina_id),
+    )
+    escolhidas = {}
+    for row in cursor.fetchall():
+        r = dict(row)
+        try:
+            chave = int(r.get("capitulo"))
+        except Exception:
+            continue
+        if chave in por_id:
+            ordem = por_id[chave]
+            canonico = chave
+            prioridade = 2
+        elif 1 <= chave <= len(capitulos):
+            ordem = chave
+            canonico = int(capitulos[ordem - 1]["id"])
+            prioridade = 1
+        else:
+            continue
+        atual = escolhidas.get(ordem)
+        # Prefere o formato canônico; em empate, o registro mais recente.
+        candidato = (prioridade, int(r.get("id") or 0))
+        if not atual or candidato >= atual[0]:
+            escolhidas[ordem] = (candidato, r, canonico)
+
+    resultado = []
+    for ordem, cap in enumerate(capitulos, start=1):
+        escolhido = escolhidas.get(ordem)
+        resultado.append({
+            "ordem": ordem,
+            "capitulo_id": int(cap["id"]),
+            "titulo": cap.get("titulo") or f"Unidade {ordem}",
+            "nota": float(escolhido[1]["nota"]) if escolhido and escolhido[1].get("nota") is not None else None,
+            "nota_id": int(escolhido[1]["id"]) if escolhido else None,
+        })
+    return resultado
+
+
+def _media_notas_logicas(cursor, aluno_id, disciplina_id, capitulos=None):
+    notas = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id, capitulos)
+    valores = [n["nota"] for n in notas if n["nota"] is not None]
+    return (sum(valores) / len(valores)) if valores else 0.0
+
+
+def _salvar_nota_logica(cursor, aluno_id, disciplina_id, capitulo_recebido, nota):
+    """Salva uma unidade usando o ID real do capítulo e absorve eventual registro legado."""
+    capitulos = _capitulos_ordenados(cursor, disciplina_id)
+    if not capitulos:
+        raise ValueError("Disciplina sem capítulos cadastrados.")
+    try:
+        recebido = int(capitulo_recebido)
+    except Exception:
+        raise ValueError("Capítulo inválido.")
+
+    ids = [int(c["id"]) for c in capitulos]
+    if recebido in ids:
+        ordem = ids.index(recebido) + 1
+        capitulo_id = recebido
+    elif 1 <= recebido <= len(capitulos):
+        ordem = recebido
+        capitulo_id = ids[ordem - 1]
+    else:
+        raise ValueError("Capítulo não pertence à disciplina.")
+
+    cursor.execute(
+        """
+        SELECT id, capitulo FROM notas
+        WHERE aluno_id = %s AND disciplina_id = %s AND capitulo IN (%s, %s)
+        ORDER BY CASE WHEN capitulo = %s THEN 0 ELSE 1 END, id DESC
+        """,
+        (aluno_id, disciplina_id, capitulo_id, ordem, capitulo_id),
+    )
+    existentes = [dict(r) for r in cursor.fetchall()]
+    if existentes:
+        manter = existentes[0]["id"]
+        cursor.execute(
+            "UPDATE notas SET capitulo = %s, nota = %s WHERE id = %s",
+            (capitulo_id, nota, manter),
+        )
+        extras = [r["id"] for r in existentes[1:]]
+        if extras:
+            cursor.execute("DELETE FROM notas WHERE id = ANY(%s)", (extras,))
+    else:
+        cursor.execute(
+            "INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota) VALUES (%s, %s, %s, %s)",
+            (aluno_id, disciplina_id, capitulo_id, nota),
+        )
+    return capitulo_id, ordem
+
+
+def _excluir_nota_logica(cursor, aluno_id, disciplina_id, capitulo_recebido):
+    capitulos = _capitulos_ordenados(cursor, disciplina_id)
+    ids = [int(c["id"]) for c in capitulos]
+    recebido = int(capitulo_recebido)
+    if recebido in ids:
+        ordem = ids.index(recebido) + 1
+        capitulo_id = recebido
+    elif 1 <= recebido <= len(capitulos):
+        ordem = recebido
+        capitulo_id = ids[ordem - 1]
+    else:
+        raise ValueError("Capítulo inválido.")
+    cursor.execute(
+        "DELETE FROM notas WHERE aluno_id = %s AND disciplina_id = %s AND capitulo IN (%s, %s)",
+        (aluno_id, disciplina_id, capitulo_id, ordem),
+    )
+
+
 def gerar_codigos_autenticacao():
     """Gera todos os códigos aleatórios simples para autenticação"""
 
@@ -792,14 +943,19 @@ def verificar_disciplina_concluida(aluno_id, disciplina_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Verificar se já fez todas as 4 provas dos capítulos
+    # Uma unidade pode existir no formato legado (1..N) ou no ID real do capítulo.
+    unidades = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id)
+    total_unidades = len(unidades)
+    total_provas = sum(1 for u in unidades if u["nota"] is not None)
+
     cursor.execute("""
-        SELECT COUNT(*) as total_provas_feitas
-        FROM notas
+        SELECT progresso_manual
+        FROM aluno_disciplina_datas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
-
-    total_provas = cursor.fetchone()["total_provas_feitas"] or 0
+    progresso_row = cursor.fetchone() or {}
+    progresso_manual = progresso_row.get("progresso_manual")
+    percurso_concluido = (progresso_manual is not None and int(progresso_manual or 0) >= 100) or (total_unidades > 0 and total_provas >= total_unidades)
 
     # Verificar se já fez a prova final
     cursor.execute("""
@@ -814,9 +970,9 @@ def verificar_disciplina_concluida(aluno_id, disciplina_id):
     # Disciplina está concluída se:
     # 1. Fez todas as 4 provas dos capítulos E
     # 2. Já fez a prova final
-    if total_provas >= 4 and fez_final:
+    if percurso_concluido and fez_final:
         return True, "concluida_com_final"
-    elif total_provas >= 4 and not fez_final:
+    elif percurso_concluido and not fez_final:
         return True, "aguardando_final"
     else:
         return False, "em_andamento"
@@ -913,7 +1069,6 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
     .dados{{border:1px solid #000;margin:15px 0;padding:8px 10px;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px}}
     .dados .wide{{grid-column:1/-1}}
     .assinatura{{margin:20mm auto 9mm;text-align:center;max-width:88mm}}
-    .assinatura .linha{{border-top:1px solid #000;margin-bottom:5px}}
     .assinatura strong{{display:block;font-size:11pt}} .assinatura span{{display:block;font-size:8.5pt;margin-top:2px}}
     .assinatura small{{display:block;font-size:6.8pt;margin-top:5px}}
     .auth{{margin-top:13px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
@@ -927,10 +1082,9 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
       </div>
       <h1>DECLARAÇÃO DE CONCLUSÃO DE DISCIPLINA</h1>
       <p>O <b>GRUPO EDUCACIONAL UNIFICADO</b>, por meio do <b>SIGEU Educacional</b>, declara, para os devidos fins, que <b>{escape(nome_aluno)}</b>, CPF {escape(cpf_aluno)}, matrícula/RA <b>{escape(ra_aluno)}</b>, concluiu com aproveitamento o componente curricular <b>{escape(nome_disciplina)}</b>, com carga horária de <b>{carga_horaria} horas</b>, frequência acadêmica registrada de <b>{frequencia_txt}</b> e média final <b>{nota_final}</b>.</p>
-      <p>A conclusão foi registrada em {escape(data_conclusao)}. O docente/responsável acadêmico registrado para o componente é <b>{escape(docente)}</b>.</p>
-      <p>A identificação da <b>FACOP CERTIFICADORA</b> é apresentada separadamente no cabeçalho, preservando os dados institucionais e de certificação vinculados ao registro acadêmico.</p>
+      <p>A conclusão foi registrada em {escape(data_conclusao)}. A certificação documental, emitida pela <b>FACOP CERTIFICADORA</b>, preserva os dados institucionais e de certificação vinculados ao registro acadêmico do(a) aluno(a).</p>
       <div class="dados"><div><b>Unidade Curricular:</b> {escape(unidade_curricular)}</div><div><b>Situação:</b> APROVADO</div><div class="wide"><b>Documento:</b> emissão acadêmica eletrônica autenticada por código, QR Code e hash.</div></div>
-      <div class="assinatura"><div class="linha"></div><strong>Tatiane Costa Lourenço</strong><span>Secretaria Acadêmica</span><small>Registro eletrônico institucional vinculado ao código e ao hash deste documento.</small></div>
+      <div class="assinatura"><strong>Tatiane R. L. Costa</strong><span>Documento assinado eletronicamente</span><small>Assinatura validada pela certificação institucional.</small></div>
       <div class="auth"><img src="{qrcode_base64}" alt="QR Code"><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class="hash">SHA-256: {hash_visual}</div></div></div>
       <div class="rodape">GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA</div>
     </div></body></html>'''
@@ -1056,34 +1210,57 @@ def dashboard():
         cursor.execute("SELECT * FROM situacao_financeira WHERE aluno_id = %s ORDER BY id DESC LIMIT 1", (aluno_id,))
         situacao_financeira = cursor.fetchone()
 
-        # Uma única consulta calcula progresso/capítulos/provas de todas as disciplinas.
         cursor.execute("""
             SELECT d.id, d.nome,
                    COUNT(DISTINCT c.id) AS total_capitulos,
                    COUNT(DISTINCT n.capitulo) AS provas_realizadas,
-                   nf.nota_final
+                   nf.nota_final, nf.media_final, nf.status AS status_final,
+                   addd.progresso_manual, addd.frequencia, addd.data_inicio
             FROM disciplinas d
             JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
             LEFT JOIN capitulos c ON c.disciplina_id = d.id
             LEFT JOIN notas n ON n.aluno_id = ad.aluno_id AND n.disciplina_id = d.id
             LEFT JOIN notas_finais nf ON nf.aluno_id = ad.aluno_id AND nf.disciplina_id = d.id
+            LEFT JOIN aluno_disciplina_datas addd
+              ON addd.aluno_id = ad.aluno_id AND addd.disciplina_id = d.id
             WHERE ad.aluno_id = %s
-            GROUP BY d.id, d.nome, nf.nota_final
+            GROUP BY d.id, d.nome, nf.nota_final, nf.media_final, nf.status,
+                     addd.progresso_manual, addd.frequencia, addd.data_inicio
             ORDER BY d.nome
         """, (aluno_id,))
         disciplinas = []
         for row in cursor.fetchall():
             d = dict(row)
             total = int(d.get("total_capitulos") or 0)
-            feitas = int(d.get("provas_realizadas") or 0)
-            if d.get("nota_final") is not None:
+            unidades_dashboard = _notas_logicas_disciplina(cursor, aluno_id, d["id"])
+            feitas = sum(1 for u in unidades_dashboard if u["nota"] is not None)
+            status_final = _normalizar_status_academico(d.get("status_final"))
+
+            if d.get("progresso_manual") is not None:
+                progresso = max(0, min(100, int(d.get("progresso_manual") or 0)))
+            elif status_final in {"aprovado", "reprovado"} or d.get("nota_final") is not None:
                 progresso = 100
             elif total <= 0:
                 progresso = 0
             else:
                 bruto = round((feitas / total) * 100)
                 progresso = 100 if bruto >= 100 else 75 if bruto >= 75 else 50 if bruto >= 50 else 25 if bruto > 0 else 0
+
+            # Verde significa disciplina academicamente finalizada. Progresso de 100%
+            # sem avaliação final continua em andamento/aguardando final (amarelo).
+            if status_final in {"aprovado", "reprovado"} or d.get("nota_final") is not None or d.get("media_final") is not None:
+                status_visual = "finalizada"
+            elif progresso <= 0 and not d.get("data_inicio") and feitas == 0:
+                status_visual = "nao_iniciada"
+            elif progresso <= 0 and feitas == 0:
+                status_visual = "nao_iniciada"
+            else:
+                status_visual = "cursando"
+
+            d["provas_realizadas"] = feitas
             d["progresso"] = progresso
+            d["status_visual"] = status_visual
+            d["status_final"] = status_final
             disciplinas.append(d)
 
         cursor.execute("""
@@ -1100,10 +1277,14 @@ def dashboard():
         solicitacoes_material = cursor.fetchall()
         cursor.execute("SELECT * FROM solicitacoes_declaracoes WHERE aluno_id = %s ORDER BY data_solicitacao DESC", (aluno_id,))
         solicitacoes_declaracoes = cursor.fetchall()
-        cursor.execute("SELECT COUNT(*) AS total, COALESCE(AVG(nota),0) AS media FROM notas WHERE aluno_id=%s", (aluno_id,))
-        resumo = cursor.fetchone() or {}
-        total_provas = resumo.get("total") or 0
-        media_geral = round(float(resumo.get("media") or 0), 2)
+
+        # Estatística geral sem duplicar unidades legadas/canônicas.
+        todas_notas = []
+        for d in disciplinas:
+            todas_notas.extend([x["nota"] for x in _notas_logicas_disciplina(cursor, aluno_id, d["id"]) if x["nota"] is not None])
+        total_provas = len(todas_notas)
+        media_geral = round(sum(todas_notas) / len(todas_notas), 2) if todas_notas else 0
+
         cursor.execute("SELECT COUNT(*) AS pendente FROM solicitacoes_material WHERE aluno_id=%s AND entregue=0", (aluno_id,))
         material_pendente = (cursor.fetchone() or {}).get("pendente") or 0
         cursor.execute("SELECT COUNT(*) AS pendente FROM solicitacoes_declaracoes WHERE aluno_id=%s AND entregue=0", (aluno_id,))
@@ -1291,30 +1472,52 @@ def verificar_questoes(disciplina_id):
 
 @app.route("/mew/salvar-nota-final", methods=["POST"])
 def mew_salvar_nota_final():
+    """Compatibilidade com a tela antiga: salva a final no mesmo modelo usado pelo MEW atual."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
+        return jsonify({"success": False, "message": "Não autorizado"}), 403
 
+    conn = None
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
+        aluno_id = int(data.get("aluno_id"))
+        disciplina_id = int(data.get("disciplina_id"))
+        valor = data.get("nota_final")
+        nota_final = None if valor in (None, "") else float(str(valor).replace(",", "."))
+        if nota_final is not None and not 0 <= nota_final <= 10:
+            raise ValueError("A nota final deve estar entre 0 e 10.")
+
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        nota_final = data['nota_final'] if data['nota_final'] else None
+        media_disciplina = round(_media_notas_logicas(cursor, aluno_id, disciplina_id), 2)
+        media_final = round((media_disciplina + nota_final) / 2, 2) if nota_final is not None else None
+        status = "aprovado" if media_final is not None and media_final >= 7 else ("reprovado" if media_final is not None else "cursando")
 
         cursor.execute("""
             INSERT INTO notas_finais
-            (aluno_id, disciplina_id, nota_final, data_avaliacao)
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
                 nota_final = EXCLUDED.nota_final,
-                data_avaliacao = EXCLUDED.data_avaliacao
-        """, (data['aluno_id'], data['disciplina_id'], nota_final))
-
+                media_disciplina = EXCLUDED.media_disciplina,
+                media_final = EXCLUDED.media_final,
+                status = EXCLUDED.status,
+                data_realizacao = EXCLUDED.data_realizacao
+        """, (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status))
         conn.commit()
-        conn.close()
-        return jsonify({"success": True, "message": "Nota final salva com sucesso!"})
+        return jsonify({
+            "success": True,
+            "message": "Nota final salva com sucesso!",
+            "media_disciplina": media_disciplina,
+            "media_final": media_final,
+            "status": status,
+        })
     except Exception as e:
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "message": f"Erro: {str(e)}"}), 400
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route("/disciplina/<int:disciplina_id>")
@@ -1420,8 +1623,17 @@ def instrucoes_prova(disciplina_id, capitulo_numero):
 
     cursor.execute("""
         SELECT n.id FROM notas n
-        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
-    """, (aluno_id, disciplina_id, capitulo_numero))
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s
+          AND (
+              n.capitulo = %s OR
+              n.capitulo = (
+                  SELECT c.id FROM capitulos c
+                  WHERE c.disciplina_id = %s
+                  ORDER BY c.id LIMIT 1 OFFSET %s
+              )
+          )
+        LIMIT 1
+    """, (aluno_id, disciplina_id, capitulo_numero, disciplina_id, capitulo_numero - 1))
 
     if cursor.fetchone():
         conn.close()
@@ -1555,8 +1767,17 @@ def prova(disciplina_id, capitulo_numero):
 
     cursor.execute("""
         SELECT n.id FROM notas n
-        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
-    """, (aluno_id, disciplina_id, capitulo_numero))
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s
+          AND (
+              n.capitulo = %s OR
+              n.capitulo = (
+                  SELECT c.id FROM capitulos c
+                  WHERE c.disciplina_id = %s
+                  ORDER BY c.id LIMIT 1 OFFSET %s
+              )
+          )
+        LIMIT 1
+    """, (aluno_id, disciplina_id, capitulo_numero, disciplina_id, capitulo_numero - 1))
 
     if cursor.fetchone():
         conn.close()
@@ -1729,10 +1950,7 @@ def prova(disciplina_id, capitulo_numero):
         # Salvar nota no banco (SEM tempo)
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota)
-            VALUES (%s, %s, %s, %s)
-        """, (aluno_id, disciplina_id, capitulo_numero, nota))
+        _salvar_nota_logica(cursor, aluno_id, disciplina_id, capitulo_id, nota)
         conn.commit()
         conn.close()
 
@@ -1848,8 +2066,19 @@ def resultado_prova(disciplina_id, capitulo_numero):
         FROM notas n
         JOIN alunos a ON n.aluno_id = a.id
         JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = %s AND n.disciplina_id = %s AND n.capitulo = %s
-    """, (aluno_id, disciplina_id, capitulo_numero))
+        WHERE n.aluno_id = %s AND n.disciplina_id = %s
+          AND (
+              n.capitulo = (
+                  SELECT c.id FROM capitulos c
+                  WHERE c.disciplina_id = %s
+                  ORDER BY c.id LIMIT 1 OFFSET %s
+              )
+              OR n.capitulo = %s
+          )
+        ORDER BY CASE WHEN n.capitulo = %s THEN 0 ELSE 1 END, n.id DESC
+        LIMIT 1
+    """, (aluno_id, disciplina_id, disciplina_id, capitulo_numero - 1,
+          capitulo_numero, capitulo_numero))
 
     nota_info = cursor.fetchone()
 
@@ -3680,15 +3909,8 @@ def correcao_final(disciplina_id):
     # Calcular nota da prova final (0-10)
     nota_final = round((acertos / 30) * 10, 2)
 
-    # Calcular média das 4 provas da disciplina
-    cursor.execute("""
-        SELECT AVG(nota) as media_disciplina
-        FROM notas
-        WHERE aluno_id = %s AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    result = cursor.fetchone()
-    media_disciplina = result["media_disciplina"] if result and result["media_disciplina"] else 0
+    # Calcular média das unidades sem duplicar registros legado/canônico.
+    media_disciplina = round(_media_notas_logicas(cursor, aluno_id, disciplina_id), 2)
 
     # Calcular média final: (nota_final + media_disciplina) / 2
     media_final = round((nota_final + media_disciplina) / 2, 2)
@@ -3702,6 +3924,12 @@ def correcao_final(disciplina_id):
         INSERT INTO notas_finais
         (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+            nota_final=EXCLUDED.nota_final,
+            media_disciplina=EXCLUDED.media_disciplina,
+            media_final=EXCLUDED.media_final,
+            status=EXCLUDED.status,
+            data_realizacao=EXCLUDED.data_realizacao
     """, (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao))
 
     conn.commit()
@@ -3780,9 +4008,9 @@ def mew_avaliacao_final():
     total_provas = cursor.fetchone()["total"] or 0
 
     # Contar aprovados/reprovados
-    cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE status = 'aprovado'")
+    cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE LOWER(TRIM(COALESCE(status,''))) = 'aprovado'")
     total_aprovados = cursor.fetchone()["total"] or 0
-    cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE status = 'reprovado'")
+    cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE LOWER(TRIM(COALESCE(status,''))) = 'reprovado'")
     total_reprovados = cursor.fetchone()["total"] or 0
 
     # Buscar todas as disciplinas para o formulário
@@ -3997,126 +4225,113 @@ def exportar_questoes_excel(disciplina_id):
 
 @app.route("/situacao-academica")
 def situacao_academica():
-    """Página com situação acadêmica completa do aluno"""
+    """Situação acadêmica baseada diretamente no PostgreSQL, sem recalcular valores administrativos."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT nome, ra FROM alunos WHERE id = %s", (aluno_id,))
+        aluno = cursor.fetchone()
+        if not aluno:
+            flash("Aluno não encontrado.", "error")
+            return redirect(url_for("dashboard"))
 
-    # Buscar dados do aluno
-    cursor.execute("SELECT nome, ra FROM alunos WHERE id = %s", (aluno_id,))
-    aluno = cursor.fetchone()
+        cursor.execute("""
+            SELECT d.id, d.nome,
+                   addd.frequencia, addd.progresso_manual, addd.data_inicio,
+                   nf.nota_final, nf.media_disciplina, nf.media_final,
+                   nf.status AS status_final, nf.data_realizacao
+            FROM disciplinas d
+            JOIN aluno_disciplina ad ON d.id = ad.disciplina_id AND ad.aluno_id = %s
+            LEFT JOIN aluno_disciplina_datas addd
+              ON addd.aluno_id = ad.aluno_id AND addd.disciplina_id = d.id
+            LEFT JOIN notas_finais nf
+              ON nf.aluno_id = ad.aluno_id AND nf.disciplina_id = d.id
+            ORDER BY d.nome
+        """, (aluno_id,))
+        disciplinas_raw = cursor.fetchall()
 
-    if not aluno:
-        flash("Aluno não encontrado.", "error")
-        return redirect(url_for("dashboard"))
+        situacao_disciplinas = []
+        notas_finais = []
+        for row in disciplinas_raw:
+            d = dict(row)
+            capitulos = _capitulos_ordenados(cursor, d["id"])
+            unidades = _notas_logicas_disciplina(cursor, aluno_id, d["id"], capitulos)
+            for unidade in unidades:
+                # Campos compatíveis com o HTML antigo, mas sem expor ID interno como número da unidade.
+                unidade["capitulo"] = unidade["ordem"]
 
-    # Buscar disciplinas do aluno
-    cursor.execute("""
-        SELECT d.id, d.nome
-        FROM disciplinas d
-        JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        WHERE ad.aluno_id = %s
-        ORDER BY d.nome
-    """, (aluno_id,))
-    disciplinas = cursor.fetchall()
+            valores = [u["nota"] for u in unidades if u["nota"] is not None]
+            feitos = len(valores)
+            total = len(unidades)
+            media_capitulos = round(sum(valores) / feitos, 2) if feitos else 0.0
 
-    # Buscar notas dos capítulos
-    cursor.execute("""
-        SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
-        FROM notas n
-        JOIN disciplinas d ON n.disciplina_id = d.id
-        WHERE n.aluno_id = %s
-        ORDER BY n.disciplina_id, n.capitulo
-    """, (aluno_id,))
-    notas_capitulos = cursor.fetchall()
+            status_norm = _normalizar_status_academico(d.get("status_final"))
+            tem_final = d.get("nota_final") is not None or d.get("media_final") is not None or bool(status_norm in {"aprovado", "reprovado"})
+            if status_norm == "aprovado":
+                situacao = "Aprovado"
+            elif status_norm == "reprovado":
+                situacao = "Reprovado"
+            elif total > 0 and feitos >= total:
+                situacao = "Aguardando final"
+            elif feitos > 0 or int(d.get("progresso_manual") or 0) > 0 or d.get("data_inicio"):
+                situacao = "Em andamento"
+            else:
+                situacao = "Não iniciada"
 
-    # Buscar notas finais
-    cursor.execute("""
-        SELECT nf.*, d.nome as disciplina_nome
-        FROM notas_finais nf
-        JOIN disciplinas d ON nf.disciplina_id = d.id
-        WHERE nf.aluno_id = %s
-        ORDER BY d.nome
-    """, (aluno_id,))
-    notas_finais = cursor.fetchall()
+            media_final = float(d["media_final"]) if d.get("media_final") is not None else None
+            nota_final_obj = None
+            if tem_final:
+                nota_final_obj = {
+                    "nota_final": float(d["nota_final"]) if d.get("nota_final") is not None else None,
+                    "media_disciplina": float(d["media_disciplina"]) if d.get("media_disciplina") is not None else media_capitulos,
+                    "media_final": media_final,
+                    "status": status_norm or "cursando",
+                    "data_realizacao": d.get("data_realizacao") or "",
+                }
+                notas_finais.append({"disciplina_id": d["id"], **nota_final_obj})
 
-    # Calcular situação de cada disciplina
-    situacao_disciplinas = []
+            frequencia = float(d["frequencia"]) if d.get("frequencia") is not None else None
+            situacao_disciplinas.append({
+                "id": d["id"],
+                "nome": d["nome"],
+                "notas_capitulos": unidades,
+                "nota_final": nota_final_obj,
+                "media_capitulos": media_capitulos,
+                "media_final": round(media_final, 2) if media_final is not None else None,
+                "frequencia": frequencia,
+                "progresso": int(d.get("progresso_manual")) if d.get("progresso_manual") is not None else None,
+                "status": status_norm or "cursando",
+                "situacao": situacao,
+                "capitulos_feitos": feitos,
+                "capitulos_total": total,
+            })
 
-    for d in disciplinas:
-        disciplina_id = d['id']
-        disciplina_nome = d['nome']
-
-        # Buscar notas dos capítulos desta disciplina
-        notas_disc = [n for n in notas_capitulos if n['disciplina_id'] == disciplina_id]
-
-        # Buscar nota final desta disciplina
-        nota_final = next((nf for nf in notas_finais if nf['disciplina_id'] == disciplina_id), None)
-
-        # Calcular média dos capítulos
-        media_capitulos = 0
-        if notas_disc:
-            media_capitulos = sum(n['nota'] for n in notas_disc) / len(notas_disc)
-
-        # Calcular situação
-        status = "cursando"
-        media_final = None
-        situacao = "Cursando"
-
-        if nota_final:
-            media_final = nota_final['media_final']
-            status = nota_final['status']
-            situacao = "Aprovado" if status == "aprovado" else "Reprovado"
-        elif len(notas_disc) == 4:  # Todas as 4 provas feitas, mas sem final
-            media_final = media_capitulos
-            situacao = "Aguardando final"
-            status = "aguardando_final"
-        elif len(notas_disc) > 0:  # Algumas provas feitas
-            situacao = "Em andamento"
-            status = "cursando"
-
-        situacao_disciplinas.append({
-            'id': disciplina_id,
-            'nome': disciplina_nome,
-            'notas_capitulos': notas_disc,
-            'nota_final': nota_final,
-            'media_capitulos': round(media_capitulos, 2) if notas_disc else 0,
-            'media_final': round(media_final, 2) if media_final else None,
-            'status': status,
-            'situacao': situacao,
-            'capitulos_feitos': len(notas_disc),
-            'capitulos_total': 4
-        })
-
-    # Calcular estatísticas gerais
-    total_disciplinas = len(situacao_disciplinas)
-    disciplinas_aprovadas = len([d for d in situacao_disciplinas if d['situacao'] == "Aprovado"])
-    disciplinas_reprovadas = len([d for d in situacao_disciplinas if d['situacao'] == "Reprovado"])
-    disciplinas_cursando = len([d for d in situacao_disciplinas if d['situacao'] == "Em andamento"])
-    disciplinas_aguardando_final = len([d for d in situacao_disciplinas if d['situacao'] == "Aguardando final"])
-
-    # Calcular média geral (considerando apenas disciplinas com nota final)
-    disciplinas_com_final = [d for d in situacao_disciplinas if d['media_final'] is not None]
-    media_geral = sum(d['media_final'] for d in disciplinas_com_final) / len(disciplinas_com_final) if disciplinas_com_final else 0
-
-    conn.close()
+        total_disciplinas = len(situacao_disciplinas)
+        disciplinas_aprovadas = sum(1 for d in situacao_disciplinas if d["situacao"] == "Aprovado")
+        disciplinas_reprovadas = sum(1 for d in situacao_disciplinas if d["situacao"] == "Reprovado")
+        disciplinas_cursando = sum(1 for d in situacao_disciplinas if d["situacao"] in {"Em andamento", "Não iniciada"})
+        disciplinas_aguardando_final = sum(1 for d in situacao_disciplinas if d["situacao"] == "Aguardando final")
+        finais = [d["media_final"] for d in situacao_disciplinas if d["media_final"] is not None]
+        media_geral = round(sum(finais) / len(finais), 2) if finais else 0
+    finally:
+        conn.close()
 
     return render_template(
         "situacao_academica.html",
-        aluno_nome=aluno['nome'],
-        aluno_ra=aluno['ra'],
+        aluno_nome=aluno["nome"], aluno_ra=aluno["ra"],
         situacao_disciplinas=situacao_disciplinas,
         total_disciplinas=total_disciplinas,
         disciplinas_aprovadas=disciplinas_aprovadas,
         disciplinas_reprovadas=disciplinas_reprovadas,
         disciplinas_cursando=disciplinas_cursando,
         disciplinas_aguardando_final=disciplinas_aguardando_final,
-        media_geral=round(media_geral, 2),
+        media_geral=media_geral,
         notas_finais=notas_finais,
-        now=datetime.now()
+        now=datetime.now(),
     )
 # ==========================
 # ADICIONE ESTA FUNÇÃO PARA VERIFICAR DISPONIBILIDADE
@@ -4479,19 +4694,21 @@ def mew_notas_aluno(aluno_id):
         conn.close()
         return "Aluno não encontrado", 404
 
-    # Buscar disciplinas do aluno
+    # Buscar disciplinas e contar unidades pelo mapeamento real de capítulos.
     cursor.execute("""
-        SELECT d.id, d.nome,
-               (SELECT COUNT(*) FROM capitulos WHERE disciplina_id = d.id) as total_capitulos,
-               (SELECT COUNT(DISTINCT capitulo) FROM notas
-                WHERE aluno_id = %s AND disciplina_id = d.id) as provas_feitas
+        SELECT d.id, d.nome
         FROM disciplinas d
         JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
         WHERE ad.aluno_id = %s
         ORDER BY d.nome
-    """, (aluno_id, aluno_id))
-
-    disciplinas = cursor.fetchall()
+    """, (aluno_id,))
+    disciplinas = []
+    for row in cursor.fetchall():
+        d = dict(row)
+        unidades = _notas_logicas_disciplina(cursor, aluno_id, d["id"])
+        d["total_capitulos"] = len(unidades)
+        d["provas_feitas"] = sum(1 for u in unidades if u["nota"] is not None)
+        disciplinas.append(d)
 
     conn.close()
 
@@ -4503,73 +4720,54 @@ def mew_notas_aluno(aluno_id):
 
 @app.route("/mew/gerenciar-notas/disciplina/<int:aluno_id>/<int:disciplina_id>")
 def mew_notas_disciplina(aluno_id, disciplina_id):
-    """Mostra e gerencia notas de uma disciplina específica"""
+    """Mostra e gerencia notas de uma disciplina específica."""
     if not session.get("mew_admin"):
         return redirect("/mew/login")
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Buscar informações do aluno e disciplina
     cursor.execute("SELECT id, nome, ra FROM alunos WHERE id = %s", (aluno_id,))
     aluno = cursor.fetchone()
-
     cursor.execute("SELECT id, nome FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
-
     if not aluno or not disciplina:
         conn.close()
         return "Aluno ou disciplina não encontrados", 404
 
-    # Buscar capítulos da disciplina
-    cursor.execute("SELECT id, titulo FROM capitulos WHERE disciplina_id = %s ORDER BY id", (disciplina_id,))
-    capitulos = cursor.fetchall()
+    capitulos = _capitulos_ordenados(cursor, disciplina_id)
+    notas_logicas = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id, capitulos)
+    notas_existentes = {n["capitulo_id"]: n["nota"] for n in notas_logicas if n["nota"] is not None}
 
-    # Buscar notas existentes
-    cursor.execute("""
-        SELECT capitulo, nota
-        FROM notas
-        WHERE aluno_id = %s AND disciplina_id = %s
-        ORDER BY capitulo
-    """, (aluno_id, disciplina_id))
-    notas_existentes = {row['capitulo']: row['nota'] for row in cursor.fetchall()}
-
-    # Buscar nota final (se existir)
     cursor.execute("""
         SELECT nota_final, media_disciplina, media_final, status
         FROM notas_finais
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     nota_final = cursor.fetchone()
+    if nota_final:
+        nota_final = dict(nota_final)
+        nota_final["status"] = _normalizar_status_academico(nota_final.get("status"))
 
-    # Buscar datas de liberação dos capítulos
     cursor.execute("""
-        SELECT data_inicio, prova_final_aberta
+        SELECT data_inicio, prova_final_aberta, frequencia, progresso_manual
         FROM aluno_disciplina_datas
         WHERE aluno_id = %s AND disciplina_id = %s
     """, (aluno_id, disciplina_id))
     datas_info = cursor.fetchone()
+    datas_info = dict(datas_info) if datas_info else {}
 
-    # Calcular progresso atual
     total_capitulos = len(capitulos)
-    provas_feitas = len(notas_existentes)
-    progresso_atual = 0
-    if total_capitulos > 0:
-        progresso_percentual = (provas_feitas / total_capitulos) * 100
-        # Arredondar para 0, 25, 50, 75, 100
-        if progresso_percentual == 100:
-            progresso_atual = 100
-        elif progresso_percentual >= 75:
-            progresso_atual = 75
-        elif progresso_percentual >= 50:
-            progresso_atual = 50
-        elif progresso_percentual >= 25:
-            progresso_atual = 25
-        else:
-            progresso_atual = 0
+    provas_feitas = len([n for n in notas_logicas if n["nota"] is not None])
+    if datas_info.get("progresso_manual") is not None:
+        progresso_atual = max(0, min(100, int(datas_info.get("progresso_manual") or 0)))
+    elif total_capitulos:
+        bruto = round((provas_feitas / total_capitulos) * 100)
+        progresso_atual = 100 if bruto >= 100 else 75 if bruto >= 75 else 50 if bruto >= 50 else 25 if bruto > 0 else 0
+    else:
+        progresso_atual = 0
 
+    frequencia_atual = datas_info.get("frequencia")
     conn.close()
-
     return render_template(
         "mew/notas_editar.html",
         aluno=aluno,
@@ -4579,186 +4777,165 @@ def mew_notas_disciplina(aluno_id, disciplina_id):
         nota_final=nota_final,
         datas_info=datas_info,
         progresso_atual=progresso_atual,
+        frequencia_atual=frequencia_atual,
         total_capitulos=total_capitulos,
-        provas_feitas=provas_feitas
+        provas_feitas=provas_feitas,
     )
+
 
 @app.route("/mew/gerenciar-notas/salvar", methods=["POST"])
 def mew_salvar_notas():
-    """Salva ou atualiza notas do aluno"""
+    """Persiste notas, prova final, frequência e progresso sem apagar avaliações."""
     if not session.get("mew_admin"):
-        return jsonify({"success": False, "message": "Não autorizado"})
+        return jsonify({"success": False, "message": "Não autorizado"}), 403
 
     aluno_id = request.form.get("aluno_id")
     disciplina_id = request.form.get("disciplina_id")
     acao = request.form.get("acao")
-
     if not all([aluno_id, disciplina_id, acao]):
-        return jsonify({"success": False, "message": "Dados incompletos"})
+        return jsonify({"success": False, "message": "Dados incompletos"}), 400
+
+    try:
+        aluno_id = int(aluno_id)
+        disciplina_id = int(disciplina_id)
+    except Exception:
+        return jsonify({"success": False, "message": "Aluno ou disciplina inválidos"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
     try:
         if acao == "salvar_nota":
             capitulo = request.form.get("capitulo")
-            nota = request.form.get("nota")
+            nota_raw = request.form.get("nota")
+            if capitulo in (None, "") or nota_raw in (None, ""):
+                raise ValueError("Capítulo ou nota não informados")
+            nota = float(str(nota_raw).replace(",", "."))
+            if nota < 0 or nota > 10:
+                raise ValueError("A nota deve estar entre 0 e 10")
+            capitulo_id, ordem = _salvar_nota_logica(cursor, aluno_id, disciplina_id, capitulo, nota)
 
-            if not capitulo or not nota:
-                conn.close()
-                return jsonify({"success": False, "message": "Capítulo ou nota não informados"})
-
-            # Verificar se já existe nota
-            cursor.execute("""
-                SELECT id FROM notas
-                WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
-            """, (aluno_id, disciplina_id, capitulo))
-
-            if cursor.fetchone():
-                # Atualizar
+            media_disciplina = _media_notas_logicas(cursor, aluno_id, disciplina_id)
+            cursor.execute("SELECT nota_final FROM notas_finais WHERE aluno_id=%s AND disciplina_id=%s", (aluno_id, disciplina_id))
+            final_row = cursor.fetchone()
+            media_final = None
+            status = None
+            if final_row and final_row.get("nota_final") is not None:
+                media_final = round((float(final_row["nota_final"]) + media_disciplina) / 2, 2)
+                status = "aprovado" if media_final >= 7 else "reprovado"
                 cursor.execute("""
-                    UPDATE notas SET nota = %s
-                    WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
-                """, (nota, aluno_id, disciplina_id, capitulo))
-            else:
-                # Inserir
-                cursor.execute("""
-                    INSERT INTO notas (aluno_id, disciplina_id, capitulo, nota)
-                    VALUES (%s, %s, %s, %s)
-                """, (aluno_id, disciplina_id, capitulo, nota))
-
-            message = "Nota salva com sucesso"
+                    UPDATE notas_finais
+                    SET media_disciplina=%s, media_final=%s, status=%s
+                    WHERE aluno_id=%s AND disciplina_id=%s
+                """, (round(media_disciplina, 2), media_final, status, aluno_id, disciplina_id))
+            message = f"Nota da Unidade {ordem} salva no banco"
+            payload_extra = {
+                "capitulo_id": capitulo_id, "ordem": ordem, "nota": nota,
+                "media_disciplina": round(media_disciplina, 2),
+                "media_final": media_final, "status": status,
+            }
 
         elif acao == "excluir_nota":
             capitulo = request.form.get("capitulo")
-
-            if not capitulo:
-                conn.close()
-                return jsonify({"success": False, "message": "Capítulo não informado"})
-
-            cursor.execute("""
-                DELETE FROM notas
-                WHERE aluno_id = %s AND disciplina_id = %s AND capitulo = %s
-            """, (aluno_id, disciplina_id, capitulo))
-
-            message = "Nota excluída com sucesso"
-
-        elif acao == "salvar_final":
-            nota_final_val = request.form.get("nota_final")
-            media_disciplina = request.form.get("media_disciplina")
-            media_final = request.form.get("media_final")
-            status = request.form.get("status")
-
-            if not all([nota_final_val, media_disciplina, media_final, status]):
-                conn.close()
-                return jsonify({"success": False, "message": "Dados da prova final incompletos"})
-
-            # Verificar se já existe nota final
-            cursor.execute("""
-                SELECT id FROM notas_finais
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
-
-            if cursor.fetchone():
-                # Atualizar
+            if capitulo in (None, ""):
+                raise ValueError("Capítulo não informado")
+            _excluir_nota_logica(cursor, aluno_id, disciplina_id, capitulo)
+            media_disciplina = _media_notas_logicas(cursor, aluno_id, disciplina_id)
+            cursor.execute("SELECT nota_final FROM notas_finais WHERE aluno_id=%s AND disciplina_id=%s", (aluno_id, disciplina_id))
+            final_row = cursor.fetchone()
+            media_final = None
+            status = None
+            if final_row and final_row.get("nota_final") is not None:
+                media_final = round((float(final_row["nota_final"]) + media_disciplina) / 2, 2)
+                status = "aprovado" if media_final >= 7 else "reprovado"
                 cursor.execute("""
-                    UPDATE notas_finais
-                    SET nota_final = %s, media_disciplina = %s, media_final = %s, status = %s
-                    WHERE aluno_id = %s AND disciplina_id = %s
-                """, (nota_final_val, media_disciplina, media_final, status, aluno_id, disciplina_id))
-            else:
-                # Inserir
-                data_realizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
-                cursor.execute("""
-                    INSERT INTO notas_finais
-                    (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (aluno_id, disciplina_id, nota_final_val, media_disciplina, media_final, status, data_realizacao))
-
-            message = "Nota final salva com sucesso"
-
-        elif acao == "excluir_final":
-            cursor.execute("""
-                DELETE FROM notas_finais
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
-
-            message = "Nota final excluída com sucesso"
-
-        elif acao == "atualizar_progresso":
-            novo_progresso = request.form.get("progresso")
-            data_inicio = request.form.get("data_inicio")
-            prova_final_aberta = request.form.get("prova_final_aberta", "0")
-
-            if not novo_progresso:
-                conn.close()
-                return jsonify({"success": False, "message": "Progresso não informado"})
-
-            # Determinar capítulos feitos baseado no progresso
-            progresso_map = {
-                "0": 0,   # 0% - nenhuma prova
-                "25": 1,  # 25% - 1ª prova
-                "50": 2,  # 50% - 2ªs provas
-                "75": 3,  # 75% - 3ªs provas
-                "100": 4  # 100% - 4ªs provas
+                    UPDATE notas_finais SET media_disciplina=%s, media_final=%s, status=%s
+                    WHERE aluno_id=%s AND disciplina_id=%s
+                """, (round(media_disciplina, 2), media_final, status, aluno_id, disciplina_id))
+            message = "Nota excluída do banco"
+            payload_extra = {
+                "media_disciplina": round(media_disciplina, 2),
+                "media_final": media_final, "status": status,
             }
 
-            cap_feitos = progresso_map.get(novo_progresso, 0)
+        elif acao == "salvar_final":
+            nota_final_raw = request.form.get("nota_final")
+            if nota_final_raw in (None, ""):
+                raise ValueError("Informe a nota da prova final")
+            nota_final_val = float(str(nota_final_raw).replace(",", "."))
+            if nota_final_val < 0 or nota_final_val > 10:
+                raise ValueError("A nota final deve estar entre 0 e 10")
 
-            # Remover notas além do progresso
-            if cap_feitos < 4:
-                cursor.execute("""
-                    DELETE FROM notas
-                    WHERE aluno_id = %s AND disciplina_id = %s AND capitulo > %s
-                """, (aluno_id, disciplina_id, cap_feitos))
-
-            # Atualizar datas
+            media_auto = round(_media_notas_logicas(cursor, aluno_id, disciplina_id), 2)
+            md_raw = request.form.get("media_disciplina")
+            mf_raw = request.form.get("media_final")
+            media_disciplina = float(str(md_raw).replace(",", ".")) if md_raw not in (None, "") else media_auto
+            media_final = float(str(mf_raw).replace(",", ".")) if mf_raw not in (None, "") else round((nota_final_val + media_disciplina) / 2, 2)
+            if not (0 <= media_disciplina <= 10 and 0 <= media_final <= 10):
+                raise ValueError("As médias devem estar entre 0 e 10")
+            status = _normalizar_status_academico(request.form.get("status"))
+            if status not in {"aprovado", "reprovado", "cursando"}:
+                status = "aprovado" if media_final >= 7 else "reprovado"
+            agora = datetime.now().strftime("%d/%m/%Y %H:%M")
             cursor.execute("""
-                SELECT id FROM aluno_disciplina_datas
-                WHERE aluno_id = %s AND disciplina_id = %s
-            """, (aluno_id, disciplina_id))
+                INSERT INTO notas_finais
+                (aluno_id, disciplina_id, nota_final, media_disciplina, media_final, status, data_realizacao)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+                    nota_final=EXCLUDED.nota_final,
+                    media_disciplina=EXCLUDED.media_disciplina,
+                    media_final=EXCLUDED.media_final,
+                    status=EXCLUDED.status,
+                    data_realizacao=EXCLUDED.data_realizacao
+            """, (aluno_id, disciplina_id, nota_final_val, media_disciplina, media_final, status, agora))
+            message = "Nota final, médias e situação salvas no banco"
+            payload_extra = {"nota_final": nota_final_val, "media_disciplina": media_disciplina, "media_final": media_final, "status": status}
 
-            if cursor.fetchone():
-                # Atualizar
-                if data_inicio:
-                    cursor.execute("""
-                        UPDATE aluno_disciplina_datas
-                        SET data_inicio = %s, prova_final_aberta = %s
-                        WHERE aluno_id = %s AND disciplina_id = %s
-                    """, (data_inicio, prova_final_aberta, aluno_id, disciplina_id))
-                else:
-                    cursor.execute("""
-                        UPDATE aluno_disciplina_datas
-                        SET prova_final_aberta = %s
-                        WHERE aluno_id = %s AND disciplina_id = %s
-                    """, (prova_final_aberta, aluno_id, disciplina_id))
-            else:
-                # Inserir (se tiver data_inicio)
-                if data_inicio:
-                    cursor.execute("""
-                        INSERT INTO aluno_disciplina_datas
-                        (aluno_id, disciplina_id, data_inicio, prova_final_aberta)
-                        VALUES (%s, %s, %s, %s)
-                    """, (aluno_id, disciplina_id, data_inicio, prova_final_aberta))
+        elif acao == "excluir_final":
+            cursor.execute("DELETE FROM notas_finais WHERE aluno_id=%s AND disciplina_id=%s", (aluno_id, disciplina_id))
+            message = "Nota final excluída do banco"
+            payload_extra = {}
 
-            message = "Progresso atualizado com sucesso"
+        elif acao == "atualizar_progresso":
+            progresso_raw = request.form.get("progresso")
+            frequencia_raw = request.form.get("frequencia")
+            data_inicio = request.form.get("data_inicio") or None
+            prova_final_aberta = 1 if str(request.form.get("prova_final_aberta", "0")) == "1" else 0
+            if progresso_raw in (None, ""):
+                raise ValueError("Progresso não informado")
+            progresso = int(float(progresso_raw))
+            if progresso < 0 or progresso > 100:
+                raise ValueError("Progresso deve estar entre 0 e 100")
+            frequencia = None
+            if frequencia_raw not in (None, ""):
+                frequencia = float(str(frequencia_raw).replace(",", "."))
+                if frequencia < 0 or frequencia > 100:
+                    raise ValueError("Frequência deve estar entre 0 e 100")
 
+            # Importante: alterar progresso/frequência NUNCA apaga nota.
+            cursor.execute("""
+                INSERT INTO aluno_disciplina_datas
+                    (aluno_id, disciplina_id, data_inicio, prova_final_aberta, frequencia, progresso_manual)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET
+                    data_inicio=COALESCE(EXCLUDED.data_inicio, aluno_disciplina_datas.data_inicio),
+                    prova_final_aberta=EXCLUDED.prova_final_aberta,
+                    frequencia=COALESCE(EXCLUDED.frequencia, aluno_disciplina_datas.frequencia),
+                    progresso_manual=EXCLUDED.progresso_manual
+            """, (aluno_id, disciplina_id, data_inicio, prova_final_aberta, frequencia, progresso))
+            message = "Progresso e frequência salvos no banco"
+            payload_extra = {"progresso": progresso, "frequencia": frequencia}
         else:
-            conn.close()
-            return jsonify({"success": False, "message": "Ação inválida"})
+            raise ValueError("Ação inválida")
 
         conn.commit()
-        conn.close()
-
-        return jsonify({
-            "success": True,
-            "message": message,
-            "redirect": f"/mew/gerenciar-notas/disciplina/{aluno_id}/{disciplina_id}"
-        })
-
+        resposta = {"success": True, "message": message}
+        resposta.update(payload_extra)
+        return jsonify(resposta)
     except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": f"Erro: {str(e)}"}), 400
+    finally:
         conn.close()
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
 
 @app.route('/mew/buscar-dados-aluno/<int:aluno_id>')
 def buscar_dados_aluno(aluno_id):
@@ -4969,120 +5146,71 @@ def buscar_aluno_por_id(aluno_id):
 
 
 def buscar_disciplinas_por_aluno_id(aluno_id):
-    """Busca todas as disciplinas de um aluno com notas - VERSÃO MELHORADA"""
+    """Busca disciplinas e notas usando os capítulos reais; lê legado 1..N sem duplicar."""
     conn = get_db_connection()
     cursor = conn.cursor()
-
     cursor.execute("""
-        SELECT
-            d.id,
-            d.nome,
-            d.carga_horaria,
-            addd.data_inicio,
-            addd.data_fim_previsto,
-            docente_info.docente_nome,
-            docente_info.docente_titulacao,
-            docente_info.ano_semestre,
-            n1.nota as nota1,
-            n2.nota as nota2,
-            n3.nota as nota3,
-            n4.nota as nota4,
-            nf.nota_final,
-            nf.media_disciplina,
-            nf.media_final,
-            nf.status as status_final
+        SELECT d.id, d.nome, d.carga_horaria,
+               addd.data_inicio, addd.data_fim_previsto, addd.frequencia, addd.progresso_manual,
+               docente_info.docente_nome, docente_info.docente_titulacao, docente_info.ano_semestre,
+               nf.nota_final, nf.media_disciplina, nf.media_final, nf.status AS status_final
         FROM disciplinas d
-        JOIN aluno_disciplina ad ON d.id = ad.disciplina_id
-        LEFT JOIN aluno_disciplina_datas addd ON ad.aluno_id = addd.aluno_id
-            AND ad.disciplina_id = addd.disciplina_id
+        JOIN aluno_disciplina ad ON d.id = ad.disciplina_id AND ad.aluno_id = %s
+        LEFT JOIN aluno_disciplina_datas addd
+          ON ad.aluno_id = addd.aluno_id AND ad.disciplina_id = addd.disciplina_id
         LEFT JOIN LATERAL (
-            SELECT doc.nome AS docente_nome,
-                   doc.titulacao AS docente_titulacao,
-                   dd.ano_semestre
+            SELECT doc.nome AS docente_nome, doc.titulacao AS docente_titulacao, dd.ano_semestre
             FROM disciplina_docente dd
             JOIN docentes doc ON dd.docente_id = doc.id
-            WHERE dd.disciplina_id = d.id
-              AND COALESCE(doc.ativo, 1) = 1
-            ORDER BY dd.id DESC
-            LIMIT 1
+            WHERE dd.disciplina_id = d.id AND COALESCE(doc.ativo, 1) = 1
+            ORDER BY dd.id DESC LIMIT 1
         ) docente_info ON TRUE
-        LEFT JOIN notas n1 ON ad.aluno_id = n1.aluno_id AND d.id = n1.disciplina_id AND n1.capitulo = 1
-        LEFT JOIN notas n2 ON ad.aluno_id = n2.aluno_id AND d.id = n2.disciplina_id AND n2.capitulo = 2
-        LEFT JOIN notas n3 ON ad.aluno_id = n3.aluno_id AND d.id = n3.disciplina_id AND n3.capitulo = 3
-        LEFT JOIN notas n4 ON ad.aluno_id = n4.aluno_id AND d.id = n4.disciplina_id AND n4.capitulo = 4
-        LEFT JOIN notas_finais nf ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
-        WHERE ad.aluno_id = %s
+        LEFT JOIN notas_finais nf
+          ON ad.aluno_id = nf.aluno_id AND d.id = nf.disciplina_id
         ORDER BY d.nome
     """, (aluno_id,))
-
     disciplinas_raw = cursor.fetchall()
     disciplinas = []
 
-    from datetime import datetime
+    for row in disciplinas_raw:
+        disc = dict(row)
+        carga_horaria = int(disc.get("carga_horaria") or 80)
+        docente_display = disc.get("docente_nome") or "Docente Titular"
+        if disc.get("docente_nome") and disc.get("docente_titulacao"):
+            docente_display += f" ({disc['docente_titulacao']})"
 
-    for disc in disciplinas_raw:
-        # Determinar carga horária
-        carga_horaria = disc['carga_horaria'] if disc['carga_horaria'] else 80
-
-        # Determinar docente
-        docente_display = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
-        if disc['docente_nome']:
-            docente_display = disc['docente_nome']
-            if disc['docente_titulacao']:
-                docente_display += f" ({disc['docente_titulacao']})"
-
-        # Determinar período
-        periodo = disc['ano_semestre'] if disc['ano_semestre'] else ""
-        if not periodo and disc['data_inicio']:
-            try:
-                data_obj = datetime.strptime(disc['data_inicio'], "%d/%m/%Y")
-                ano = data_obj.year
-                mes = data_obj.month
-                semestre = "1" if mes <= 6 else "2"
-                periodo = f"{ano}.{semestre}"
-            except:
-                periodo = f"{datetime.now().year}.1"
-        elif not periodo:
+        periodo = disc.get("ano_semestre") or ""
+        if not periodo and disc.get("data_inicio"):
+            data_obj = _parse_data_sigeu(disc.get("data_inicio"))
+            if data_obj:
+                periodo = f"{data_obj.year}.{'1' if data_obj.month <= 6 else '2'}"
+        if not periodo:
             periodo = f"{datetime.now().year}.1"
 
-        # Determinar nota para exibição
-        nota_final = disc['media_final'] if disc['media_final'] is not None else disc['nota_final']
-        if nota_final is not None:
-            nota_exibicao = round(float(nota_final), 2)
-        else:
-            nota_exibicao = None
+        unidades = _notas_logicas_disciplina(cursor, aluno_id, disc["id"])
+        notas = [u["nota"] for u in unidades]
+        while len(notas) < 4:
+            notas.append(None)
+        nota_exibicao = disc.get("media_final") if disc.get("media_final") is not None else disc.get("nota_final")
+        nota_exibicao = round(float(nota_exibicao), 2) if nota_exibicao is not None else None
+        status_norm = _normalizar_status_academico(disc.get("status_final"))
+        status_display = "APROVADO" if status_norm == "aprovado" else "REPROVADO" if status_norm == "reprovado" else "CURSANDO"
+        semestre = str(periodo).split(".")[-1] if "." in str(periodo) else "1"
 
-        # Determinar status
-        if disc['status_final'] == 'aprovado':
-            status_display = 'APROVADO'
-        elif disc['status_final'] == 'reprovado':
-            status_display = 'REPROVADO'
-        else:
-            status_display = 'CURSANDO'
-
-        # Determinar semestre
-        semestre = periodo.split('.')[-1] if '.' in periodo else "1"
-
-        disciplina = {
-            'id': disc['id'],
-            'nome': disc['nome'],
-            'periodo': periodo,
-            'semestre': semestre,
-            'carga': carga_horaria,
-            'docente': docente_display,
-            'nota': nota_exibicao,
-            'status': status_display,
-            'nota1': disc['nota1'],
-            'nota2': disc['nota2'],
-            'nota3': disc['nota3'],
-            'nota4': disc['nota4'],
-            'nota_final': disc['nota_final'],
-            'media_final': disc['media_final']
-        }
-        disciplinas.append(disciplina)
-
+        disciplinas.append({
+            "id": disc["id"], "nome": disc["nome"], "periodo": periodo, "semestre": semestre,
+            "carga": carga_horaria, "carga_horaria": carga_horaria, "docente": docente_display,
+            "nota": nota_exibicao, "status": status_display,
+            "nota1": notas[0], "nota2": notas[1], "nota3": notas[2], "nota4": notas[3],
+            "notas_unidades": unidades,
+            "nota_final": disc.get("nota_final"), "media_disciplina": disc.get("media_disciplina"),
+            "media_final": disc.get("media_final"), "frequencia": disc.get("frequencia"),
+            "progresso_manual": disc.get("progresso_manual"),
+            "data_inicio": disc.get("data_inicio"), "data_fim_previsto": disc.get("data_fim_previsto"),
+        })
     conn.close()
     return disciplinas
+
 
 def buscar_dados_pessoais_completos(aluno_id):
     """Busca dados pessoais completos do aluno - VERSÃO COMPLETA"""
@@ -5498,7 +5626,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             if info_disc.get('titulacao'):
                 docente += f" ({info_disc['titulacao']})"
         else:
-            docente = 'Tatiane R. Costa — Coordenação Acadêmica SIGEU'
+            docente = 'Docente Titular'
 
         data_inicio_disc = info_disc.get('data_inicio')
         if data_inicio_disc:
@@ -5522,8 +5650,14 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
         # Determinar semestre
         semestre = periodo.split('.')[-1] if '.' in periodo else "1"
 
-        # 👇 USA O VALOR DO FORMULÁRIO PARA FREQUÊNCIA
-        frequencia = frequencia_manual
+        # Frequência administrativa é a fonte de verdade. O valor manual, quando informado,
+        # é persistido antes da geração; sem valor manual usamos o que já está no banco.
+        if str(frequencia_manual or "").strip().upper() not in {"", "N/I", "NI", "NONE"}:
+            frequencia = frequencia_manual
+        elif d.get("frequencia") is not None:
+            frequencia = f"{float(d.get('frequencia')):.0f}%"
+        else:
+            frequencia = "N/I"
 
         linhas += f"""
             <tr>
@@ -5561,6 +5695,7 @@ h1{{text-align:center;font-size:19pt;margin:16px 0 14px}}
 table{{width:100%;border-collapse:collapse;font-size:8.1pt}} thead{{display:table-header-group}} tr{{page-break-inside:avoid}}
 th,td{{border:1px solid #000;padding:4px;vertical-align:top}} th{{background:#fff;color:#000;text-transform:uppercase;font-size:7.3pt}}
 .resumo{{margin-top:12px;border:1px solid #000;padding:8px;display:flex;gap:16px;flex-wrap:wrap}}
+.assinatura{{margin:10mm auto 5mm;text-align:center;max-width:90mm}} .assinatura strong{{display:block;font-size:10pt}} .assinatura span{{display:block;font-size:8pt;margin-top:2px}} .assinatura small{{display:block;font-size:7pt;margin-top:3px}}
 .auth{{margin-top:10px;border-top:1px solid #000;padding-top:8px;display:grid;grid-template-columns:76px 1fr;gap:10px;align-items:center}}
 .auth img{{width:72px;height:72px}} .hash{{font-family:monospace;font-size:6.5pt;word-break:break-all;margin-top:4px}}
 .obs{{margin-top:11px;border:1px solid #000;padding:8px;font-size:7.6pt}}
@@ -5580,6 +5715,7 @@ th,td{{border:1px solid #000;padding:4px;vertical-align:top}} th{{background:#ff
 <tr><td colspan="3"><b>Carga Horária Total Aprovada</b></td><td><b>{carga_total_aprovada}H</b></td><td colspan="2"><b>Carga Horária Total Cursada</b></td><td colspan="2"><b>{carga_total_cursada}H</b></td></tr></tbody></table>
 <div class="resumo"><span><b>IRA:</b> {ira_display}</span><span><b>Disciplinas aprovadas:</b> {ira_info['disciplinas_aprovadas']}</span><span><b>Carga aprovada:</b> {carga_total_aprovada}H</span><span><b>Carga cursada:</b> {carga_total_cursada}H</span></div>
 <div class="obs"><b>Observação:</b> documento emitido para registro dos componentes curriculares cursados. A FACOP CERTIFICADORA atua na certificação documental conforme a parceria educacional registrada. Os dados acadêmicos e pessoais acima são mantidos conforme cadastro do estudante.</div>
+<div class="assinatura"><strong>Tatiane R. L. Costa</strong><span>Documento assinado eletronicamente</span><small>Assinatura validada pela certificação institucional.</small></div>
 <div class="auth"><img src="{qr_code_base64}" alt="QR Code"><div><b>Código:</b> {codigo}<br><b>Emissão:</b> {data_emissao}<br><b>Validade:</b> {data_validade}<div class="hash">SHA-256: {hash_documento}</div></div></div>
 <div class="rodape">GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA • Validação eletrônica pelo QR Code e código acima.</div>
 </div></body></html>'''
@@ -5792,7 +5928,7 @@ def mew_editar_docente(docente_id):
         titulacao = request.form.get("titulacao", "")
         email = request.form.get("email", "")
         telefone = request.form.get("telefone", "")
-        ativo = request.form.get("ativo", "1")
+        ativo = 1 if request.form.get("ativo") in {"1", "on", "true", "True"} else 0
 
         cursor.execute("""
             UPDATE docentes
@@ -5877,19 +6013,20 @@ def mew_atribuir_info_disciplina():
             WHERE id = %s
         """, (carga_horaria, disciplina_id))
 
-        # Se tiver docente, associar
+        # Uma disciplina tem um responsável atual para os documentos. Ao trocar, removemos
+        # a associação anterior para que o sistema não continue exibindo o docente antigo.
+        cursor.execute("DELETE FROM disciplina_docente WHERE disciplina_id = %s", (disciplina_id,))
         if docente_id and docente_id != "0":
-            # Remover associação anterior para este ano/semestre
-            cursor.execute("""
-                DELETE FROM disciplina_docente
-                WHERE disciplina_id = %s AND ano_semestre = %s
-            """, (disciplina_id, ano_semestre))
-
-            # Adicionar nova associação
             cursor.execute("""
                 INSERT INTO disciplina_docente (disciplina_id, docente_id, ano_semestre)
                 VALUES (%s, %s, %s)
             """, (disciplina_id, docente_id, ano_semestre))
+            cursor.execute("SELECT nome FROM docentes WHERE id = %s", (docente_id,))
+            docente_row = cursor.fetchone()
+            cursor.execute("UPDATE disciplinas SET docente_documental = %s WHERE id = %s",
+                           ((docente_row or {}).get("nome"), disciplina_id))
+        else:
+            cursor.execute("UPDATE disciplinas SET docente_documental = NULL WHERE id = %s", (disciplina_id,))
 
         conn.commit()
         conn.close()
@@ -6231,10 +6368,11 @@ def calcular_ira_aluno_completo(aluno_id):
 
     # Mapeamento de conceitos
     def nota_para_conceito(nota):
-        if nota >= 90: return ("A", 4.0)
-        elif nota >= 80: return ("B", 3.0)
-        elif nota >= 70: return ("C", 2.0)
-        elif nota >= 60: return ("D", 1.0)
+        # As notas do SIGEU estão na escala 0-10, não 0-100.
+        if nota >= 9: return ("A", 4.0)
+        elif nota >= 8: return ("B", 3.0)
+        elif nota >= 7: return ("C", 2.0)
+        elif nota >= 6: return ("D", 1.0)
         else: return ("F", 0.0)
 
     # Calcular IRA
@@ -6245,7 +6383,7 @@ def calcular_ira_aluno_completo(aluno_id):
     for disc in disciplinas:
         carga = disc['carga_horaria'] if disc['carga_horaria'] else 80
 
-        if disc['status'] == 'aprovado' and disc['media_final'] is not None:
+        if _normalizar_status_academico(disc.get('status')) == 'aprovado' and disc['media_final'] is not None:
             nota = disc['media_final']
             conceito, valor = nota_para_conceito(nota)
             soma_pontos += valor * carga
@@ -6524,10 +6662,10 @@ def gerar_historico_automatico_route():
         aluno_id = data.get('aluno_id')
         ano_manual = data.get('ano_historico')
 
-        # 👇 PEGAR OS VALORES MANUAIS DO FORMULÁRIO
-        ira_manual = data.get('ira_manual', 'N/I')
-        total_disciplinas_manual = data.get('total_disciplinas', '0')
-        frequencia = data.get('frequencia', 'N/I')  # 👈 DEFINIR A VARIÁVEL AQUI!
+        # Histórico é calculado pelo banco. O único valor administrativo opcional
+        # que pode ser atribuído aqui é a frequência; quando informado, ele é
+        # persistido antes da geração e passa a ser a fonte de verdade.
+        frequencia = data.get('frequencia', 'N/I')
 
         if not aluno_id:
             return jsonify({"success": False, "message": "Aluno não selecionado"})
@@ -6541,6 +6679,31 @@ def gerar_historico_automatico_route():
         disciplinas = buscar_disciplinas_por_aluno_id(aluno_id)
         if not disciplinas:
             return jsonify({"success": False, "message": "Aluno não tem disciplinas"})
+
+        # Se a frequência foi digitada no MEW, ela deixa de ser apenas texto do documento:
+        # passa a ser gravada no vínculo acadêmico e reaproveitada por todas as telas/documentos.
+        freq_texto = str(frequencia or "").strip().replace("%", "").replace(",", ".")
+        if freq_texto and freq_texto.upper() not in {"N/I", "NI", "NONE"}:
+            freq_valor = float(freq_texto)
+            if not 0 <= freq_valor <= 100:
+                return jsonify({"success": False, "message": "Frequência deve estar entre 0 e 100%"})
+            conn_freq = get_db_connection()
+            cur_freq = conn_freq.cursor()
+            try:
+                for disc in disciplinas:
+                    cur_freq.execute("""
+                        INSERT INTO aluno_disciplina_datas (aluno_id, disciplina_id, frequencia)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (aluno_id, disciplina_id) DO UPDATE SET frequencia = EXCLUDED.frequencia
+                    """, (aluno_id, disc["id"], freq_valor))
+                    disc["frequencia"] = freq_valor
+                conn_freq.commit()
+                frequencia = f"{freq_valor:.0f}%"
+            except Exception:
+                conn_freq.rollback()
+                raise
+            finally:
+                conn_freq.close()
 
         # Gerar código único
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -6561,18 +6724,9 @@ def gerar_historico_automatico_route():
         dados_qr = link_validacao
         qr_code_base64 = gerar_qrcode_base64(dados_qr)
 
-        # 👇 PASSAR OS VALORES MANUAIS PARA A FUNÇÃO (10 PARÂMETROS)
         html = gerar_historico_automatico(
-            aluno_id,
-            disciplinas,
-            aluno_completo,
-            qr_code_base64,
-            codigo,
-            hash_documento,
-            ano_manual,
-            ira_manual,
-            total_disciplinas_manual,
-            frequencia  # 👈 10º PARÂMETRO
+            aluno_id, disciplinas, aluno_completo, qr_code_base64,
+            codigo, hash_documento, ano_manual, frequencia_manual=frequencia
         )
 
         # Criar metadados
@@ -7122,6 +7276,12 @@ def mew_processar_plano_ensino():
     ementa_sugerida = (dados_recebidos.get("ementa") or "").strip()
     if not ementa_sugerida:
         return jsonify({"success": False, "message": "Informe uma sugestão de ementa."}), 400
+    try:
+        numero_unidades = int(dados_recebidos.get("numero_unidades") or 4)
+    except Exception:
+        numero_unidades = 4
+    if not 1 <= numero_unidades <= 12:
+        return jsonify({"success": False, "message": "A quantidade de unidades deve ficar entre 1 e 12."}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -7147,7 +7307,8 @@ def mew_processar_plano_ensino():
     dados_ia = {
         "disciplina": disc["nome"],
         "ementa": ementa_sugerida,
-        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas"
+        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas",
+        "numero_unidades": numero_unidades
     }
 
     try:
@@ -7162,6 +7323,9 @@ def mew_processar_plano_ensino():
         # Modalidade e pré-requisitos são gerados pela IA; metodologia e avaliação continuam institucionais/fixas.
         dados_html = dict(conteudo_ia)
         modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
+        # numero_unidades vem do formulário; removemos a cópia da resposta da IA
+        # para não duplicar o argumento ao montar o template.
+        dados_html.pop("numero_unidades", None)
 
         data_formatada = datetime.now().strftime("%d/%m/%Y")
         codigo = gerar_codigo_simples()
@@ -7184,6 +7348,7 @@ def mew_processar_plano_ensino():
             docente=docente,
             data_formatada=data_formatada,
             qr_code_base64=qr_code_base64,
+            numero_unidades=numero_unidades,
             **dados_html
         )
 
@@ -7213,6 +7378,7 @@ def mew_processar_plano_ensino():
             "docente": docente,
             "carga_horaria": carga_horaria,
             "modalidade": modalidade,
+            "numero_unidades": numero_unidades,
             "bibliografia_gerada_por_ia": True,
             "url_visualizar": f"/ver-documento/{codigo}",
             "data_emissao": data_emissao,
@@ -7996,13 +8162,12 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         .secretary-signature {{ border-bottom: 0 !important; text-align: center; box-shadow: none !important; }}
         .secretary-name {{ font-family: Arial, sans-serif !important; font-size: 9pt !important; font-style: normal !important; border-bottom: 0 !important; padding-bottom: 3px !important; }}
         .secretary-title {{ font-size: 10pt !important; color: #000 !important; }}
-        .signature-electronic {{ font-size: 8pt; color: #000; border-top: 1px solid #000; padding-top: 5px; display: block; width: 100%; }}
-        .signature-area {{ display:block !important; margin-top:8mm !important; padding-top:10px !important; border-top:1px solid #000 !important; }}
+        .signature-electronic {{ font-size: 8pt; color: #000; border-top: 0 !important; padding-top: 5px; display: block; width: 100%; }}
+        .signature-area {{ display:block !important; margin-top:8mm !important; padding-top:0 !important; border-top:0 !important; }}
         .digital-signature {{ padding:7px 9px !important; font-size:8pt !important; border-left:3px solid #000 !important; }}
         .hash-label {{ font-size:7pt !important; letter-spacing:1px !important; }}
         .hash-value {{ font-size:6.7pt !important; line-height:1.2 !important; padding:4px 6px !important; margin-top:4px !important; }}
         .academic-signature {{ max-width:95mm; margin:8mm auto 0; text-align:center; font-size:8pt; }}
-        .academic-signature-line {{ border-top:1px solid #000; margin-bottom:4px; }}
         .academic-signature strong {{ display:block; font-size:9.5pt; }}
         .academic-signature span {{ display:block; margin-top:2px; }}
         .academic-signature small {{ display:block; margin-top:3px; font-size:6.8pt; }}
@@ -8308,15 +8473,10 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
 
             <!-- REGISTRO E RESPONSÁVEL ACADÊMICO -->
             <div class="signature-area">
-                <div class="digital-signature">
-                    <span class="hash-label">REGISTRO ELETRÔNICO DE INTEGRIDADE • SHA-256</span>
-                    <div class="hash-value">{hash_completa}</div>
-                </div>
                 <div class="academic-signature">
-                    <div class="academic-signature-line"></div>
-                    <strong>{docente}</strong>
-                    <span>Assinado eletronicamente em {data_formatada}</span>
-                    <small>Registro eletrônico validado por Certificação Digital</small>
+                    <strong>Tatiane R. L. Costa</strong>
+                    <span>Documento assinado eletronicamente</span>
+                    <small>Assinatura validada pela certificação institucional.</small>
                 </div>
             </div>
 
@@ -9641,22 +9801,7 @@ def corrigir_projeto_final(projeto_id):
     aluno_id = projeto["aluno_id"]
     disciplina_id = projeto["disciplina_id"]
 
-    cursor.execute("""
-        SELECT AVG(nota) AS media_disciplina
-        FROM notas
-        WHERE aluno_id = %s
-          AND disciplina_id = %s
-    """, (
-        aluno_id,
-        disciplina_id
-    ))
-
-    resultado_media = cursor.fetchone()
-
-    if resultado_media and resultado_media["media_disciplina"] is not None:
-        media_disciplina = float(resultado_media["media_disciplina"])
-    else:
-        media_disciplina = 0
+    media_disciplina = round(_media_notas_logicas(cursor, aluno_id, disciplina_id), 2)
 
     nota_final = round(nota, 2)
     media_final = round((nota_final + media_disciplina) / 2, 2)
@@ -9910,7 +10055,7 @@ def _docente_documental_disciplina(cursor, disciplina_id, disciplina_nome):
         return row["docente_documental"]
 
     # Designação funcional: evita atribuir falsamente a disciplina a uma pessoa real/fictícia.
-    designacao = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
+    designacao = "Docente Titular"
     cursor.execute(
         "UPDATE disciplinas SET docente_documental = %s WHERE id = %s",
         (designacao, disciplina_id)
@@ -9929,7 +10074,7 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
 
     cursor.execute("""
         SELECT d.id, d.nome, COALESCE(d.carga_horaria, 80) AS carga_horaria,
-               addd.data_inicio, addd.data_fim_previsto,
+               addd.data_inicio, addd.data_fim_previsto, addd.frequencia, addd.progresso_manual,
                nf.nota_final, nf.media_disciplina, nf.media_final, nf.status AS status_final,
                nf.data_realizacao
         FROM disciplinas d
@@ -9949,11 +10094,8 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     cursor.execute("SELECT COUNT(*) AS total FROM capitulos WHERE disciplina_id = %s", (disciplina_id,))
     total_capitulos = int((cursor.fetchone() or {}).get("total") or 0)
 
-    cursor.execute("""
-        SELECT COUNT(DISTINCT capitulo) AS total
-        FROM notas WHERE aluno_id = %s AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-    capitulos_avaliados = int((cursor.fetchone() or {}).get("total") or 0)
+    unidades_documentais = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id)
+    capitulos_avaliados = sum(1 for u in unidades_documentais if u["nota"] is not None)
 
     cursor.execute("""
         SELECT corrigido, nota, arquivo_r2_key, arquivo_path, data_envio
@@ -9968,15 +10110,18 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     faltam_dias = max(0, 20 - dias_cursados)
 
     motivos = []
-    if not data_inicio:
-        motivos.append("data de início da disciplina não cadastrada")
-    elif faltam_dias > 0:
-        motivos.append(f"faltam {faltam_dias} dia(s) para completar o prazo mínimo de 20 dias")
+    progresso_manual = d.get("progresso_manual")
+    conclusao_administrativa = progresso_manual is not None and int(progresso_manual or 0) >= 100
+    if not conclusao_administrativa:
+        if not data_inicio:
+            motivos.append("data de início da disciplina não cadastrada")
+        elif faltam_dias > 0:
+            motivos.append(f"faltam {faltam_dias} dia(s) para completar o prazo mínimo de 20 dias")
 
-    if total_capitulos <= 0:
-        motivos.append("disciplina sem capítulos cadastrados")
-    elif capitulos_avaliados < total_capitulos:
-        motivos.append(f"faltam {total_capitulos - capitulos_avaliados} avaliação(ões) de capítulo")
+        if total_capitulos <= 0:
+            motivos.append("disciplina sem capítulos cadastrados")
+        elif capitulos_avaliados < total_capitulos:
+            motivos.append(f"faltam {total_capitulos - capitulos_avaliados} avaliação(ões) de capítulo")
 
     final_concluido = False
     final_tipo = "Prova Final"
@@ -9997,9 +10142,13 @@ def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     if final_concluido and not aprovado:
         motivos.append("disciplina ainda não consta como aprovada")
 
-    atividades_total = max(total_capitulos, 0) + 1
-    atividades_feitas = min(capitulos_avaliados, max(total_capitulos, 0)) + (1 if final_concluido else 0)
-    frequencia = round((atividades_feitas / atividades_total) * 100, 2) if atividades_total else 0.0
+    if d.get("frequencia") is not None:
+        frequencia = max(0.0, min(100.0, float(d.get("frequencia"))))
+    else:
+        # Compatibilidade para matrículas antigas que ainda não receberam frequência administrativa.
+        atividades_total = max(total_capitulos, 0) + 1
+        atividades_feitas = min(capitulos_avaliados, max(total_capitulos, 0)) + (1 if final_concluido else 0)
+        frequencia = round((atividades_feitas / atividades_total) * 100, 2) if atividades_total else 0.0
 
     docente = _docente_documental_disciplina(cursor, disciplina_id, d["nome"])
 
@@ -10142,6 +10291,7 @@ def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_document
     thead{{display:table-header-group}} tr{{page-break-inside:avoid}}
     th,td{{border:1px solid #000;padding:5px;vertical-align:top}} th{{background:#fff;color:#000;text-transform:uppercase;font-size:7.7pt;text-align:left}}
     .resumo{{margin-top:12px;border:1px solid #000;padding:8px;display:flex;gap:18px;flex-wrap:wrap}}
+    .assinatura{{margin:10mm auto 5mm;text-align:center;max-width:90mm}} .assinatura strong{{display:block;font-size:10pt}} .assinatura span{{display:block;font-size:8pt;margin-top:2px}} .assinatura small{{display:block;font-size:7pt;margin-top:3px}}
     .auth{{margin-top:14px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
     .auth img{{width:78px;height:78px}} .hash{{font-family:monospace;font-size:6.7pt;word-break:break-all;margin-top:4px}}
     .rodape{{margin-top:10px;border-top:1px solid #000;padding-top:6px;font-size:6.7pt;text-align:center}}
@@ -10163,6 +10313,7 @@ def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_document
       <table><thead><tr><th>Componente Curricular</th><th>CH</th><th>Docente</th><th>Média</th><th>Frequência</th><th>Situação</th><th>Início</th></tr></thead>
       <tbody>{''.join(linhas)}</tbody></table>
       <div class='resumo'><span><b>IRA:</b> {resumo['ira']:.2f}/10</span><span><b>Disciplinas:</b> {resumo['total_disciplinas']}</span><span><b>Aprovadas:</b> {resumo['disciplinas_aprovadas']}</span><span><b>Carga horária:</b> {resumo['carga_total']}h</span></div>
+      <div class='assinatura'><strong>Tatiane R. L. Costa</strong><span>Documento assinado eletronicamente</span><small>Assinatura validada pela certificação institucional.</small></div>
       <div class='auth'><img src='{qr_code}' alt='QR Code'><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>SHA-256: {escape(hash_documento)}</div></div></div>
       <div class='rodape'>Documento eletrônico autenticado. Validação pelo código, QR Code e hash de integridade.</div>
     </div></body></html>"""
@@ -10190,7 +10341,6 @@ def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
     .dados{{border:1px solid #000;margin:12px 0;padding:8px 10px}}
     .dados div{{margin:3px 0}}
     .assinatura{{margin:12mm auto 8mm;text-align:center;max-width:88mm}}
-    .assinatura .linha{{border-top:1px solid #000;margin-bottom:5px}}
     .assinatura strong{{display:block;font-size:11pt}} .assinatura span{{display:block;font-size:8.5pt;margin-top:2px}}
     .assinatura small{{display:block;font-size:6.8pt;margin-top:5px}}
     .auth{{margin-top:14px;border-top:1px solid #000;padding-top:10px;display:grid;grid-template-columns:82px 1fr;gap:12px;align-items:center}}
@@ -10207,7 +10357,7 @@ def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
       <p>A conclusão foi registrada em {escape(data_conclusao)}. O docente/responsável acadêmico registrado para o componente é <b>{escape(d.get('docente') or 'N/I')}</b>.</p>
       <p>A certificação documental, quando aplicável, é realizada pela <b>FACOP CERTIFICADORA</b> — Faculdade do Centro Oeste Paulista LTDA, CNPJ 04.344.730/0001-60, credenciada pela Portaria MEC nº 887 de 26/07/2017, no âmbito da parceria educacional registrada no sistema.</p>
       <div class='dados'><div><b>Unidade Curricular:</b> {escape(str(unidade_curricular))}</div><div><b>Situação:</b> APROVADO</div><div class='wide'><b>Documento:</b> emissão acadêmica eletrônica autenticada por código, QR Code e hash.</div></div>
-      <div class='assinatura'><div class='linha'></div><strong>Tatiane Costa Lourenço</strong><span>Secretaria Acadêmica</span><small>Assinatura eletrônica institucional vinculada ao código e ao hash deste documento.</small></div>
+      <div class='assinatura'><strong>Tatiane R. L. Costa</strong><span>Documento assinado eletronicamente</span><small>Assinatura validada pela certificação institucional.</small></div>
       <div class='auth'><img src='{qr_code}' alt='QR Code'><div><b>Código:</b> {escape(codigo)}<br><b>Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<div class='hash'>SHA-256: {escape(hash_documento)}</div></div></div>
       <div class='rodape'>GRUPO EDUCACIONAL UNIFICADO • SIGEU Educacional • FACOP CERTIFICADORA</div>
     </div></body></html>"""
@@ -10937,11 +11087,11 @@ def _preco_total_pedido_publico(itens):
 
 
 def _formatar_docente_publico(nome, titulacao=None):
-    """Formata um docente REAL já cadastrado no MEW; não fabrica identidade acadêmica."""
+    """Formata um docente REAL já cadastrado no MEW."""
     nome = _limpar_texto_publico(nome, 180)
     titulo = _limpar_texto_publico(titulacao, 120).lower()
     if not nome:
-        return "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
+        return "Docente Titular"
     if re.match(r"^prof(?:a|essor|essora)?\.?\s", nome, re.I):
         return nome
     if "dout" in titulo or titulo in {"dr", "dr."}:
@@ -11007,7 +11157,7 @@ def _selecionar_docente_publico(cursor, pedido_token, disciplina_nome=None, carg
     if escolhido is None and candidatos:
         escolhido = candidatos[0]
     if not escolhido:
-        return None, "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
+        return None, "Docente Titular"
     return escolhido["id"], _formatar_docente_publico(escolhido["nome"], escolhido.get("titulacao"))
 
 
@@ -11528,7 +11678,7 @@ def _assegurar_disciplina_e_plano_publico(solicitacao_id):
                 )
             else:
                 docente_id = None
-                docente_nome = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
+                docente_nome = "Docente Titular"
 
         cur.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (docente_nome, disciplina_id))
         cur.execute(
@@ -11916,6 +12066,438 @@ def mew_liberar_matricula_publica(solicitacao_id):
     except Exception as exc:
         print(f"Aviso e-mail liberação: {exc}")
     return redirect("/mew/solicitacoes-matricula?sucesso=Matricula+liberada")
+
+
+
+# ============================================================================
+# SIGEU 2026-09-08 — PADRÃO ÚNICO DE DOCUMENTOS ACADÊMICOS
+# Este bloco substitui, em tempo de execução, os templates legados acima sem
+# remover compatibilidade com as rotas e os registros já existentes.
+# ============================================================================
+from documentos_institucionais import (
+    build_declaration as _doc_build_declaration,
+    build_history as _doc_build_history,
+    build_plan as _doc_build_plan,
+)
+
+
+def _parse_unidades_plano_legacy(conteudo_programatico, limite=12):
+    """Converte o texto antigo de conteúdo programático em blocos de unidades."""
+    texto = str(conteudo_programatico or "").strip()
+    if not texto:
+        return []
+    # O gerador antigo usa blocos separados por linha em branco e títulos UNIDADE.
+    blocos = re.split(r"\n\s*\n(?=\s*(?:UNIDADE|Unidade))", texto)
+    unidades = []
+    for i, bloco in enumerate(blocos[:limite], 1):
+        linhas = [x.strip() for x in str(bloco).splitlines() if x.strip()]
+        if not linhas:
+            continue
+        titulo = linhas[0]
+        topicos = [re.sub(r"^[•\-–—\s]+", "", x).strip() for x in linhas[1:] if x.strip()]
+        unidades.append({"titulo": titulo or f"UNIDADE {i}", "topicos": topicos})
+    return unidades
+
+
+def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
+                             modalidade, docente, data_formatada, qr_code_base64,
+                             numero_unidades=4, **kwargs):
+    """Plano institucional padronizado: até 12 unidades, 6 posições por folha."""
+    from api_planos import METODOLOGIA_FIXA, SISTEMA_AVALIACAO_FIXO
+
+    try:
+        numero_unidades = max(1, min(12, int(numero_unidades or kwargs.get("numero_unidades") or 4)))
+    except Exception:
+        numero_unidades = 4
+
+    unidades = kwargs.get("conteudo_programatico_estruturado")
+    if not isinstance(unidades, list):
+        unidades = _parse_unidades_plano_legacy(kwargs.get("conteudo_programatico"), numero_unidades)
+
+    return _doc_build_plan(
+        disciplina=str(disciplina or ""),
+        codigo=str(codigo or ""),
+        hash_documento=str(hash_completa or ""),
+        carga_horaria=str(carga_horaria or ""),
+        modalidade=str(modalidade or "EaD"),
+        docente=str(docente or "Docente responsável"),
+        data_formatada=str(data_formatada or datetime.now().strftime("%d/%m/%Y")),
+        qr_code=str(qr_code_base64 or ""),
+        objetivo_geral=kwargs.get("objetivo_geral", ""),
+        objetivos_especificos=kwargs.get("objetivos_especificos", ""),
+        ementa=kwargs.get("ementa_expandida", kwargs.get("ementa", "")),
+        habilidades=kwargs.get("habilidades", ""),
+        pre_requisitos=kwargs.get("pre_requisitos", "Não há pré-requisitos formais."),
+        enquadramento_curricular=kwargs.get("enquadramento_curricular", ""),
+        metodologia_html=METODOLOGIA_FIXA,
+        avaliacao_html=SISTEMA_AVALIACAO_FIXO,
+        bibliografia_basica=kwargs.get("bibliografia_basica", ""),
+        bibliografia_complementar=kwargs.get("bibliografia_complementar", ""),
+        unidades=unidades,
+        numero_unidades=numero_unidades,
+    )
+
+
+def _html_historico_integrado(aluno, disciplinas, codigo, qr_code, hash_documento):
+    """Histórico com páginas explícitas e 8 disciplinas por folha, sem cortes."""
+    return _doc_build_history(
+        dict(aluno or {}),
+        [dict(d) for d in (disciplinas or [])],
+        str(codigo or ""),
+        str(qr_code or ""),
+        str(hash_documento or ""),
+    )
+
+
+def _html_declaracao_integrada(aluno, d, codigo, qr_code, hash_documento):
+    """Declaração no mesmo perfil visual do Plano e do Histórico."""
+    return _doc_build_declaration(
+        dict(aluno or {}), dict(d or {}), str(codigo or ""), str(qr_code or ""), str(hash_documento or "")
+    )
+
+
+def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base64,
+                                codigo, hash_documento, ano_manual=None,
+                                ira_manual='N/I', total_disciplinas_manual='0',
+                                frequencia_manual='N/I'):
+    """Versão administrativa do histórico usando os dados atuais do PostgreSQL."""
+    aluno = dict(dados_aluno or {})
+    base = [dict(d) for d in (disciplinas or [])]
+    ids = [int(d["id"]) for d in base if d.get("id") is not None]
+    enriquecidas = []
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Dados cadastrais completos para a primeira página.
+        cur.execute("""
+            SELECT nome_pai,nome_mae,naturalidade,nacionalidade,data_nascimento,
+                   sexo,estado_civil,curso_referencia
+            FROM dados_pessoais WHERE aluno_id=%s
+        """, (aluno_id,))
+        extra = cur.fetchone() or {}
+        aluno.update({k:v for k,v in dict(extra).items() if v not in (None, "")})
+
+        if ids:
+            cur.execute("""
+                SELECT d.id,d.nome,COALESCE(d.carga_horaria,80) AS carga_horaria,
+                       nf.nota_final,nf.media_final,nf.status AS status_final,nf.data_realizacao,
+                       adt.frequencia,adt.data_inicio,
+                       doc.nome AS docente_nome,doc.titulacao
+                FROM disciplinas d
+                LEFT JOIN notas_finais nf ON nf.aluno_id=%s AND nf.disciplina_id=d.id
+                LEFT JOIN aluno_disciplina_datas adt ON adt.aluno_id=%s AND adt.disciplina_id=d.id
+                LEFT JOIN LATERAL (
+                    SELECT dd.docente_id FROM disciplina_docente dd
+                    WHERE dd.disciplina_id=d.id ORDER BY dd.ano_semestre DESC,dd.id DESC LIMIT 1
+                ) dd_ultimo ON TRUE
+                LEFT JOIN docentes doc ON doc.id=dd_ultimo.docente_id
+                WHERE d.id=ANY(%s)
+                ORDER BY d.nome
+            """, (aluno_id, aluno_id, ids))
+            for row in cur.fetchall():
+                item = dict(row)
+                nome_doc = item.get("docente_nome") or "Docente responsável"
+                if item.get("titulacao"):
+                    nome_doc = f"{nome_doc} ({item['titulacao']})"
+                item["docente"] = nome_doc
+                enriquecidas.append(item)
+    finally:
+        conn.close()
+
+    if not enriquecidas:
+        enriquecidas = base
+
+    # IRA, quantidade de aprovadas e cargas são sempre derivados das disciplinas
+    # carregadas do banco pelo construtor institucional. Os parâmetros manuais
+    # são mantidos apenas por compatibilidade com chamadas antigas.
+    return _doc_build_history(
+        aluno, enriquecidas, str(codigo or ""), str(qr_code_base64 or ""), str(hash_documento or ""),
+        ira=None, ano_referencia=ano_manual or obter_configuracao_ano()
+    )
+
+
+def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disciplina, ano_manual=None):
+    """Compatibilidade com chamadas antigas, já no padrão visual atual."""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    ra = str((dados_aluno or {}).get("ra") or "")
+    codigo = f"DECL-{ra}-{disciplina_id}-{timestamp}"
+    hash_documento = gerar_hash_documento(f"declaracao_{aluno_id}_{disciplina_id}", ra, timestamp)
+    base_url = os.getenv("SIGEU_PUBLIC_URL", "https://sigeueducacional.com.br").rstrip("/")
+    qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+    d = dict(dados_disciplina or {})
+    try:
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute("""
+            SELECT d.nome,COALESCE(d.carga_horaria,80) AS carga_horaria,
+                   nf.nota_final,nf.media_final,nf.status AS status_final,nf.data_realizacao,
+                   adt.frequencia,doc.nome AS docente_nome
+            FROM disciplinas d
+            LEFT JOIN notas_finais nf ON nf.aluno_id=%s AND nf.disciplina_id=d.id
+            LEFT JOIN aluno_disciplina_datas adt ON adt.aluno_id=%s AND adt.disciplina_id=d.id
+            LEFT JOIN LATERAL (
+              SELECT dd.docente_id FROM disciplina_docente dd WHERE dd.disciplina_id=d.id
+              ORDER BY dd.ano_semestre DESC,dd.id DESC LIMIT 1
+            ) ult ON TRUE
+            LEFT JOIN docentes doc ON doc.id=ult.docente_id
+            WHERE d.id=%s
+        """, (aluno_id, aluno_id, disciplina_id))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            d.update(dict(row)); d["docente"] = d.get("docente_nome") or d.get("docente")
+    except Exception:
+        pass
+    return _doc_build_declaration(dict(dados_aluno or {}), d, codigo, qr, hash_documento)
+
+
+
+# ============================================================================
+# AVISOS ACADÊMICOS — MEW -> PORTAL DO ALUNO
+# ============================================================================
+
+def _aviso_media_url(row):
+    row = dict(row or {})
+    if row.get("media_r2_key"):
+        try:
+            return r2_presigned_url(row["media_r2_key"], expires=3600, inline=True)
+        except Exception:
+            return None
+    return row.get("media_url") or None
+
+
+@app.route("/mew/avisos-academicos")
+def mew_avisos_academicos():
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT id,nome,ra FROM alunos ORDER BY nome")
+        alunos = cur.fetchall()
+        cur.execute("""
+            SELECT a.*,
+                   COUNT(DISTINCT d.aluno_id) AS total_destinatarios,
+                   COUNT(DISTINCT v.aluno_id) AS total_fechamentos
+            FROM avisos_academicos a
+            LEFT JOIN avisos_academicos_destinatarios d ON d.aviso_id=a.id
+            LEFT JOIN avisos_academicos_visualizacoes v ON v.aviso_id=a.id
+            GROUP BY a.id
+            ORDER BY a.id DESC
+            LIMIT 200
+        """)
+        avisos=[]
+        for row in cur.fetchall():
+            a=dict(row)
+            a["media_url_exibicao"]=_aviso_media_url(a)
+            avisos.append(a)
+    finally:
+        conn.close()
+    return render_template("mew/avisos_academicos.html", alunos=alunos, avisos=avisos)
+
+
+@app.route("/mew/avisos-academicos/salvar", methods=["POST"])
+def mew_salvar_aviso_academico():
+    if not session.get("mew_admin"):
+        return jsonify({"success":False,"message":"Não autorizado"}),403
+    titulo=(request.form.get("titulo") or "").strip()[:160]
+    mensagem=(request.form.get("mensagem") or "").strip()[:5000]
+    destino=(request.form.get("destino") or "todos").strip().lower()
+    media_tipo=(request.form.get("media_tipo") or "").strip().lower()
+    media_url=(request.form.get("media_url") or "").strip()[:2000]
+    arquivo=request.files.get("media_file")
+    alunos_ids=[]
+    for valor in request.form.getlist("alunos_ids"):
+        try: alunos_ids.append(int(valor))
+        except Exception: pass
+    alunos_ids=sorted(set(alunos_ids))
+    if not titulo:
+        return jsonify({"success":False,"message":"Informe o título do aviso."}),400
+    if destino not in {"todos","selecionados"}:
+        destino="todos"
+    if destino=="selecionados" and not alunos_ids:
+        return jsonify({"success":False,"message":"Selecione pelo menos um aluno."}),400
+    if media_tipo not in {"","imagem","video"}:
+        return jsonify({"success":False,"message":"Tipo de mídia inválido."}),400
+
+    media_r2_key=None; media_mime=None
+    if arquivo and arquivo.filename:
+        nome=secure_filename(arquivo.filename) or "midia"
+        mime=(arquivo.mimetype or guess_content_type(nome) or "application/octet-stream").lower()
+        if mime.startswith("image/"):
+            media_tipo="imagem"
+        elif mime.startswith("video/"):
+            media_tipo="video"
+        else:
+            return jsonify({"success":False,"message":"O arquivo precisa ser uma imagem ou um vídeo."}),400
+        if not r2_is_configured():
+            return jsonify({"success":False,"message":"O R2 precisa estar configurado para enviar imagem/vídeo pelo MEW."}),500
+        media_r2_key=make_key("avisos-academicos",nome,datetime.now().strftime("%Y%m%d"))
+        try:
+            r2_upload_fileobj(arquivo.stream,media_r2_key,mime,{"origem":"mew-avisos","tipo":media_tipo})
+            media_mime=mime; media_url=None
+        except Exception as exc:
+            return jsonify({"success":False,"message":f"Falha ao enviar a mídia: {exc}"}),500
+    elif media_url and not media_tipo:
+        ext=media_url.lower().split("?")[0]
+        media_tipo="video" if ext.endswith((".mp4",".webm",".mov",".m4v")) else "imagem"
+
+    conn=get_db_connection(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO avisos_academicos
+            (titulo,mensagem,publico_todos,media_tipo,media_url,media_r2_key,media_mime,ativo,criado_por)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,TRUE,'MEW') RETURNING id
+        """,(titulo,mensagem,destino=="todos",media_tipo or None,media_url or None,media_r2_key,media_mime))
+        aviso_id=cur.fetchone()["id"]
+        if destino=="selecionados":
+            cur.executemany(
+                "INSERT INTO avisos_academicos_destinatarios(aviso_id,aluno_id) VALUES(%s,%s) ON CONFLICT DO NOTHING",
+                [(aviso_id,aid) for aid in alunos_ids]
+            )
+        conn.commit()
+        aviso_retorno = {
+            "id": aviso_id,
+            "titulo": titulo,
+            "mensagem": mensagem,
+            "publico_todos": destino == "todos",
+            "total_destinatarios": len(alunos_ids) if destino == "selecionados" else 0,
+            "media_tipo": media_tipo or "",
+            "media_url_exibicao": _aviso_media_url({"media_r2_key": media_r2_key, "media_url": media_url}),
+            "ativo": True,
+        }
+        return jsonify({"success":True,"id":aviso_id,"aviso":aviso_retorno})
+    except Exception as exc:
+        conn.rollback()
+        if media_r2_key:
+            try: delete_object(media_r2_key)
+            except Exception: pass
+        return jsonify({"success":False,"message":f"Erro ao salvar aviso: {exc}"}),500
+    finally:
+        conn.close()
+
+
+@app.route("/mew/avisos-academicos/<int:aviso_id>/alternar", methods=["POST"])
+def mew_alternar_aviso_academico(aviso_id):
+    ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if not session.get("mew_admin"):
+        if ajax:
+            return jsonify({"success": False, "message": "Sessão do MEW expirada."}), 403
+        return redirect("/mew/login")
+    conn=get_db_connection(); cur=conn.cursor()
+    try:
+        cur.execute("UPDATE avisos_academicos SET ativo=NOT ativo WHERE id=%s RETURNING ativo",(aviso_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            if ajax:
+                return jsonify({"success": False, "message": "Aviso não encontrado."}), 404
+            return redirect("/mew/avisos-academicos")
+        conn.commit()
+        if ajax:
+            return jsonify({"success": True, "ativo": bool(row.get("ativo"))})
+        return redirect("/mew/avisos-academicos")
+    except Exception as exc:
+        conn.rollback()
+        if ajax:
+            return jsonify({"success": False, "message": f"Não foi possível alterar o aviso: {exc}"}), 500
+        return redirect("/mew/avisos-academicos")
+    finally:
+        conn.close()
+
+
+@app.route("/mew/avisos-academicos/<int:aviso_id>/excluir", methods=["POST"])
+def mew_excluir_aviso_academico(aviso_id):
+    ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    if not session.get("mew_admin"):
+        if ajax:
+            return jsonify({"success": False, "message": "Sessão do MEW expirada."}), 403
+        return redirect("/mew/login")
+    conn=get_db_connection(); cur=conn.cursor()
+    row={}
+    try:
+        cur.execute("SELECT media_r2_key FROM avisos_academicos WHERE id=%s",(aviso_id,))
+        row=cur.fetchone()
+        if not row:
+            if ajax:
+                return jsonify({"success": False, "message": "Aviso não encontrado."}), 404
+            return redirect("/mew/avisos-academicos")
+        cur.execute("DELETE FROM avisos_academicos WHERE id=%s",(aviso_id,))
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        if ajax:
+            return jsonify({"success": False, "message": f"Não foi possível excluir o aviso: {exc}"}), 500
+        return redirect("/mew/avisos-academicos")
+    finally:
+        conn.close()
+    if row.get("media_r2_key"):
+        try: delete_object(row["media_r2_key"])
+        except Exception: pass
+    if ajax:
+        return jsonify({"success": True})
+    return redirect("/mew/avisos-academicos")
+
+
+@app.route("/api/avisos-academicos")
+def api_avisos_academicos_aluno():
+    aluno_id=session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success":False,"avisos":[]}),401
+    conn=get_db_connection(); cur=conn.cursor()
+    try:
+        cur.execute("""
+            SELECT a.*
+            FROM avisos_academicos a
+            WHERE a.ativo=TRUE
+              AND (
+                a.publico_todos=TRUE OR EXISTS(
+                    SELECT 1 FROM avisos_academicos_destinatarios d
+                    WHERE d.aviso_id=a.id AND d.aluno_id=%s
+                )
+              )
+              AND NOT EXISTS(
+                SELECT 1 FROM avisos_academicos_visualizacoes v
+                WHERE v.aviso_id=a.id AND v.aluno_id=%s
+              )
+            ORDER BY a.id ASC
+            LIMIT 20
+        """,(aluno_id,aluno_id))
+        avisos=[]
+        for row in cur.fetchall():
+            a=dict(row)
+            avisos.append({
+                "id":a["id"],"titulo":a.get("titulo") or "Aviso acadêmico",
+                "mensagem":a.get("mensagem") or "","media_tipo":a.get("media_tipo") or "",
+                "media_url":_aviso_media_url(a),
+            })
+        return jsonify({"success":True,"avisos":avisos})
+    finally:
+        conn.close()
+
+
+@app.route("/api/avisos-academicos/<int:aviso_id>/fechar", methods=["POST"])
+def api_fechar_aviso_academico(aviso_id):
+    aluno_id=session.get("aluno_id")
+    if not aluno_id:
+        return jsonify({"success":False}),401
+    conn=get_db_connection(); cur=conn.cursor()
+    try:
+        # Só permite marcar como fechado um aviso que realmente alcança esse aluno.
+        cur.execute("""
+            SELECT 1 FROM avisos_academicos a
+            WHERE a.id=%s AND (a.publico_todos=TRUE OR EXISTS(
+                SELECT 1 FROM avisos_academicos_destinatarios d WHERE d.aviso_id=a.id AND d.aluno_id=%s
+            ))
+        """,(aviso_id,aluno_id))
+        if not cur.fetchone():
+            return jsonify({"success":False}),404
+        cur.execute("""
+            INSERT INTO avisos_academicos_visualizacoes(aviso_id,aluno_id)
+            VALUES(%s,%s) ON CONFLICT(aviso_id,aluno_id) DO UPDATE SET fechado_em=CURRENT_TIMESTAMP
+        """,(aviso_id,aluno_id))
+        conn.commit()
+        return jsonify({"success":True})
+    finally:
+        conn.close()
 
 
 

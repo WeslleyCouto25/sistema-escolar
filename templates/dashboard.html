@@ -980,6 +980,14 @@ body.portal07 .page-title,body.portal07 .section-title,body.portal07 .mew-title,
  background:#eceff1!important;background-image:none!important;color:#202428!important;border:1px solid #c9d0d5!important;border-left:4px solid #343a40!important;border-radius:0!important;box-shadow:none!important;text-shadow:none!important
 }
 body.portal07 .page-title *,body.portal07 .section-title *,body.portal07 .mew-title *,body.portal07 .card-header *{color:#202428!important}
+
+/* STATUS ACADÊMICO DAS DISCIPLINAS - único uso de cinza/amarelo/verde nos cards */
+body.portal07 .card-header.nao-iniciada{background:#e5e8ea!important;border-color:#c4cbd0!important;border-left:5px solid #6f7880!important}
+body.portal07 .card-header.cursando{background:#fff3bf!important;border-color:#e4c96e!important;border-left:5px solid #b8860b!important}
+body.portal07 .card-header.finalizada{background:#e6f4e8!important;border-color:#b8d9bf!important;border-left:5px solid #2e7d32!important}
+body.portal07 .card-header.nao-iniciada .status-badge{background:#d3d8dc!important;color:#343a40!important}
+body.portal07 .card-header.cursando .status-badge{background:#f5dc82!important;color:#5b4600!important}
+body.portal07 .card-header.finalizada .status-badge{background:#cce7d1!important;color:#205c2b!important}
 body.portal07 .card,body.portal07 .mew-card,body.portal07 .menu-card,body.portal07 .info-card,body.portal07 .content-card,body.portal07 .chapter-card,body.portal07 .capitulo-card{
  background:#fff!important;background-image:none!important;color:#202428!important;border:1px solid #c9d0d5!important;border-radius:3px!important;box-shadow:0 2px 7px rgba(28,34,39,.07)!important;transform:none!important
 }
@@ -1274,10 +1282,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     {% set provas_feitas = d['provas_realizadas'] %}
 
                     <div class="card">
-                        <div class="card-header {% if progresso == 100 %}concluido{% endif %}">
+                        <div class="card-header {{ d['status_visual']|replace('_', '-') }}">
                             <h3><i class="fas fa-book"></i> {{ d['nome'][:40] }}{% if d['nome']|length > 40 %}...{% endif %}</h3>
                             <div class="status-badge">
-                                {% if progresso == 100 %}Concluído{% else %}Cursando{% endif %}
+                                {% if d['status_visual'] == 'finalizada' %}Finalizada
+                                {% elif d['status_visual'] == 'nao_iniciada' %}Não iniciada
+                                {% else %}Cursando{% endif %}
                             </div>
                         </div>
                         <div class="card-content">
@@ -2080,6 +2090,52 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </div>
     </div>
 </div>
+
+<!-- AVISOS ACADÊMICOS — exibidos após o login, sem recarregar a página -->
+<style>
+#sigeuAvisoOverlay{display:none;position:fixed;inset:0;background:rgba(20,24,28,.62);z-index:20000;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(2px)}
+#sigeuAvisoCard{width:min(620px,96vw);max-height:88vh;overflow:auto;background:#fff;border:1px solid #bfc6cb;border-top:4px solid #c86d20;box-shadow:0 18px 55px rgba(0,0,0,.28);position:relative;color:#202428}
+#sigeuAvisoHead{padding:16px 48px 11px 18px;background:#f1f3f4;border-bottom:1px solid #d6dadd}
+#sigeuAvisoTitle{margin:0;font-size:17px;color:#202428!important}#sigeuAvisoClose{position:absolute;right:13px;top:10px;width:32px;height:32px;border:0!important;background:transparent!important;color:#343a40!important;font-size:26px;line-height:28px;cursor:pointer;padding:0!important}
+#sigeuAvisoBody{padding:18px}#sigeuAvisoMessage{white-space:pre-wrap;font-size:13px;line-height:1.55;margin:0;color:#30363b}
+#sigeuAvisoMedia{margin-top:14px;text-align:center}#sigeuAvisoMedia img,#sigeuAvisoMedia video,#sigeuAvisoMedia iframe{max-width:100%;width:auto;max-height:52vh;border:1px solid #d2d7da;background:#000}#sigeuAvisoMedia iframe{width:100%;height:330px}
+#sigeuAvisoFoot{padding:11px 18px 16px;display:flex;justify-content:flex-end;border-top:1px solid #e1e5e8}.sigeu-aviso-ok{background:#343a40!important;color:#fff!important;border:1px solid #343a40!important;border-radius:2px!important;padding:9px 18px!important;font-weight:700!important;cursor:pointer}
+@media(max-width:600px) { #sigeuAvisoCard{max-height:92vh}#sigeuAvisoMedia iframe{height:220px}}
+</style>
+<div id="sigeuAvisoOverlay" role="dialog" aria-modal="true" aria-labelledby="sigeuAvisoTitle">
+  <div id="sigeuAvisoCard">
+    <div id="sigeuAvisoHead"><h2 id="sigeuAvisoTitle">Aviso acadêmico</h2><button id="sigeuAvisoClose" aria-label="Fechar">&times;</button></div>
+    <div id="sigeuAvisoBody"><p id="sigeuAvisoMessage"></p><div id="sigeuAvisoMedia"></div></div>
+    <div id="sigeuAvisoFoot"><button id="sigeuAvisoOk" class="sigeu-aviso-ok">Fechar</button></div>
+  </div>
+</div>
+<script>
+(function(){
+  let fila=[], atual=null;
+  const overlay=document.getElementById('sigeuAvisoOverlay'), titulo=document.getElementById('sigeuAvisoTitle'), mensagem=document.getElementById('sigeuAvisoMessage'), media=document.getElementById('sigeuAvisoMedia');
+  function youtubeEmbed(url){try{const u=new URL(url);let id='';if(u.hostname.includes('youtu.be')) id=u.pathname.replace('/','');else if(u.hostname.includes('youtube.com')) id=u.searchParams.get('v')||((u.pathname.match(/\/embed\/([^/?]+)/)||[])[1]||'');return id?`https://www.youtube.com/embed/${id}`:''}catch(e){return ''}}
+  function mostrarProximo(){
+    if(!fila.length){atual=null;overlay.style.display='none';return}
+    atual=fila.shift();titulo.textContent=atual.titulo||'Aviso acadêmico';mensagem.textContent=atual.mensagem||'';media.innerHTML='';
+    if(atual.media_url){
+      if(atual.media_tipo==='video'){
+        const yt=youtubeEmbed(atual.media_url);
+        if(yt){const f=document.createElement('iframe');f.src=yt;f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';f.allowFullscreen=true;media.appendChild(f)}
+        else{const v=document.createElement('video');v.src=atual.media_url;v.controls=true;v.preload='metadata';media.appendChild(v)}
+      }else{const img=document.createElement('img');img.src=atual.media_url;img.alt='Imagem do aviso acadêmico';media.appendChild(img)}
+    }
+    overlay.style.display='flex';
+  }
+  async function fechar(){
+    if(!atual){overlay.style.display='none';return}
+    const id=atual.id;overlay.style.display='none';
+    try{await fetch(`/api/avisos-academicos/${id}/fechar`,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}})}catch(e){console.warn('Não foi possível registrar o fechamento do aviso',e)}
+    atual=null;mostrarProximo();
+  }
+  document.getElementById('sigeuAvisoClose').addEventListener('click',fechar);document.getElementById('sigeuAvisoOk').addEventListener('click',fechar);
+  document.addEventListener('DOMContentLoaded',async()=>{try{const r=await fetch('/api/avisos-academicos',{headers:{'X-Requested-With':'XMLHttpRequest'}});if(!r.ok)return;const d=await r.json();fila=Array.isArray(d.avisos)?d.avisos:[];mostrarProximo()}catch(e){console.warn('Avisos acadêmicos indisponíveis',e)}});
+})();
+</script>
 </body>
 
 </html>

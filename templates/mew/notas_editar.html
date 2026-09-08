@@ -381,7 +381,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 </div>
                 <div class="info-row">
                     <div class="info-label">Progresso Atual:</div>
-                    <div>{{ provas_feitas }}/{{ total_capitulos }} provas ({{ progresso_atual }}%)</div>
+                    <div id="resumoProgresso">{{ provas_feitas }}/{{ total_capitulos }} provas ({{ progresso_atual }}%)</div>
                 </div>
             </div>
             
@@ -393,7 +393,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 <h3 class="section-title">📊 Progresso do Curso</h3>
                 <p>Defina o progresso do aluno na disciplina (quantas provas ele já fez):</p>
                 
-                <div class="current-progress">
+                <div class="current-progress" id="progressoAtualTexto">
                     Progresso Atual: {{ progresso_atual }}%
                 </div>
                 
@@ -435,6 +435,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </div>
                         
                         <div class="form-group">
+                            <label>Frequência (%)</label>
+                            <input type="number" name="frequencia" id="frequenciaInput" class="nota-input" min="0" max="100" step="0.1"
+                                   value="{% if frequencia_atual is not none %}{{ frequencia_atual }}{% endif %}" placeholder="Ex: 100">
+                        </div>
+
+                        <div class="form-group">
                             <label>Prova Final Liberada?</label>
                             <select name="prova_final_aberta" class="nota-input">
                                 <option value="0" {% if not datas_info or datas_info.prova_final_aberta == 0 %}selected{% endif %}>
@@ -453,9 +459,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 </div>
             </div>
             
-            <!-- ========= NOTAS DOS CAPÍTULOS ========= -->
-            <h2 class="section-title">📋 Notas dos Capítulos</h2>
-            <p>Gerencie as notas de cada capítulo (0-10):</p>
+            <!-- ========= NOTAS DAS UNIDADES ========= -->
+            <h2 class="section-title">📋 Notas das Unidades</h2>
+            <p>Gerencie as notas de cada unidade (0-10):</p>
             
             <div class="notas-container">
                 {% for capitulo in capitulos %}
@@ -463,30 +469,29 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <h4>{{ capitulo.titulo }}</h4>
                     
                     <div class="info-row">
-                        <div class="info-label">Capítulo:</div>
+                        <div class="info-label">Unidade:</div>
                         <div>{{ loop.index }}</div>
                     </div>
                     
-                    <form class="form-nota" data-capitulo="{{ loop.index }}">
+                    <form class="form-nota" data-capitulo="{{ capitulo.id }}">
                         <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
                         <input type="hidden" name="disciplina_id" value="{{ disciplina.id }}">
                         <input type="hidden" name="acao" value="salvar_nota">
-                        <input type="hidden" name="capitulo" value="{{ loop.index }}">
+                        <input type="hidden" name="capitulo" value="{{ capitulo.id }}">
                         
                         <label>Nota (0-10):</label>
                         <input type="number" name="nota" class="nota-input" min="0" max="10" step="0.1"
-                               value="{% if loop.index in notas_existentes %}{{ notas_existentes[loop.index] }}{% endif %}"
+                               value="{% if capitulo.id in notas_existentes %}{{ notas_existentes[capitulo.id] }}{% endif %}"
                                placeholder="Ex: 7.5">
                         
                         <div class="nota-buttons">
                             <button type="button" onclick="salvarNota(this)" class="btn btn-success btn-sm">
                                 <i class="fas fa-save"></i> Salvar
                             </button>
-                            {% if loop.index in notas_existentes %}
-                            <button type="button" onclick="excluirNota(this)" class="btn btn-danger btn-sm">
+                            <button type="button" onclick="excluirNota(this)" class="btn btn-danger btn-sm delete-nota"
+                                    {% if capitulo.id not in notas_existentes %}style="display:none"{% endif %}>
                                 <i class="fas fa-trash"></i> Excluir
                             </button>
-                            {% endif %}
                         </div>
                     </form>
                 </div>
@@ -543,11 +548,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                             <i class="fas fa-save"></i> Salvar Prova Final
                         </button>
                         
-                        {% if nota_final %}
-                        <button type="button" onclick="excluirFinal()" class="btn btn-danger">
+                        <button type="button" id="btnExcluirFinal" onclick="excluirFinal()" class="btn btn-danger"
+                                {% if not nota_final %}style="display:none"{% endif %}>
                             <i class="fas fa-trash"></i> Excluir Prova Final
                         </button>
-                        {% endif %}
                     </div>
                 </form>
             </div>
@@ -609,9 +613,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             .then(data => {
                 if (data.success) {
                     mostrarMensagem(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                    document.getElementById('progressoAtualTexto').textContent = `Progresso Atual: ${progressoSelecionado}%`;
+                    if (data.frequencia !== undefined && data.frequencia !== null) {
+                        document.getElementById('frequenciaInput').value = data.frequencia;
+                    }
                 } else {
                     mostrarMensagem(data.message, 'error');
                 }
@@ -621,6 +626,23 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             });
         }
         
+        function sincronizarFinalCalculado(data) {
+            const formFinal = document.getElementById('formFinal');
+            if (!formFinal || !data) return;
+            const mediaDisc = formFinal.querySelector('[name="media_disciplina"]');
+            const mediaFinal = formFinal.querySelector('[name="media_final"]');
+            const status = formFinal.querySelector('[name="status"]');
+            if (mediaDisc && data.media_disciplina !== undefined && data.media_disciplina !== null) {
+                mediaDisc.value = data.media_disciplina;
+            }
+            if (mediaFinal && data.media_final !== undefined && data.media_final !== null) {
+                mediaFinal.value = data.media_final;
+            }
+            if (status && data.status) {
+                status.value = data.status;
+            }
+        }
+
         function salvarNota(button) {
             const form = button.closest('.form-nota');
             const formData = new FormData(form);
@@ -633,9 +655,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             .then(data => {
                 if (data.success) {
                     mostrarMensagem(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                    const campo = form.querySelector('[name="nota"]');
+                    if (campo && data.nota !== undefined) campo.value = data.nota;
+                    const excluir = form.querySelector('.delete-nota');
+                    if (excluir) excluir.style.display = '';
+                    sincronizarFinalCalculado(data);
                 } else {
                     mostrarMensagem(data.message, 'error');
                 }
@@ -662,9 +686,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             .then(data => {
                 if (data.success) {
                     mostrarMensagem(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                    const campo = form.querySelector('[name="nota"]');
+                    if (campo) campo.value = '';
+                    button.style.display = 'none';
+                    sincronizarFinalCalculado(data);
                 } else {
                     mostrarMensagem(data.message, 'error');
                 }
@@ -680,11 +705,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             
             // Validar campos
             const notaFinal = formData.get('nota_final');
-            const mediaFinal = formData.get('media_final');
-            const status = formData.get('status');
-            
-            if (!notaFinal || !mediaFinal || !status) {
-                mostrarMensagem('Preencha todos os campos da prova final', 'error');
+            if (notaFinal === null || notaFinal === '') {
+                mostrarMensagem('Informe a nota da prova final', 'error');
                 return;
             }
             
@@ -696,9 +718,20 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             .then(data => {
                 if (data.success) {
                     mostrarMensagem(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                    if (data.media_disciplina !== undefined) {
+                        const el = form.querySelector('[name="media_disciplina"]');
+                        if (el) el.value = data.media_disciplina;
+                    }
+                    if (data.media_final !== undefined) {
+                        const el = form.querySelector('[name="media_final"]');
+                        if (el) el.value = data.media_final;
+                    }
+                    if (data.status) {
+                        const el = form.querySelector('[name="status"]');
+                        if (el) el.value = data.status;
+                    }
+                    const btnExcluir = document.getElementById('btnExcluirFinal');
+                    if (btnExcluir) btnExcluir.style.display = '';
                 } else {
                     mostrarMensagem(data.message, 'error');
                 }
@@ -725,9 +758,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             .then(data => {
                 if (data.success) {
                     mostrarMensagem(data.message, 'success');
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                    form.querySelector('[name="nota_final"]').value = '';
+                    form.querySelector('[name="media_disciplina"]').value = '';
+                    form.querySelector('[name="media_final"]').value = '';
+                    form.querySelector('[name="status"]').value = '';
+                    const btnExcluir = document.getElementById('btnExcluirFinal');
+                    if (btnExcluir) btnExcluir.style.display = 'none';
                 } else {
                     mostrarMensagem(data.message, 'error');
                 }

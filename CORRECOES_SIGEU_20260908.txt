@@ -1,0 +1,83 @@
+SIGEU - PACOTE CONSOLIDADO - 08/09/2026
+
+1. NOTAS / FREQUÊNCIA / PROGRESSO (mantido do pacote corrigido anterior)
+- Notas administrativas usam os IDs reais dos capítulos e continuam lendo registros legados 1/2/3/4.
+- notas.nota é REAL: aceita valores decimais.
+- Frequência administrativa fica persistida em aluno_disciplina_datas.frequencia e é respeitada literalmente.
+- Se o MEW grava 100% de frequência, o portal e os documentos usam 100%.
+- Alterar progresso/frequência não apaga notas.
+- Salvamentos principais do MEW usam AJAX, sem recarregar a página a cada alteração.
+- Situação Acadêmica mostra todas as unidades reais e não duplica nota legado + nota canônica.
+- Reenvio de Avaliação Final agora também usa UPSERT em notas_finais, evitando erro por registro já existente.
+
+2. DOCUMENTOS - NOVO PADRÃO ÚNICO
+Arquivo central: documentos_institucionais.py
+- Plano de Ensino, Declaração e Histórico passam a usar o mesmo perfil institucional limpo, em cinza/preto, inspirado no modelo visual fornecido.
+- Logotipo institucional existente do projeto é incorporado ao HTML/PDF.
+- Cabeçalho principal: SIGEU Educacional - Grupo Educacional Unificado.
+- FACOP aparece explicitamente e sempre como FACOP CERTIFICADORA, com texto de certificação/parceria.
+- Marca d'água diagonal discreta em todas as páginas, contendo o código de autenticação.
+- Rodapé em todas as páginas com código de autenticação e número da página.
+- QR Code, hash SHA-256 e código de autenticação permanecem na validação eletrônica.
+- Não existe linha/rabisco simulando assinatura.
+
+3. RESPONSÁVEIS / ASSINATURA ELETRÔNICA
+Somente duas responsáveis podem ser selecionadas pelo gerador:
+- Tatiane R. L. Costa
+- Natalia Nunes de Couto
+Cargo comum: Coordenação Acadêmica e Secretaria Geral - FACOP/SIGEU.
+A escolha é distribuída entre as duas a partir do código do documento e permanece estável quando o mesmo documento é reaberto.
+O bloco contém somente nome, cargo e informação de assinatura eletrônica, sem assinatura manuscrita simulada.
+
+4. PLANO DE ENSINO - 1 A 12 UNIDADES
+- MEW agora permite escolher de 1 a 12 unidades antes da geração.
+- A IA recebe a quantidade EXATA e é validada contra essa quantidade.
+- O bloco de unidades possui estrutura fixa e imutável:
+  * primeira folha do bloco: posições 1 a 6;
+  * segunda folha do bloco: posições 7 a 12.
+- Se forem escolhidas 5 unidades, a posição 6 permanece vazia e as posições 7 a 12 continuam reservadas/vazias.
+- Se forem escolhidas 12, todas as 12 posições são preenchidas.
+- O documento não redistribui unidades para ocupar os espaços vazios.
+- Foi removido o reload da tela ao clicar em “Gerar Novo Plano”; o formulário é reiniciado na própria página.
+
+5. HISTÓRICO ACADÊMICO
+- Paginação explícita e conservadora: 8 componentes curriculares por folha no layout atual.
+- Linhas não são divididas entre páginas.
+- Cabeçalho e rodapé são repetidos em cada folha.
+- Exemplo validado: 16 disciplinas geram exatamente 2 páginas no PDF de teste, sem cortar a 8ª/16ª disciplina nem a validação final.
+- A última página inclui resumo, assinatura eletrônica e autenticação sem criar uma terceira folha vazia.
+- Frequência, média, situação, carga horária e docente continuam vindo do PostgreSQL.
+
+6. AVISOS ACADÊMICOS - NOVA ÁREA MEW
+Nova página: /mew/avisos-academicos
+- Publicação de título + mensagem.
+- Mídia opcional por upload (imagem/vídeo no R2) ou URL.
+- Destino: todos os alunos ou aluno(s) específico(s).
+- Pode ativar, desativar e excluir avisos.
+- Publicar/ativar/desativar/excluir funciona por AJAX na tela MEW, sem reload obrigatório.
+- No dashboard do aluno, os avisos pendentes aparecem como modal após o login.
+- O aluno fecha pelo X ou botão Fechar e volta ao portal normalmente, sem reload.
+- O fechamento é gravado por aluno; o mesmo aviso não reaparece para quem já o fechou.
+- Novas tabelas são criadas automaticamente por migrate.py no deploy do Render.
+
+7. DASHBOARD / CORES (mantido)
+- Cinza: não iniciada.
+- Amarelo: cursando.
+- Verde: finalizada.
+- Mantido o Portal 07 como design atual.
+
+8. CHECK-UP DO PACOTE
+- Todos os arquivos Python do pacote: py_compile OK.
+- 66 templates HTML/Jinja: parse OK.
+- JavaScript novo de Avisos, popup do aluno e geração de Plano: node --check OK.
+- PDF de teste do Plano: 5 páginas exatas; unidades 1-6 e 7-12 permanecem nas posições fixas.
+- PDF de teste com apenas 5 unidades: unidade 6 e 7-12 permanecem vazias, sem colapso do layout.
+- PDF de teste do Histórico com 16 disciplinas: 2 páginas exatas, sem corte.
+- PDF de teste da Declaração: 1 página.
+- Os PDFs de teste foram renderizados em PNG para inspeção visual.
+
+9. DEPLOY
+O Procfile continua executando migrate.py antes do Gunicorn. No próximo deploy, as mudanças de banco são idempotentes e não apagam dados existentes.
+
+OBSERVAÇÃO
+Este check-up valida código, templates, JavaScript, migrações e renderização de documentos do pacote. A comparação registro a registro com o banco de produção exige um dump/backup do PostgreSQL atual; nenhuma alegação de auditoria dos dados de produção é feita sem esse arquivo.

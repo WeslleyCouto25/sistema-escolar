@@ -108,6 +108,11 @@
             color: #4a5157;
         }
 
+        .status-nao-iniciada {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
+
         .disciplina-content {
             padding: 20px;
         }
@@ -445,9 +450,6 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <p style="color: var(--medium-gray); margin-bottom: 5px;">
                         {{ aluno_nome }} • RA: {{ aluno_ra }}
                     </p>
-                    <p style="color: var(--medium-gray); font-size: 14px;">
-                        Status atualizado: {{ now.strftime("%d/%m/%Y %H:%M") if now else "" }}
-                    </p>
                 </div>
 
                 <div class="progress-overall">
@@ -548,14 +550,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <div class="disciplina-icon" style="background: 
                                 {% if disc.situacao == 'Aprovado' %}#28a745
                                 {% elif disc.situacao == 'Reprovado' %}#dc3545
-                                {% elif disc.situacao == 'Aguardando final' %}#6f7880
+                                {% elif disc.situacao == 'Aguardando final' %}#ffc107
+                                {% elif disc.situacao == 'Não iniciada' %}#6b7280
                                 {% else %}#ffc107{% endif %};">
                             <i class="fas fa-book"></i>
                         </div>
                         <div>
                             <h3 style="margin: 0; color: var(--dark-gray);">{{ disc.nome }}</h3>
                             <p style="margin: 5px 0 0 0; color: var(--medium-gray); font-size: 14px;">
-                                {{ disc.capitulos_feitos }}/{{ disc.capitulos_total }} capítulos completados
+                                {{ disc.capitulos_feitos }}/{{ disc.capitulos_total }} unidades concluídas
                             </p>
                         </div>
                     </div>
@@ -565,10 +568,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 {% if disc.situacao == 'Aprovado' %}status-aprovado
                                 {% elif disc.situacao == 'Reprovado' %}status-reprovado
                                 {% elif disc.situacao == 'Aguardando final' %}status-aguardando
+                                {% elif disc.situacao == 'Não iniciada' %}status-nao-iniciada
                                 {% else %}status-cursando{% endif %}">
                             {% if disc.situacao == 'Aprovado' %}✅ Aprovado
                             {% elif disc.situacao == 'Reprovado' %}❌ Reprovado
                             {% elif disc.situacao == 'Aguardando final' %}⏳ Aguardando Final
+                            {% elif disc.situacao == 'Não iniciada' %}Não iniciada
                             {% else %}📚 Cursando{% endif %}
                         </span>
                     </div>
@@ -591,10 +596,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <div class="grade-item">
                             <div class="grade-label">Nota Final</div>
                             <div class="grade-value 
-                                    {% if disc.nota_final.nota_final >= 7 %}grade-good
-                                    {% elif disc.nota_final.nota_final >= 5 %}grade-medium
-                                    {% else %}grade-low{% endif %}">
-                                {{ disc.nota_final.nota_final }}/10
+                                    {% if disc.nota_final.nota_final is not none and disc.nota_final.nota_final >= 7 %}grade-good
+                                    {% elif disc.nota_final.nota_final is not none and disc.nota_final.nota_final >= 5 %}grade-medium
+                                    {% elif disc.nota_final.nota_final is not none %}grade-low{% endif %}">
+                                {{ disc.nota_final.nota_final if disc.nota_final.nota_final is not none else '--' }}/10
                             </div>
                         </div>
                         {% endif %}
@@ -602,10 +607,17 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <div class="grade-item">
                             <div class="grade-label">Média Final</div>
                             <div class="grade-value 
-                                    {% if disc.media_final and disc.media_final >= 7 %}grade-good
-                                    {% elif disc.media_final and disc.media_final >= 5 %}grade-medium
-                                    {% elif disc.media_final %}grade-low{% endif %}">
+                                    {% if disc.media_final is not none and disc.media_final >= 7 %}grade-good
+                                    {% elif disc.media_final is not none and disc.media_final >= 5 %}grade-medium
+                                    {% elif disc.media_final is not none %}grade-low{% endif %}">
                                 {{ disc.media_final|string|replace('None', '--') }}/10
+                            </div>
+                        </div>
+
+                        <div class="grade-item">
+                            <div class="grade-label">Frequência</div>
+                            <div class="grade-value">
+                                {% if disc.frequencia is not none %}{{ ('%.1f'|format(disc.frequencia)).replace('.0','') }}%{% else %}--{% endif %}
                             </div>
                         </div>
 
@@ -623,37 +635,38 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <!-- Notas Detalhadas -->
                     <div class="notas-detailed">
                         <h4 style="color: var(--dark-gray); margin-bottom: 15px;">
-                            <i class="fas fa-clipboard-list"></i> Notas dos Capítulos
+                            <i class="fas fa-clipboard-list"></i> Notas das Unidades
                         </h4>
 
                         {% if disc.notas_capitulos %}
                         {% for nota in disc.notas_capitulos %}
                         <div class="nota-capitulo">
                             <div>
-                                <strong>Capítulo {{ nota.capitulo }}</strong>
+                                <strong>Unidade {{ nota.ordem }}</strong>
                                 <div style="font-size: 14px; color: var(--medium-gray);">
-                                    Mini-prova do capítulo
+                                    {{ nota.titulo }}
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 15px;">
+                                {% if nota.nota is not none %}
                                 <div style="font-size: 20px; font-weight: bold; 
                                             color: {% if nota.nota >= 7 %}#28a745
                                                    {% elif nota.nota >= 5 %}#ffc107
                                                    {% else %}#dc3545{% endif %};">
-                                    {{ nota.nota }}/10
+                                    {{ '%.1f'|format(nota.nota) }}/10
                                 </div>
                                 <div style="font-size: 14px; color: var(--medium-gray);">
-                                    {% if nota.nota >= 7 %}✅
-                                    {% elif nota.nota >= 5 %}⚠️
-                                    {% else %}❌{% endif %}
+                                    {% if nota.nota >= 7 %}✅{% elif nota.nota >= 5 %}⚠️{% else %}❌{% endif %}
                                 </div>
+                                {% else %}
+                                <div style="font-size: 20px; font-weight: bold; color: var(--medium-gray);">--</div>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}
                         {% else %}
                         <div style="text-align: center; padding: 20px; color: var(--medium-gray);">
-                            <i class="fas fa-clipboard" style="font-size: 24px; margin-bottom: 10px;"></i>
-                            <p>Nenhuma nota registrada para os capítulos</p>
+                            <p>Nenhuma unidade cadastrada para esta disciplina.</p>
                         </div>
                         {% endif %}
 
@@ -672,19 +685,19 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 <div>
                                     <div style="font-size: 14px; color: var(--medium-gray);">Nota Final:</div>
                                     <div style="font-size: 24px; font-weight: bold; 
-                                            color: {% if disc.nota_final.nota_final >= 7 %}#28a745
-                                                   {% elif disc.nota_final.nota_final >= 5 %}#ffc107
-                                                   {% else %}#dc3545{% endif %};">
-                                        {{ disc.nota_final.nota_final }}/10
+                                            color: {% if disc.nota_final.nota_final is not none and disc.nota_final.nota_final >= 7 %}#28a745
+                                                   {% elif disc.nota_final.nota_final is not none and disc.nota_final.nota_final >= 5 %}#ffc107
+                                                   {% elif disc.nota_final.nota_final is not none %}#dc3545{% else %}#6b7280{% endif %};">
+                                        {{ disc.nota_final.nota_final if disc.nota_final.nota_final is not none else '--' }}/10
                                     </div>
                                 </div>
                                 <div>
                                     <div style="font-size: 14px; color: var(--medium-gray);">Média Final:</div>
                                     <div style="font-size: 24px; font-weight: bold; 
-                                            color: {% if disc.nota_final.media_final >= 7 %}#28a745
-                                                   {% elif disc.nota_final.media_final >= 5 %}#ffc107
-                                                   {% else %}#dc3545{% endif %};">
-                                        {{ disc.nota_final.media_final }}/10
+                                            color: {% if disc.nota_final.media_final is not none and disc.nota_final.media_final >= 7 %}#28a745
+                                                   {% elif disc.nota_final.media_final is not none and disc.nota_final.media_final >= 5 %}#ffc107
+                                                   {% elif disc.nota_final.media_final is not none %}#dc3545{% else %}#6b7280{% endif %};">
+                                        {{ disc.nota_final.media_final if disc.nota_final.media_final is not none else '--' }}/10
                                     </div>
                                 </div>
                                 <div>
@@ -699,13 +712,13 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 </div>
                             </div>
                         </div>
-                        {% elif disc.capitulos_feitos == 4 %}
+                        {% elif disc.capitulos_total > 0 and disc.capitulos_feitos == disc.capitulos_total %}
                         <div
                             style="margin-top: 25px; padding: 15px; background: rgba(23, 162, 184, 0.1); border-radius: 8px; text-align: center;">
                             <i class="fas fa-hourglass-half" style="color: #6f7880; margin-bottom: 10px;"></i>
                             <p style="color: #4a5157; margin: 0;">
                                 <strong>Aguardando prova final</strong><br>
-                                Todos os capítulos foram concluídos. Aguarde a liberação da prova final.
+                                Todas as unidades foram concluídas. Aguarde a liberação da prova final.
                             </p>
                         </div>
                         {% endif %}
@@ -714,7 +727,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <!-- Ações -->
                     <div
                         style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--light-gray); display: flex; gap: 10px;">
-                        {% if disc.situacao == 'Cursando' %}
+                        {% if disc.situacao in ['Cursando', 'Em andamento', 'Não iniciada'] %}
                         <a href="/disciplina/{{ disc.id }}" class="btn btn-primary">
                             <i class="fas fa-play-circle"></i> Continuar Estudos
                         </a>

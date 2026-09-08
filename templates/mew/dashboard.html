@@ -387,6 +387,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <span class="badge">{{ total_planos }}</span>
                     {% endif %}
                 </a>
+
+                <a href="/mew/avisos-academicos" class="menu-item">
+                    <i class="fas fa-bullhorn"></i>
+                    <span class="text">Avisos Acadêmicos</span>
+                </a>
             </div>
         </nav>
 
@@ -482,6 +487,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     {% if total_planos and total_planos > 0 %}
                     <span class="badge">{{ total_planos }}</span>
                     {% endif %}
+                </div>
+
+                <!-- Card Avisos Acadêmicos -->
+                <div class="menu-card" onclick="window.location.href='/mew/avisos-academicos'">
+                    <div class="menu-icon" style="background:#343a40;">
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <h3>Avisos Acadêmicos</h3>
+                    <p>Publicar mensagens com texto, imagem ou vídeo para todos os alunos ou para alunos específicos.</p>
                 </div>
 
                 <!-- Card Gerenciar Documentos -->

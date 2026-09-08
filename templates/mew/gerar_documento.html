@@ -423,22 +423,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </p>
     </div>
 
-    <div class="form-group">
-        <label style="font-weight:bold;">IRA do Aluno:</label>
-        <input type="text" id="iraAluno" value="N/I" class="form-control" placeholder="Ex: 8.5, 7.2, N/I" style="margin-bottom:10px;">
-        <small style="color: #666;">Índice de Rendimento Acadêmico</small>
+    <div class="info-box" style="margin:12px 0;background:#f1f3f4;border-left:4px solid #59636a;padding:10px 12px;">
+        <strong>IRA, disciplinas aprovadas, notas e carga horária</strong><br>
+        Esses valores são calculados automaticamente a partir do PostgreSQL. O documento não aceita mais números manuais que possam divergir do cadastro acadêmico.
     </div>
 
     <div class="form-group">
-        <label style="font-weight:bold;">Total de Disciplinas Aprovadas:</label>
-        <input type="number" id="totalDisciplinas" value="0" class="form-control" min="0" style="margin-bottom:10px;">
-        <small style="color: #666;">Este valor aparecerá em "Disciplinas Aprovadas"</small>
-    </div>
-
-    <div class="form-group">
-        <label style="font-weight:bold;">Frequência do Aluno:</label>
-        <input type="text" id="frequenciaAluno" value="N/I" class="form-control" placeholder="Ex: 75%, 80%, 90%, N/I" style="margin-bottom:10px;">
-        <small style="color: #666;">Digite a frequência do aluno (ex: 75%, 80%, N/I)</small>
+        <label style="font-weight:bold;">Frequência administrativa (opcional):</label>
+        <input type="text" id="frequenciaAluno" value="N/I" class="form-control" placeholder="Ex.: 100%, 85% ou N/I" style="margin-bottom:10px;">
+        <small style="color:#666;">Se você informar um percentual, ele será gravado no banco para todas as disciplinas deste histórico e será respeitado literalmente nas telas e documentos.</small>
     </div>
 
     <button onclick="gerarDocumento()" id="btnGerar" class="btn btn-primary btn-grande" disabled>
@@ -685,8 +678,6 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         const alunoId = document.getElementById('alunoSelect').value;
         const ano = document.getElementById('anoReferencia').value;
         
-        const ira = document.getElementById('iraAluno')?.value || 'N/I';
-        const totalDisc = document.getElementById('totalDisciplinas')?.value || '0';
         const frequencia = document.getElementById('frequenciaAluno')?.value || 'N/I';
         
         const tipo = tipoAtual;
@@ -723,8 +714,6 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 bodyData = {
                     aluno_id: alunoId,
                     ano_historico: ano,
-                    ira_manual: ira,
-                    total_disciplinas: totalDisc,
                     frequencia: frequencia
                 };
             } else if (tipo === 'declaracao') {

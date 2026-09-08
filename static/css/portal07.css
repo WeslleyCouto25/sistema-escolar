@@ -1338,3 +1338,25 @@ body.portal07.student-page .academic-kicker{
     overflow-x:hidden!important;
   }
 }
+
+/* SIGEU 2026 — status acadêmico no Portal 07 */
+body.portal07.student-page .card-header.nao-iniciada{
+  background:#e5e7eb!important;
+  border-left:4px solid #6b7280!important;
+  color:#202428!important;
+}
+body.portal07.student-page .card-header.cursando{
+  background:#fff3cd!important;
+  border-left:4px solid #b7791f!important;
+  color:#3f350f!important;
+}
+body.portal07.student-page .card-header.finalizada{
+  background:#d1e7dd!important;
+  border-left:4px solid #198754!important;
+  color:#153b2b!important;
+}
+body.portal07.student-page .card-header.nao-iniciada *,
+body.portal07.student-page .card-header.cursando *,
+body.portal07.student-page .card-header.finalizada *{
+  color:inherit!important;
+}

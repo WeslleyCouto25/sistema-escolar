@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEW — Avisos Acadêmicos</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/portal07.css') }}?v=avisos-20260908">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--dark:#343a40;--orange:#c86d20;--bg:#e9ecef;--border:#c9d0d5;--muted:#586169}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Tahoma,"Segoe UI",Arial,sans-serif;color:#202428}
+.top{background:#343a40;color:#fff;border-bottom:3px solid var(--orange);padding:13px 18px;display:flex;align-items:center;justify-content:space-between;gap:15px}
+.top h1{font-size:18px;margin:0;color:#fff}.top a{color:#fff;text-decoration:none;border:1px solid #737b81;padding:7px 10px;border-radius:2px}
+.wrap{max-width:1180px;margin:20px auto;padding:0 14px}.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,.8fr);gap:18px}
+.card{background:#fff;border:1px solid var(--border);padding:20px;box-shadow:0 2px 7px rgba(28,34,39,.07)}
+.card h2{font-size:16px;margin:0 0 16px;padding:10px 12px;background:#eceff1;border-left:4px solid #343a40}
+label{display:block;font-weight:700;font-size:12px;margin:12px 0 6px}input,textarea,select{width:100%;padding:10px;border:1px solid #bfc8ce;background:#fff;color:#202428;border-radius:2px;font:inherit}
+textarea{min-height:120px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{border:0;border-radius:2px;padding:10px 14px;font-weight:700;cursor:pointer}.primary{background:#343a40;color:#fff}.secondary{background:#6f7880;color:#fff}.danger{background:#a94442;color:#fff}.orange{background:#c86d20;color:#fff}
+.help{font-size:11px;color:var(--muted);line-height:1.45;margin-top:5px}.student-box{border:1px solid var(--border);max-height:220px;overflow:auto;padding:8px;background:#f7f8f9}.student{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid #e3e6e8}.student:last-child{border-bottom:0}.student input{width:auto}
+.alert{display:none;padding:10px 12px;margin-bottom:14px;border-left:4px solid #343a40;background:#fff}.alert.ok{border-color:#28733d;background:#edf7ef}.alert.err{border-color:#a94442;background:#fff0f0}
+.aviso{border:1px solid var(--border);padding:12px;margin-bottom:10px;background:#fff}.aviso.inativo{opacity:.58}.aviso-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.aviso h3{font-size:14px;margin:0 0 5px}.meta{font-size:10px;color:#6b7379}.aviso p{font-size:12px;white-space:pre-wrap;margin:8px 0}.actions{display:flex;gap:7px;flex-wrap:wrap}.actions form{margin:0}.actions button{padding:6px 8px;font-size:11px}
+.media-preview{margin-top:8px;border:1px solid #ddd;padding:6px;background:#fafafa}.media-preview img,.media-preview video{max-width:100%;max-height:180px;display:block;margin:auto}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top"><h1><i class="fa-solid fa-bullhorn"></i> MEW — Avisos Acadêmicos</h1><div><a href="/mew/dashboard">Voltar ao MEW</a></div></div>
+<div class="wrap">
+  <div id="alert" class="alert"></div>
+  <div class="grid">
+    <section class="card">
+      <h2>Novo aviso para o portal do aluno</h2>
+      <form id="formAviso" enctype="multipart/form-data">
+        <label>Título *</label>
+        <input name="titulo" maxlength="160" required placeholder="Ex.: Aviso da Coordenação Acadêmica">
+
+        <label>Mensagem</label>
+        <textarea name="mensagem" maxlength="5000" placeholder="Digite a mensagem que aparecerá quando o aluno entrar no portal."></textarea>
+
+        <div class="row">
+          <div>
+            <label>Tipo de mídia</label>
+            <select name="media_tipo" id="media_tipo">
+              <option value="">Sem mídia</option>
+              <option value="imagem">Imagem</option>
+              <option value="video">Vídeo</option>
+            </select>
+          </div>
+          <div>
+            <label>Arquivo de imagem/vídeo</label>
+            <input type="file" name="media_file" accept="image/*,video/*">
+            <div class="help">O arquivo é enviado ao R2. O limite geral do sistema continua sendo o definido no Render.</div>
+          </div>
+        </div>
+
+        <label>Ou URL de imagem/vídeo</label>
+        <input name="media_url" placeholder="https://...">
+        <div class="help">Se houver arquivo e URL, o arquivo terá prioridade.</div>
+
+        <label>Destinatários *</label>
+        <select name="destino" id="destino">
+          <option value="todos">Todos os alunos</option>
+          <option value="selecionados">Aluno(s) específico(s)</option>
+        </select>
+
+        <div id="alunosBox" style="display:none">
+          <label>Selecione os alunos</label>
+          <div class="student-box">
+            {% for a in alunos %}
+            <label class="student"><input type="checkbox" name="alunos_ids" value="{{ a.id }}"><span>{{ a.nome }} — RA {{ a.ra }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          <button type="submit" class="btn primary"><i class="fa-solid fa-paper-plane"></i> Publicar aviso</button>
+          <button type="reset" class="btn secondary">Limpar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Avisos cadastrados</h2>
+      <div id="listaAvisos">
+        {% if avisos %}
+          {% for a in avisos %}
+          <article class="aviso {% if not a.ativo %}inativo{% endif %}" data-id="{{ a.id }}">
+            <div class="aviso-head"><div><h3>{{ a.titulo }}</h3><div class="meta">{{ a.data_criacao }} • {% if a.publico_todos %}Todos os alunos{% else %}{{ a.total_destinatarios }} aluno(s){% endif %} • {% if a.ativo %}Ativo{% else %}Inativo{% endif %}</div></div></div>
+            {% if a.mensagem %}<p>{{ a.mensagem }}</p>{% endif %}
+            {% if a.media_url_exibicao %}
+            <div class="media-preview">
+              {% if a.media_tipo == 'video' %}<video src="{{ a.media_url_exibicao }}" controls preload="metadata"></video>{% else %}<img src="{{ a.media_url_exibicao }}" alt="Mídia do aviso">{% endif %}
+            </div>
+            {% endif %}
+            <div class="actions" style="margin-top:9px">
+              <form class="acao-aviso" data-op="alternar" method="post" action="/mew/avisos-academicos/{{ a.id }}/alternar"><button class="btn orange" type="submit">{% if a.ativo %}Desativar{% else %}Ativar{% endif %}</button></form>
+              <form class="acao-aviso" data-op="excluir" method="post" action="/mew/avisos-academicos/{{ a.id }}/excluir"><button class="btn danger" type="submit">Excluir</button></form>
+            </div>
+          </article>
+          {% endfor %}
+        {% else %}
+          <p class="help">Nenhum aviso cadastrado.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+const destino=document.getElementById('destino');
+const box=document.getElementById('alunosBox');
+const alertEl=document.getElementById('alert');
+const listaAvisos=document.getElementById('listaAvisos');
+function syncDestino(){box.style.display=destino.value==='selecionados'?'block':'none'}
+destino.addEventListener('change',syncDestino); syncDestino();
+function alertMsg(msg,ok){alertEl.textContent=msg;alertEl.className='alert '+(ok?'ok':'err');alertEl.style.display='block';window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>alertEl.style.display='none',6500)}
+function cardAviso(a){
+  const article=document.createElement('article'); article.className='aviso'; article.dataset.id=a.id;
+  const head=document.createElement('div'); head.className='aviso-head'; const inner=document.createElement('div'); const h=document.createElement('h3'); h.textContent=a.titulo||'Aviso acadêmico';
+  const meta=document.createElement('div'); meta.className='meta'; meta.textContent=(a.publico_todos?'Todos os alunos':((a.total_destinatarios||0)+' aluno(s)'))+' • Ativo • publicado agora'; inner.append(h,meta); head.append(inner); article.append(head);
+  if(a.mensagem){const p=document.createElement('p');p.textContent=a.mensagem;article.append(p)}
+  if(a.media_url_exibicao){const wrap=document.createElement('div');wrap.className='media-preview';const el=document.createElement(a.media_tipo==='video'?'video':'img');el.src=a.media_url_exibicao;if(a.media_tipo==='video'){el.controls=true;el.preload='metadata'}else{el.alt='Mídia do aviso'}wrap.append(el);article.append(wrap)}
+  const actions=document.createElement('div');actions.className='actions';actions.style.marginTop='9px';
+  actions.innerHTML='<form class="acao-aviso" data-op="alternar" method="post"><button class="btn orange" type="submit">Desativar</button></form><form class="acao-aviso" data-op="excluir" method="post"><button class="btn danger" type="submit">Excluir</button></form>';
+  const forms=actions.querySelectorAll('form');forms[0].action='/mew/avisos-academicos/'+a.id+'/alternar';forms[1].action='/mew/avisos-academicos/'+a.id+'/excluir';article.append(actions);return article;
+}
+document.getElementById('formAviso').addEventListener('submit',async(e)=>{
+  e.preventDefault(); const form=e.currentTarget; const fd=new FormData(form);
+  if(destino.value==='selecionados' && !fd.getAll('alunos_ids').length){alertMsg('Selecione pelo menos um aluno.',false);return}
+  const btn=form.querySelector('button[type=submit]'); const original=btn.innerHTML; btn.disabled=true; btn.textContent='Publicando...';
+  try{
+    const r=await fetch('/mew/avisos-academicos/salvar',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}});const data=await r.json();if(!r.ok||!data.success)throw new Error(data.message||'Erro ao publicar');
+    const vazio=listaAvisos.querySelector('.help');if(vazio&&!listaAvisos.querySelector('.aviso'))vazio.remove();if(data.aviso)listaAvisos.prepend(cardAviso(data.aviso));
+    form.reset();syncDestino();alertMsg('Aviso publicado com sucesso.',true);
+  }catch(err){alertMsg(err.message,false)}finally{btn.disabled=false;btn.innerHTML=original}
+});
+listaAvisos.addEventListener('submit',async(e)=>{
+  const form=e.target.closest('form.acao-aviso');if(!form)return;e.preventDefault();const op=form.dataset.op;if(op==='excluir'&&!confirm('Excluir este aviso?'))return;const btn=form.querySelector('button');btn.disabled=true;
+  try{const r=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});const data=await r.json();if(!r.ok||!data.success)throw new Error(data.message||'Não foi possível concluir a ação.');const card=form.closest('.aviso');if(op==='excluir'){card.remove();alertMsg('Aviso excluído.',true)}else{card.classList.toggle('inativo',!data.ativo);btn.textContent=data.ativo?'Desativar':'Ativar';alertMsg(data.ativo?'Aviso ativado.':'Aviso desativado.',true)}}catch(err){alertMsg(err.message,false)}finally{if(btn.isConnected)btn.disabled=false}
+});
+</script>
+</body></html>
