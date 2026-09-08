@@ -104,6 +104,17 @@ def gerar_hash_completa(codigo, data):
 ROMANOS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV"]
 
 
+def sortear_estrutura_plano(numero_unidades=None):
+    """Define a estrutura antes da IA: 8-12 unidades e 8-12 tópicos por unidade."""
+    try:
+        n = int(numero_unidades) if numero_unidades not in (None, "", 0, "0") else 0
+    except Exception:
+        n = 0
+    if not 8 <= n <= 12:
+        n = random.randint(8, 12)
+    return n, [random.randint(8, 12) for _ in range(n)]
+
+
 def _get_client():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -169,19 +180,22 @@ def _formatar_conteudo(unidades):
     return "\n\n".join(blocos)
 
 
-def _validar_e_normalizar(plano, numero_unidades=4):
+def _validar_e_normalizar(plano, numero_unidades=8, topicos_por_unidade_alvo=None):
     """Valida a resposta da IA sem prender o plano a quatro unidades.
 
-    O MEW pode gerar de 1 a 12 unidades. Para manter o documento sempre paginado,
+    O gerador trabalha com 8 a 12 unidades. Para manter o documento sempre paginado,
     o conteúdo de cada unidade é deliberadamente compacto.
     """
     if not isinstance(plano, dict):
         raise ValueError("A IA não retornou um objeto JSON válido.")
 
     try:
-        numero_unidades = max(1, min(12, int(numero_unidades or 4)))
+        numero_unidades = max(8, min(12, int(numero_unidades or 8)))
     except Exception:
-        numero_unidades = 4
+        numero_unidades = 8
+    alvos = list(topicos_por_unidade_alvo or [])
+    if len(alvos) != numero_unidades:
+        alvos = [8] * numero_unidades
 
     objetivo_geral = str(plano.get("objetivo_geral") or "").strip()
     objetivos = _lista(plano.get("objetivos_especificos"))
@@ -203,17 +217,11 @@ def _validar_e_normalizar(plano, numero_unidades=4):
     if not isinstance(unidades, list) or len(unidades) != numero_unidades:
         erros.append(f"conteudo_programatico deve ter {numero_unidades} unidades")
     else:
-        # Quanto mais unidades, mais compacto cada bloco precisa ser para caber
-        # rigorosamente em 6 posições por página.
-        max_topicos = 5 if numero_unidades <= 6 else 4
-        min_topicos = 3
         for i, unidade in enumerate(unidades, 1):
             topicos = _lista(unidade.get("topicos") if isinstance(unidade, dict) else None)
-            if not min_topicos <= len(topicos) <= max_topicos:
-                erros.append(
-                    f"unidade {i} deve ter de {min_topicos} a {max_topicos} tópicos "
-                    f"(recebeu {len(topicos)})"
-                )
+            alvo = int(alvos[i - 1])
+            if len(topicos) != alvo:
+                erros.append(f"unidade {i} deve ter exatamente {alvo} tópicos (recebeu {len(topicos)})")
     if not 8 <= len(habilidades) <= 12:
         erros.append(f"habilidades deve ter de 8 a 12 itens (recebeu {len(habilidades)})")
     if len(basica) != 5:
@@ -250,10 +258,13 @@ def gerar_prompt_simplificado(dados, correcao=""):
     ementa_base = str(dados.get("ementa") or "").strip()
     carga = str(dados.get("carga_horaria") or "80 horas").strip()
     try:
-        numero_unidades = max(1, min(12, int(dados.get("numero_unidades") or 4)))
+        numero_unidades = max(8, min(12, int(dados.get("numero_unidades") or 8)))
     except Exception:
-        numero_unidades = 4
-    topicos_por_unidade = "3 a 5" if numero_unidades <= 6 else "3 a 4"
+        numero_unidades = 8
+    alvos = list(dados.get("topicos_por_unidade_alvo") or [])
+    if len(alvos) != numero_unidades:
+        alvos = [8] * numero_unidades
+    regra_topicos = "; ".join(f"Unidade {i+1}: {alvos[i]} tópicos" for i in range(numero_unidades))
 
     return f"""
 Você é especialista brasileiro em elaboração de planos de ensino de educação superior.
@@ -265,6 +276,7 @@ DADOS FORNECIDOS:
 - Sugestão de ementa: {ementa_base}
 - Carga horária: {carga}
 - Quantidade EXATA de unidades: {numero_unidades}
+- Quantidade EXATA de tópicos por unidade: {regra_topicos}
 
 REGRAS OBRIGATÓRIAS:
 1. Preserve o sentido da sugestão de ementa, mas desenvolva-a tecnicamente.
@@ -272,7 +284,7 @@ REGRAS OBRIGATÓRIAS:
 3. Gere EXATAMENTE 5 objetivos específicos, iniciados por verbos no infinitivo.
 4. Gere EXATAMENTE 20 tópicos de ementa expandida, sem citações.
 5. Gere EXATAMENTE {numero_unidades} unidades de conteúdo programático.
-6. Cada unidade deve ter de {topicos_por_unidade} tópicos curtos e objetivos; cada tópico deve, preferencialmente, caber em uma linha e ter no máximo cerca de 14 palavras.
+6. Respeite EXATAMENTE esta distribuição de tópicos: {regra_topicos}. Cada tópico deve ser curto, específico e ter no máximo 8 palavras, de modo a caber no quadro compacto da página 2.
 7. Os títulos das unidades devem ser curtos. Use “UNIDADE 1 — ...”, “UNIDADE 2 — ...” e assim sucessivamente.
 8. Gere de 8 a 12 habilidades coerentes com a disciplina.
 9. Gere pré-requisitos acadêmicos realistas. Se não forem necessários, escreva explicitamente que não há pré-requisitos formais.
@@ -290,7 +302,7 @@ RETORNE EXATAMENTE UM JSON COM ESTA ESTRUTURA (a lista conteudo_programatico dev
   "objetivos_especificos": ["item 1", "item 2", "item 3", "item 4", "item 5"],
   "ementa_expandida": ["tópico 1", "tópico 2", "... até 20"],
   "conteudo_programatico": [
-    {{"titulo": "UNIDADE 1 — TÍTULO", "topicos": ["tópico 1", "tópico 2", "tópico 3"]}}
+    {{"titulo": "UNIDADE 1 — TÍTULO", "topicos": ["tópico 1", "... quantidade exata definida acima"]}}
   ],
   "habilidades": ["habilidade 1", "..."],
   "pre_requisitos": "texto",
@@ -304,9 +316,14 @@ RETORNE EXATAMENTE UM JSON COM ESTA ESTRUTURA (a lista conteudo_programatico dev
 
 
 def consultar_openai_para_plano(dados):
-    """Gera todo o conteúdo variável do plano. Entrada manual: disciplina + sugestão de ementa."""
+    """Gera o conteúdo variável já com a estrutura sorteada antes da chamada à IA."""
     if not (dados.get("disciplina") and dados.get("ementa")):
         raise ValueError("Disciplina e sugestão de ementa são obrigatórias.")
+
+    dados = dict(dados)
+    numero_unidades, alvos = sortear_estrutura_plano(dados.get("numero_unidades"))
+    dados["numero_unidades"] = numero_unidades
+    dados["topicos_por_unidade_alvo"] = alvos
 
     client = _get_client()
     modelo = _modelo_planos()
@@ -328,7 +345,7 @@ def consultar_openai_para_plano(dados):
         texto = getattr(response, "output_text", "") or ""
         try:
             bruto = _json_da_resposta(texto)
-            return _validar_e_normalizar(bruto, numero_unidades=dados.get("numero_unidades") or 4)
+            return _validar_e_normalizar(bruto, numero_unidades=dados["numero_unidades"], topicos_por_unidade_alvo=dados["topicos_por_unidade_alvo"])
         except Exception as e:
             erro_anterior = str(e)
             if tentativa == 1:
@@ -360,5 +377,6 @@ __all__ = [
     'METODOLOGIA_FIXA',
     'SISTEMA_AVALIACAO_FIXO',
     'gerar_codigo_autenticacao',
-    'gerar_hash_completa'
+    'gerar_hash_completa',
+    'sortear_estrutura_plano'
 ]

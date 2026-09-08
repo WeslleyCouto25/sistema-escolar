@@ -9,13 +9,13 @@
 </style>
 </head>
 <body>
-<header class="top"><div class="wrap brand"><strong>GRUPO EDUCACIONAL UNIFICADO</strong><small>SIGEU Educacional • Sistema Integrado de Gestão Educacional</small><div class="cert">FACOP CERTIFICADORA</div></div></header>
+{% include '_public_header.html' %}
 <main class="wrap"><div class="grid">
 <section class="card pad">
 <h1 style="font-size:24px;margin:0 0 6px">Sua seleção</h1>
 <p style="margin:0 0 15px;color:var(--muted);line-height:1.5">Confira as unidades curriculares antes de seguir. Você pode acrescentar quantas precisar antes do pagamento.</p>
 {% for i in itens %}
-<div class="item"><strong>{{ loop.index }}. {{ i.disciplina_confirmada }}</strong><span>{{ i.curso_area }} • {{ i.carga_horaria }}h • {{ i.preco_txt }}</span><span>Docente: {{ i.docente_nome or 'Docente Titular' }}</span></div>
+<div class="item"><strong>{{ loop.index }}. {{ i.disciplina_confirmada }}</strong><span>{{ i.curso_area }} • {{ i.carga_horaria }}h • {{ i.preco_txt }}</span><span>Docente: {{ i.docente_nome or 'Docente em definição automática' }}</span></div>
 {% endfor %}
 <div class="total"><span><small style="color:var(--muted);font-weight:700">TOTAL DA SELEÇÃO</small><br>{{ itens|length }} disciplina(s)</span><b>{{ total_txt }}</b></div>
 <a class="btn alt" href="/?pedido={{ pedido_token }}#procure-disciplina">Sim, desejo mais uma disciplina</a>
@@ -26,4 +26,5 @@
 </section>
 <section class="card"><div class="preview-head"><strong>Última prévia gerada: {{ sol.disciplina_confirmada }}</strong><span>SEM VALIDADE ACADÊMICA</span></div><iframe class="frame" title="Prévia do plano de ensino" src="{{ url_for('matricula_publica_plano', token=sol.token) }}"></iframe></section>
 </div></main>
+{% include '_public_footer.html' %}
 </body></html>

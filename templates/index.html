@@ -1351,7 +1351,13 @@ a.whatsapp-course-btn:hover {
                                 </select>
                             </div>
                         </div>
-                        <button class="disc-btn" id="discGenerateBtn" type="button" style="margin-top:16px">Gerar prévia do plano de ensino</button>
+                        <div class="disc-confirm" id="discPlanMessage" style="margin-top:14px; display:none"></div>
+                        <div class="disc-field" style="margin-top:14px">
+                            <label for="discConteudosEsperados">Conteúdos esperados ou específicos <span style="font-weight:400;color:var(--medium-gray)">(opcional)</span></label>
+                            <textarea class="disc-input" id="discConteudosEsperados" rows="4" maxlength="3500" style="width:100%;resize:vertical" placeholder="Se quiser uma ementa diferente da disponível, informe apenas os conteúdos que espera encontrar. Ex.: auditoria governamental, NBC TSP, prestação de contas..."></textarea>
+                            <small style="display:block;margin-top:6px;color:var(--medium-gray)">Se a disciplina já existir na base e este campo ficar vazio, o SIGEU reutiliza o plano institucional disponível. Se você informar conteúdos, uma nova versão será preparada conforme sua ementa.</small>
+                        </div>
+                        <button class="disc-btn" id="discGenerateBtn" type="button" style="margin-top:16px">Consultar disponibilidade e plano</button>
                     </div>
                     <div class="disc-status" id="discPublicStatus" aria-live="polite"></div>
                     <p class="disc-note">A prévia é informativa e não possui validade acadêmica. A matrícula somente é liberada após contratação, confirmação do pagamento e conferência documental pelo SIGEU.</p>
@@ -1726,121 +1732,7 @@ a.whatsapp-course-btn:hover {
     </section>
 
     <!-- Footer -->
-    <footer class="main-footer" id="contact">
-        <div class="footer-wave"></div>
-        <div class="container">
-            <div class="footer-grid">
-                <div>
-                    <h4 style="margin-bottom: 25px; color: white;">FACOP</h4>
-                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
-                        <strong>Faculdade do Centro Oeste Paulista - Mantenedora</strong><br>
-                        Código MEC: 1135<br>
-                        Situação: ATIVA<br>
-                        Credenciada pelo Ministério da Educação
-                        INSTITUIÇÃO CERTIFICADORA PARCEIRA DO SIGEU EDUCACIONAL
-                    </p>
-                    <div style="margin-top: 20px;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
-                            <span style="opacity: 0.9;">CREDENCIADA MEC - CERTIFICADO</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
-                            <span style="opacity: 0.9;">RECONEHCIMENTO DE CURSOS</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
-                            <span style="opacity: 0.9;">CURSOS E CADEIRAS LIVRES, EXTENSÃO, ENSINO</span>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
-                            <span style="opacity: 0.9;">ENSINO CONTINUADO, FORMAÇÃO COMPLEMENTAR, APRIMORAMENTO</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <h4 style="margin-bottom: 25px; color: white;">Parceria Estratégica</h4>
-                    <p style="opacity: 0.9; margin-bottom: 20px; font-size: 0.95rem;">
-                        <strong>SISTEMA SiGEU</strong><br>
-                        Sistema de Gestão Educacional Unificada<br>
-                        Contrato de Administração Educacional (CAE)<br>
-                        Validação: Processo/Contrato nº 2025/2
-                    </p>
-                    <div class="mec-verified">
-                        <i class="fas fa-shield-alt"></i> PARCERIA VALIDADA INSTITUCIONAL
-
-                    </div>
-                </div>
-
-                <div>
-                    <h4 style="margin-bottom: 25px; color: #ffffff;">
-                        Verificação MEC
-                    </h4>
-
-                    <p style="opacity: 0.9; margin-bottom: 15px; font-size: 0.9rem; color: #ffffff;">
-                        Clique na imagem abaixo para verificar o credenciamento da FACOP diretamente no sistema do MEC:
-                    </p>
-
-                    <div style="text-align: center;">
-                        <a href="https://emec.mec.gov.br/emec/consulta-cadastro/detalhamento/d96957f455f6405d14c6542552b0f6eb/MTkzMjU="
-                            target="_blank">
-                            <picture>
-                                <source srcset="{{ url_for('static', filename='img/consultamec.webp') }}" type="image/webp">
-                                <img src="{{ url_for('static', filename='img/consultamec.png') }}"
-                                    alt="Clique para consultar o status da FACOP Certificadora no MEC" width="120"
-                                    loading="lazy" decoding="async" style="cursor: pointer;">
-                            </picture>
-                        </a>
-                    </div>
-
-                    <p style="margin-top: 10px; font-size: 0.8rem; opacity: 0.8; color: #ffffff; text-align: center;">
-                        e-MEC: 1135/2024 — FACOP
-                    </p>
-                </div>
-
-                <div>
-                    <h4 style="margin-bottom: 25px; color: white;">Contato</h4>
-                    <div style="margin-bottom: 15px;">
-                        <i class="fas fa-map-marker-alt" style="margin-right: 10px; opacity: 0.8;"></i>
-                        <span style="opacity: 0.9;">Av. Paulista, 1000 - São Paulo/SP</span>
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <i class="fas fa-phone" style="margin-right: 10px; opacity: 0.8;"></i>
-                        <span style="opacity: 0.9; display: block;">(11) 3302-0501</span>
-                        <span style="opacity: 0.9; display: block;">(21) 3795-0444</span>
-                        <span style="opacity: 0.9; display: block;">(21) 99002-0262</span>
-                    </div>
-                    <div style="margin-bottom: 20px;">
-                        <i class="fas fa-envelope" style="margin-right: 10px; opacity: 0.8;"></i>
-                        <span style="opacity: 0.9; display: block;">contato@sigeueducacional.com.br</span>
-                        <span style="opacity: 0.9; display: block;">secretariavirtual@sigeueducacional.com.br</span>
-                        <span style="opacity: 0.9; display: block;">academico@sigeueducacional.com.br</span>
-                    </div>
-
-                    <div class="header-social">
-                        <a href="https://wa.me/5521990020262" target="_blank" class="social-icon">
-                            <i class="fab fa-whatsapp"></i>
-                        </a>
-                        <a href="#" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
-                        <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-                        <a href="#" class="social-icon"><i class="fab fa-youtube"></i></a>
-                    </div>
-                </div>
-            </div>
-
-            <div
-                style="border-top: 1px solid rgba(255,255,255,0.1); margin-top: 60px; padding-top: 30px; text-align: center; opacity: 0.8;">
-                <p style="margin-bottom: 10px;">
-                    &copy; 2026 Sistema de Gestão Educacional Unificada & FACOP Certificadora. Todos os direitos reservados.
-                </p>
-                <p style="font-size: 0.9rem;">
-                    CNPJ MANETEDORA: 04.344.730/0003-22 |
-                    Em parceria contratual com o SISTEMA SiGEU |
-                    Credenciada pela Portaria MEC nº 1.135/2024
-                </p>
-            </div>
-        </div>
-    </footer>
+    {% include '_public_footer.html' %}
 
     <!-- Modal WhatsApp -->
     <div class="modal" id="whatsappModal">
@@ -2381,6 +2273,8 @@ function getAreaColor(area) {
     const curso = document.getElementById('discCursoArea');
     const carga = document.getElementById('discCargaHoraria');
     const generateBtn = document.getElementById('discGenerateBtn');
+    const conteudos = document.getElementById('discConteudosEsperados');
+    const planMessage = document.getElementById('discPlanMessage');
     const statusBox = document.getElementById('discPublicStatus');
     let disciplinaSugerida = '';
     const pedidoToken = new URLSearchParams(window.location.search).get('pedido') || '';
@@ -2404,8 +2298,8 @@ function getAreaColor(area) {
         e.preventDefault();
         const digitado = (input.value || '').trim();
         if (digitado.length < 2) return status('Digite o nome da disciplina.', 'error');
-        busy(suggestBtn, true, 'Conferindo...');
-        status('Conferindo a nomenclatura acadêmica...');
+        busy(suggestBtn, true, 'Consultando...');
+        status('CONSULTANDO DISCIPLINA E DISPONIBILIDADE NA BASE INSTITUCIONAL');
         step2.style.display = 'none';
         try {
             const r = await fetch('/api/publico/sugerir-disciplina', {
@@ -2415,8 +2309,12 @@ function getAreaColor(area) {
             if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível conferir a disciplina.');
             disciplinaSugerida = d.nome_sugerido;
             confirmation.textContent = d.pergunta_curso || `Sua disciplina é ${disciplinaSugerida}. De qual curso ou área ela faz parte?`;
+            if (planMessage) {
+                planMessage.textContent = d.mensagem_plano || '';
+                planMessage.style.display = d.mensagem_plano ? 'block' : 'none';
+            }
             step2.style.display = 'block';
-            status('Nome conferido. Informe agora o curso ou área e escolha a carga horária.', 'ok');
+            status(d.plano_existente ? 'DISCIPLINA LOCALIZADA NA BASE INSTITUCIONAL • PLANO DISPONÍVEL' : 'DISCIPLINA CONSULTADA • COMPLETE OS DADOS PARA VERIFICAR A DISPONIBILIDADE', 'ok');
             setTimeout(() => curso.focus(), 50);
         } catch (err) {
             status(err.message || 'Não foi possível conferir a disciplina.', 'error');
@@ -2427,16 +2325,16 @@ function getAreaColor(area) {
         const cursoArea = (curso.value || '').trim();
         if (!disciplinaSugerida) return status('Primeiro confira o nome da disciplina.', 'error');
         if (cursoArea.length < 2) return status('Informe o curso ou a área da disciplina.', 'error');
-        busy(generateBtn, true, 'Preparando plano...');
-        status('Preparando a prévia do plano de ensino. Isso pode levar alguns segundos...');
+        busy(generateBtn, true, 'Consultando...');
+        status('CONSULTANDO DISCIPLINA E DISPONIBILIDADE NA BASE INSTITUCIONAL');
         try {
             const r = await fetch('/api/publico/gerar-previa-plano', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({disciplina: disciplinaSugerida, curso_area: cursoArea, carga_horaria: Number(carga.value), pedido_token: pedidoToken})
+                body: JSON.stringify({disciplina: disciplinaSugerida, curso_area: cursoArea, carga_horaria: Number(carga.value), pedido_token: pedidoToken, conteudos_esperados: (conteudos?.value || '').trim()})
             });
             const d = await r.json();
             if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível gerar a prévia.');
-            status('Prévia pronta. Abrindo o plano de ensino...', 'ok');
+            status(d.plano_reutilizado ? 'PLANO INSTITUCIONAL LOCALIZADO. ABRINDO A PRÉVIA...' : 'PLANO PREPARADO CONFORME A EMENTA. ABRINDO A PRÉVIA...', 'ok');
             window.location.href = d.url;
         } catch (err) {
             status(err.message || 'Não foi possível gerar a prévia.', 'error');

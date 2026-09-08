@@ -1,83 +1,78 @@
-SIGEU - PACOTE CONSOLIDADO - 08/09/2026
+SIGEU - PACOTE FINAL CONSOLIDADO - 08/09/2026
 
-1. NOTAS / FREQUÊNCIA / PROGRESSO (mantido do pacote corrigido anterior)
-- Notas administrativas usam os IDs reais dos capítulos e continuam lendo registros legados 1/2/3/4.
-- notas.nota é REAL: aceita valores decimais.
-- Frequência administrativa fica persistida em aluno_disciplina_datas.frequencia e é respeitada literalmente.
-- Se o MEW grava 100% de frequência, o portal e os documentos usam 100%.
-- Alterar progresso/frequência não apaga notas.
-- Salvamentos principais do MEW usam AJAX, sem recarregar a página a cada alteração.
-- Situação Acadêmica mostra todas as unidades reais e não duplica nota legado + nota canônica.
-- Reenvio de Avaliação Final agora também usa UPSERT em notas_finais, evitando erro por registro já existente.
+1. NOTAS, FREQUÊNCIA E SITUAÇÃO ACADÊMICA
+- Notas administrativas usam IDs reais dos capítulos e mantêm compatibilidade com registros legados.
+- Notas decimais são aceitas no PostgreSQL.
+- Frequência administrativa é persistida em aluno_disciplina_datas.frequencia e respeitada literalmente; 100% permanece 100%.
+- Alterar frequência/progresso não apaga notas.
+- Situação Acadêmica usa as unidades reais, sem duplicar nota legada/canônica.
+- Salvamentos principais do MEW permanecem em AJAX para evitar recarga desnecessária.
+- O bloco público de "Resultados Anteriores" foi retirado da Situação Acadêmica sem apagar os registros do banco.
 
-2. DOCUMENTOS - NOVO PADRÃO ÚNICO
-Arquivo central: documentos_institucionais.py
-- Plano de Ensino, Declaração e Histórico passam a usar o mesmo perfil institucional limpo, em cinza/preto, inspirado no modelo visual fornecido.
-- Logotipo institucional existente do projeto é incorporado ao HTML/PDF.
-- Cabeçalho principal: SIGEU Educacional - Grupo Educacional Unificado.
-- FACOP aparece explicitamente e sempre como FACOP CERTIFICADORA, com texto de certificação/parceria.
-- Marca d'água diagonal discreta em todas as páginas, contendo o código de autenticação.
-- Rodapé em todas as páginas com código de autenticação e número da página.
-- QR Code, hash SHA-256 e código de autenticação permanecem na validação eletrônica.
-- Não existe linha/rabisco simulando assinatura.
+2. DOCUMENTOS INSTITUCIONAIS - PADRÃO ÚNICO
+- Plano de Ensino, Declaração e Histórico usam documentos_institucionais.py.
+- Logo padrão: static/img/logo.png.
+- Identificação principal: SIGEU Educacional / FACOP Certificadora.
+- Instituição: Grupo Educacional Unificado / Faculdade do Centro Oeste Paulista LTDA - Certificadora.
+- Bloco superior: CERTIFICADORA PARCEIRA / FACOP CERTIFICADORA.
+- Razão Social: FACULDADE DO CENTRO OESTE PAULISTA FACOP LTDA.
+- CNPJ Matriz: 04.344.730/0001-60.
+- Natureza Jurídica: Sociedade Empresária Limitada.
+- Marca d'água discreta com código de autenticação.
+- Rodapé horizontal em todas as páginas, com código e "Página X de Y" sem quebra do contador.
+- QR Code, código e SHA-256 mantidos na autenticação eletrônica.
 
-3. RESPONSÁVEIS / ASSINATURA ELETRÔNICA
-Somente duas responsáveis podem ser selecionadas pelo gerador:
-- Tatiane R. L. Costa
-- Natalia Nunes de Couto
-Cargo comum: Coordenação Acadêmica e Secretaria Geral - FACOP/SIGEU.
-A escolha é distribuída entre as duas a partir do código do documento e permanece estável quando o mesmo documento é reaberto.
-O bloco contém somente nome, cargo e informação de assinatura eletrônica, sem assinatura manuscrita simulada.
+3. DECLARAÇÃO
+- Texto institucional preservado conforme redação definida pelo administrador.
+- Sem linha simulando assinatura e sem frase de docente/responsável dentro do corpo.
+- Certificação vinculada à FACOP Certificadora nos termos definidos.
+- Assinatura eletrônica somente por Tatiane R. L. Costa ou Natalia Nunes de Couto.
 
-4. PLANO DE ENSINO - 1 A 12 UNIDADES
-- MEW agora permite escolher de 1 a 12 unidades antes da geração.
-- A IA recebe a quantidade EXATA e é validada contra essa quantidade.
-- O bloco de unidades possui estrutura fixa e imutável:
-  * primeira folha do bloco: posições 1 a 6;
-  * segunda folha do bloco: posições 7 a 12.
-- Se forem escolhidas 5 unidades, a posição 6 permanece vazia e as posições 7 a 12 continuam reservadas/vazias.
-- Se forem escolhidas 12, todas as 12 posições são preenchidas.
-- O documento não redistribui unidades para ocupar os espaços vazios.
-- Foi removido o reload da tela ao clicar em “Gerar Novo Plano”; o formulário é reiniciado na própria página.
+4. HISTÓRICO ESCOLAR
+- Docente real da disciplina é usado no histórico.
+- Se a disciplina não tiver docente vinculado, o sistema sorteia um docente ativo já cadastrado no MEW e grava o vínculo.
+- Dados do estudante incluem instituição.
+- Texto final: carga horária integralizada + certificação formalizada pela FACOP Certificadora, vinculada aos registros autenticados.
+- Redação técnica sobre regulação/verificação institucional sem afirmar validação individual do documento pelo MEC.
+- Paginação dinâmica: linhas nunca são cortadas; primeira/última folha reservam espaço para identificação e validação.
+- Teste de 40 componentes: 4 páginas, com fechamento completo na última.
 
-5. HISTÓRICO ACADÊMICO
-- Paginação explícita e conservadora: 8 componentes curriculares por folha no layout atual.
-- Linhas não são divididas entre páginas.
-- Cabeçalho e rodapé são repetidos em cada folha.
-- Exemplo validado: 16 disciplinas geram exatamente 2 páginas no PDF de teste, sem cortar a 8ª/16ª disciplina nem a validação final.
-- A última página inclui resumo, assinatura eletrônica e autenticação sem criar uma terceira folha vazia.
-- Frequência, média, situação, carga horária e docente continuam vindo do PostgreSQL.
+5. PLANO DE ENSINO
+- Estrutura sorteada ANTES da IA: de 8 a 12 unidades.
+- Cada unidade recebe, também antes da IA, de 8 a 12 tópicos.
+- Página 2 contém SEMPRE as 12 posições de unidades em grade fixa.
+- Se forem geradas apenas 8 unidades, as posições 9 a 12 permanecem vazias sem alterar a formação.
+- Página 3 inicia diretamente em METODOLOGIA.
+- Página 4 contém referências e validação institucional.
+- Um único plano institucional corrente por disciplina.
+- Gerar novamente substitui o plano corrente daquela disciplina.
+- Exclusão de plano no MEW funciona por AJAX, sem recarregar a listagem.
 
-6. AVISOS ACADÊMICOS - NOVA ÁREA MEW
-Nova página: /mew/avisos-academicos
-- Publicação de título + mensagem.
-- Mídia opcional por upload (imagem/vídeo no R2) ou URL.
-- Destino: todos os alunos ou aluno(s) específico(s).
-- Pode ativar, desativar e excluir avisos.
-- Publicar/ativar/desativar/excluir funciona por AJAX na tela MEW, sem reload obrigatório.
-- No dashboard do aluno, os avisos pendentes aparecem como modal após o login.
-- O aluno fecha pelo X ou botão Fechar e volta ao portal normalmente, sem reload.
-- O fechamento é gravado por aluno; o mesmo aviso não reaparece para quem já o fechou.
-- Novas tabelas são criadas automaticamente por migrate.py no deploy do Render.
+6. CONSULTA PÚBLICA / MATRÍCULA
+- Mensagem fixa durante a busca: CONSULTANDO DISCIPLINA E DISPONIBILIDADE NA BASE INSTITUCIONAL.
+- Se já houver plano institucional, ele é reaproveitado.
+- Campo opcional "Conteúdos esperados ou específicos" permite pedir outra abordagem/ementa.
+- Quando esse campo é usado, a instrução enviada à IA prioriza os conteúdos "CONFORME SUA EMENTA".
+- Após contratação/pagamento, a disciplina é garantida na base institucional e o plano correspondente é vinculado/substituído conforme o pedido.
+- Páginas públicas de matrícula possuem menu superior institucional e rodapé horizontal padronizado.
 
-7. DASHBOARD / CORES (mantido)
-- Cinza: não iniciada.
-- Amarelo: cursando.
-- Verde: finalizada.
-- Mantido o Portal 07 como design atual.
+7. RESPONSÁVEIS DE ASSINATURA
+- Tatiane R. L. Costa.
+- Natalia Nunes de Couto.
+- Cargo: Coordenação Acadêmica e Secretaria Geral - SIGEU Educacional - Executora / FACOP Certificadora.
+- A seleção é estável por código documental.
 
-8. CHECK-UP DO PACOTE
-- Todos os arquivos Python do pacote: py_compile OK.
-- 66 templates HTML/Jinja: parse OK.
-- JavaScript novo de Avisos, popup do aluno e geração de Plano: node --check OK.
-- PDF de teste do Plano: 5 páginas exatas; unidades 1-6 e 7-12 permanecem nas posições fixas.
-- PDF de teste com apenas 5 unidades: unidade 6 e 7-12 permanecem vazias, sem colapso do layout.
-- PDF de teste do Histórico com 16 disciplinas: 2 páginas exatas, sem corte.
-- PDF de teste da Declaração: 1 página.
-- Os PDFs de teste foram renderizados em PNG para inspeção visual.
+8. CHECK-UP FINAL
+- 11 arquivos Python: py_compile OK.
+- 68 templates HTML/Jinja: parse OK.
+- 160 rotas Flask efetivas: sem duplicidade pelo AST.
+- Plano de teste com 12 unidades: 4 páginas.
+- Plano de teste com 8 unidades: 4 páginas, posições 9-12 vazias.
+- Histórico de teste com 40 componentes: 4 páginas.
+- Declaração de teste: 1 página.
+- PDFs renderizados e inspecionados: sem corte de conteúdo e com contador do rodapé em uma única linha.
 
 9. DEPLOY
-O Procfile continua executando migrate.py antes do Gunicorn. No próximo deploy, as mudanças de banco são idempotentes e não apagam dados existentes.
-
-OBSERVAÇÃO
-Este check-up valida código, templates, JavaScript, migrações e renderização de documentos do pacote. A comparação registro a registro com o banco de produção exige um dump/backup do PostgreSQL atual; nenhuma alegação de auditoria dos dados de produção é feita sem esse arquivo.
+- Procfile e migrações preservados.
+- .env, __pycache__, *.pyc e arquivos temporários não fazem parte do pacote final.
+- O banco de produção não é sobrescrito pelo ZIP; as migrações são executadas pelo fluxo de deploy existente.

@@ -1,0 +1,27 @@
+<style>
+.sigeu-public-head{background:#fff;border-bottom:3px solid #2d3337;position:relative;z-index:50;font-family:Arial,Helvetica,sans-serif}
+.sigeu-public-head .sph-wrap{max-width:1220px;margin:auto;padding:12px 20px;display:flex;align-items:center;gap:26px}
+.sigeu-public-head .sph-brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#202428;min-width:300px}
+.sigeu-public-head .sph-brand img{width:118px;height:42px;object-fit:contain;object-position:left center}
+.sigeu-public-head .sph-brand strong{display:block;font-size:16px;line-height:1.15}.sigeu-public-head .sph-brand small{display:block;color:#687176;margin-top:3px;font-size:11px}
+.sigeu-public-head nav{margin-left:auto;display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.sigeu-public-head nav a{color:#262c30;text-decoration:none;font-size:12px;font-weight:700;padding:9px 10px;border-bottom:2px solid transparent}
+.sigeu-public-head nav a:hover{border-bottom-color:#c86d20;color:#9b5117}.sigeu-public-head nav a.sph-login{background:#343a40;color:#fff;border:0;padding:10px 14px;margin-left:5px}
+@media(max-width:820px){.sigeu-public-head .sph-wrap{padding:10px 12px;display:block}.sigeu-public-head .sph-brand{min-width:0}.sigeu-public-head nav{margin-top:10px;justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap}.sigeu-public-head nav a{white-space:nowrap}.sigeu-public-head .sph-brand img{width:96px;height:36px}}
+</style>
+<header class="sigeu-public-head">
+  <div class="sph-wrap">
+    <a class="sph-brand" href="/">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="SIGEU Educacional e FACOP Certificadora">
+      <span><strong>GRUPO EDUCACIONAL UNIFICADO</strong><small>SIGEU Educacional / FACOP Certificadora</small></span>
+    </a>
+    <nav aria-label="Navegação pública">
+      <a href="/">Início</a>
+      <a href="/#procure-disciplina">Consultar disciplina</a>
+      <a href="/disciplinas-isoladas">Disciplinas</a>
+      <a href="/validar-documento">Validar documento</a>
+      <a href="/suporte">Suporte</a>
+      <a class="sph-login" href="/login">Área do aluno</a>
+    </nav>
+  </div>
+</header>

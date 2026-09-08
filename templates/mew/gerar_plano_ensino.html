@@ -474,21 +474,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <select class="form-control" id="disciplina_id" name="disciplina_id" required>
                         <option value="">-- Selecione a disciplina --</option>
                         {% for d in disciplinas %}
-                        <option value="{{ d.id }}" data-nome="{{ d.nome }}" data-carga="{{ d.carga_horaria or 80 }}">{{ d.nome }} — {{ d.carga_horaria or 80 }}h</option>
+                        <option value="{{ d.id }}" data-nome="{{ d.nome }}" data-carga="{{ d.carga_horaria or 80 }}" {% if selected_disciplina_id == d.id %}selected{% endif %}>{{ d.nome }} — {{ d.carga_horaria or 80 }}h</option>
                         {% endfor %}
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label><i>🔢</i> Quantidade de unidades do plano *</label>
-                    <select class="form-control" id="numero_unidades" name="numero_unidades" required>
-                        {% for n in range(1, 13) %}
-                        <option value="{{ n }}" {% if n == 4 %}selected{% endif %}>{{ n }} unidade{% if n != 1 %}s{% endif %}</option>
-                        {% endfor %}
-                    </select>
-                    <div class="info-box" style="margin-top:10px; background:#f1f3f4; border-left-color:#59636a;">
-                        <i>📐</i> O formato não muda: a primeira folha reserva as posições 1–6 e a segunda as posições 7–12. Se você gerar menos unidades, as posições restantes ficam vazias para preservar o padrão do documento.
-                    </div>
+                <div class="info-box" style="background:#f1f3f4; border-left-color:#59636a;">
+                    <i>📐</i> <strong>Estrutura automática:</strong> antes da geração, o sistema sorteia entre <b>8 e 12 unidades</b>. Cada unidade recebe entre <b>8 e 12 tópicos</b>. As posições 1 a 12 ficam reservadas na <b>segunda página</b>; posições não utilizadas permanecem vazias sem alterar a formação do documento.
                 </div>
 
                 <div class="form-group">
@@ -545,7 +536,6 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             const disciplinaId = document.getElementById('disciplina_id').value;
             const ementa = document.getElementById('ementa').value.trim();
-            const numeroUnidades = parseInt(document.getElementById('numero_unidades').value || '4', 10);
 
             if (!disciplinaId || !ementa) {
                 showAlert('Selecione a disciplina e informe uma sugestão de ementa.', 'error');
@@ -561,8 +551,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         disciplina_id: disciplinaId,
-                        ementa: ementa,
-                        numero_unidades: numeroUnidades
+                        ementa: ementa
                     })
                 });
 
@@ -575,7 +564,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <p><strong>📘 Disciplina:</strong> ${result.disciplina}</p>
                         <p><strong>⏱️ Carga horária:</strong> ${result.carga_horaria}</p>
                         <p><strong>👨‍🏫 Docente:</strong> ${result.docente}</p>
-                        <p><strong>🔢 Unidades:</strong> ${result.numero_unidades || numeroUnidades}</p>
+                        <p><strong>🔢 Unidades:</strong> ${result.numero_unidades || 8}</p>
                         <p><strong>🤖 Bibliografias:</strong> geradas automaticamente pela IA</p>
                         <p><strong>🔑 Código:</strong> ${result.codigo}</p>
                         <p><strong>📅 Emissão:</strong> ${result.data_emissao}</p>
@@ -594,7 +583,6 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
         document.getElementById('novoPlanoBtn').addEventListener('click', function() {
             document.getElementById('formPlano').reset();
-            document.getElementById('numero_unidades').value = '4';
             document.getElementById('resultBox').style.display = 'none';
             document.getElementById('resultInfo').innerHTML = '';
             document.getElementById('visualizarLink').href = '#';

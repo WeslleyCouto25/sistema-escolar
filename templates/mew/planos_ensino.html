@@ -498,7 +498,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     </thead>
                     <tbody>
                         {% for plano in planos %}
-                        <tr>
+                        <tr id="plano-row-{{ plano.id }}">
                             <td>
                                 {% if plano.disciplina %}
                                 <strong>{{ plano.disciplina }}</strong><br><small style="color:var(--success)">✓ Vinculado</small>
@@ -533,7 +533,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                     <a href="/mew/enviar-plano-aluno/{{ plano.id }}" class="btn btn-sm btn-warning" title="Enviar para Aluno">
                                         <i>📤</i>
                                     </a>
-                                    <a href="#" onclick="deletarPlano('{{ plano.id }}')" class="btn btn-sm btn-danger" title="Excluir">
+                                    {% if plano.disciplina_id %}
+                                    <a href="/mew/gerar-plano-ensino?disciplina_id={{ plano.disciplina_id }}" class="btn btn-sm btn-primary" title="Gerar novamente / substituir">
+                                        <i>🔄</i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="#" onclick="deletarPlano('{{ plano.id }}'); return false;" class="btn btn-sm btn-danger" title="Excluir">
                                         <i>🗑️</i>
                                     </a>
                                 </div>
@@ -557,17 +562,21 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
     </div>
     
     <script>
-        function deletarPlano(id) {
-            if (confirm('Tem certeza que deseja excluir este plano de ensino?')) {
-                fetch(`/mew/excluir-documento/${id}`, { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            location.reload();
-                        } else {
-                            alert('Erro: ' + data.message);
-                        }
-                    });
+        async function deletarPlano(id) {
+            if (!confirm('Tem certeza que deseja excluir este plano de ensino?')) return;
+            try {
+                const response = await fetch(`/mew/excluir-documento/${id}`, {
+                    method: 'DELETE',
+                    headers: {'Accept': 'application/json'}
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível excluir.');
+                const row = document.getElementById(`plano-row-${id}`);
+                if (row) row.remove();
+                const total = document.querySelector('.stat-value');
+                if (total) total.textContent = Math.max(0, Number(total.textContent || 0) - 1);
+            } catch (err) {
+                alert('Erro: ' + (err.message || err));
             }
         }
         

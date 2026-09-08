@@ -5175,9 +5175,12 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
     for row in disciplinas_raw:
         disc = dict(row)
         carga_horaria = int(disc.get("carga_horaria") or 80)
-        docente_display = disc.get("docente_nome") or "Docente Titular"
-        if disc.get("docente_nome") and disc.get("docente_titulacao"):
-            docente_display += f" ({disc['docente_titulacao']})"
+        if disc.get("docente_nome"):
+            docente_display = disc["docente_nome"]
+            if disc.get("docente_titulacao"):
+                docente_display += f" ({disc['docente_titulacao']})"
+        else:
+            docente_display = _docente_documental_disciplina(cursor, disc["id"], disc["nome"])
 
         periodo = disc.get("ano_semestre") or ""
         if not periodo and disc.get("data_inicio"):
@@ -5208,6 +5211,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
             "progresso_manual": disc.get("progresso_manual"),
             "data_inicio": disc.get("data_inicio"), "data_fim_previsto": disc.get("data_fim_previsto"),
         })
+    conn.commit()
     conn.close()
     return disciplinas
 
@@ -7085,7 +7089,7 @@ def mew_filtrar_documentos():
 
 
 
-@app.route("/mew/excluir-documento/<int:documento_id>")
+@app.route("/mew/excluir-documento/<int:documento_id>", methods=["GET", "POST", "DELETE"])
 def mew_excluir_documento(documento_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
@@ -7093,16 +7097,23 @@ def mew_excluir_documento(documento_id):
     try:
         cursor.execute("SELECT arquivo_r2_key FROM documentos_autenticados WHERE id=%s",(documento_id,)); row=cursor.fetchone()
         if not row:
-            conn.close(); return redirect("/mew/gerenciar-documentos?erro=Documento+não+encontrado")
+            conn.close()
+            if request.method in ("POST", "DELETE"):
+                return jsonify({"success": False, "message": "Documento não encontrado"}), 404
+            return redirect("/mew/gerenciar-documentos?erro=Documento+não+encontrado")
         cursor.execute("DELETE FROM documentos_enviados WHERE documento_original_id=%s",(documento_id,))
         cursor.execute("DELETE FROM documentos_autenticados WHERE id=%s",(documento_id,)); conn.commit(); conn.close()
         if row.get('arquivo_r2_key'):
             try: delete_object(row['arquivo_r2_key'])
             except Exception as e: app.logger.warning("Falha ao excluir arquivo R2 do documento %s: %s",documento_id,e)
+        if request.method in ("POST", "DELETE"):
+            return jsonify({"success": True, "message": "Documento excluído com sucesso"})
         return redirect("/mew/gerenciar-documentos?sucesso=Documento+excluído+com+sucesso")
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass
+        if request.method in ("POST", "DELETE"):
+            return jsonify({"success": False, "message": str(e)}), 500
         return redirect(f"/mew/gerenciar-documentos?erro=Erro+ao+excluir:+{str(e)}")
 
 
@@ -7257,7 +7268,8 @@ def mew_gerar_plano_ensino():
     disciplinas = cursor.fetchall()
     conn.close()
     hoje = datetime.now().strftime("%Y-%m-%d")
-    return render_template("mew/gerar_plano_ensino.html", hoje=hoje, disciplinas=disciplinas)
+    selected_disciplina_id = request.args.get("disciplina_id", type=int)
+    return render_template("mew/gerar_plano_ensino.html", hoje=hoje, disciplinas=disciplinas, selected_disciplina_id=selected_disciplina_id)
 
 
 @app.route("/mew/processar-plano-ensino", methods=["POST"])
@@ -7276,12 +7288,6 @@ def mew_processar_plano_ensino():
     ementa_sugerida = (dados_recebidos.get("ementa") or "").strip()
     if not ementa_sugerida:
         return jsonify({"success": False, "message": "Informe uma sugestão de ementa."}), 400
-    try:
-        numero_unidades = int(dados_recebidos.get("numero_unidades") or 4)
-    except Exception:
-        numero_unidades = 4
-    if not 1 <= numero_unidades <= 12:
-        return jsonify({"success": False, "message": "A quantidade de unidades deve ficar entre 1 e 12."}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -7307,8 +7313,7 @@ def mew_processar_plano_ensino():
     dados_ia = {
         "disciplina": disc["nome"],
         "ementa": ementa_sugerida,
-        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas",
-        "numero_unidades": numero_unidades
+        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas"
     }
 
     try:
@@ -7323,8 +7328,7 @@ def mew_processar_plano_ensino():
         # Modalidade e pré-requisitos são gerados pela IA; metodologia e avaliação continuam institucionais/fixas.
         dados_html = dict(conteudo_ia)
         modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
-        # numero_unidades vem do formulário; removemos a cópia da resposta da IA
-        # para não duplicar o argumento ao montar o template.
+        numero_unidades = max(8, min(12, int(conteudo_ia.get("numero_unidades") or 8)))
         dados_html.pop("numero_unidades", None)
 
         data_formatada = datetime.now().strftime("%d/%m/%Y")
@@ -7355,16 +7359,38 @@ def mew_processar_plano_ensino():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO documentos_autenticados
-            (codigo, aluno_id, aluno_nome, aluno_ra, tipo, conteudo_html, data_geracao,
-             qr_code, hash_documento, data_emissao, data_validade, metadados, disciplina_id)
-            VALUES (%s,NULL,'ADMIN - MEW','ADMIN','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
-            RETURNING id
-        """, (
-            codigo, html_completo, data_emissao, qr_code_base64, hash_documento,
-            data_emissao, data_validade, metadados, disciplina_id
-        ))
-        documento_id = cursor.fetchone()["id"]
+            SELECT id FROM documentos_autenticados
+            WHERE COALESCE(tipo,tipo_documento)='plano_ensino' AND disciplina_id=%s
+            ORDER BY id DESC LIMIT 1
+        """, (disciplina_id,))
+        existente = cursor.fetchone()
+        if existente:
+            documento_id = existente["id"]
+            cursor.execute("""
+                UPDATE documentos_autenticados
+                SET codigo=%s, codigo_autenticacao=%s, aluno_id=NULL, aluno_nome='ADMIN - MEW', aluno_ra='ADMIN',
+                    tipo='plano_ensino', tipo_documento='plano_ensino', conteudo_html=%s, data_geracao=%s,
+                    qr_code=%s, hash_documento=%s, data_emissao=%s, data_validade=%s, metadados=%s,
+                    disciplina_id=%s
+                WHERE id=%s
+            """, (codigo, codigo, html_completo, data_emissao, qr_code_base64, hash_documento,
+                  data_emissao, data_validade, metadados, disciplina_id, documento_id))
+            # Mantém um único plano institucional corrente por disciplina.
+            cursor.execute("""
+                DELETE FROM documentos_autenticados
+                WHERE COALESCE(tipo,tipo_documento)='plano_ensino' AND disciplina_id=%s AND id<>%s
+                  AND id NOT IN (SELECT COALESCE(documento_original_id,0) FROM documentos_enviados)
+            """, (disciplina_id, documento_id))
+        else:
+            cursor.execute("""
+                INSERT INTO documentos_autenticados
+                (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,
+                 qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
+                VALUES (%s,%s,NULL,'ADMIN - MEW','ADMIN','plano_ensino','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (codigo,codigo,html_completo,data_emissao,qr_code_base64,hash_documento,
+                  data_emissao,data_validade,metadados,disciplina_id))
+            documento_id = cursor.fetchone()["id"]
         conn.commit()
         conn.close()
 
@@ -7396,14 +7422,27 @@ def mew_planos_ensino():
         return redirect("/mew/login")
     conn=get_db_connection(); cursor=conn.cursor()
     cursor.execute("""
-        SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,da.data_geracao,da.data_emissao,
-               da.hash_documento,da.disciplina_id,d.nome AS disciplina,
-               COALESCE(e.total_envios,0) AS total_envios
-        FROM documentos_autenticados da
-        LEFT JOIN disciplinas d ON d.id=da.disciplina_id
-        LEFT JOIN LATERAL (SELECT COUNT(*) AS total_envios FROM documentos_enviados WHERE documento_original_id=da.id) e ON TRUE
-        WHERE COALESCE(da.tipo,da.tipo_documento)='plano_ensino'
-        ORDER BY da.id DESC LIMIT 500
+        WITH atuais AS (
+          SELECT DISTINCT ON (da.disciplina_id)
+                 da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,da.data_geracao,da.data_emissao,
+                 da.hash_documento,da.disciplina_id
+          FROM documentos_autenticados da
+          WHERE COALESCE(da.tipo,da.tipo_documento)='plano_ensino' AND da.disciplina_id IS NOT NULL
+          ORDER BY da.disciplina_id,da.id DESC
+        ), nao_vinculados AS (
+          SELECT da.id,COALESCE(da.codigo,da.codigo_autenticacao) AS codigo,da.data_geracao,da.data_emissao,
+                 da.hash_documento,da.disciplina_id
+          FROM documentos_autenticados da
+          WHERE COALESCE(da.tipo,da.tipo_documento)='plano_ensino' AND da.disciplina_id IS NULL
+        ), lista AS (
+          SELECT * FROM atuais UNION ALL SELECT * FROM nao_vinculados
+        )
+        SELECT lista.id,lista.codigo,lista.data_geracao,lista.data_emissao,lista.hash_documento,lista.disciplina_id,
+               d.nome AS disciplina,COALESCE(e.total_envios,0) AS total_envios
+        FROM lista
+        LEFT JOIN disciplinas d ON d.id=lista.disciplina_id
+        LEFT JOIN LATERAL (SELECT COUNT(*) AS total_envios FROM documentos_enviados WHERE documento_original_id=lista.id) e ON TRUE
+        ORDER BY lista.id DESC LIMIT 500
     """); planos=cursor.fetchall()
     cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome"); disciplinas=cursor.fetchall(); conn.close()
     return render_template("mew/planos_ensino.html",planos=planos,total_planos=len(planos),disciplinas=disciplinas)
@@ -10033,9 +10072,9 @@ def _parse_data_sigeu(valor):
 
 
 def _docente_documental_disciplina(cursor, disciplina_id, disciplina_nome):
-    """Usa docente real quando cadastrado; nunca inventa uma pessoa inexistente."""
+    """Retorna o docente real da disciplina; se faltar vínculo, sorteia um docente ativo e grava o vínculo."""
     cursor.execute("""
-        SELECT doc.nome, doc.titulacao
+        SELECT doc.id, doc.nome, doc.titulacao
         FROM disciplina_docente dd
         JOIN docentes doc ON doc.id = dd.docente_id
         WHERE dd.disciplina_id = %s AND COALESCE(doc.ativo, 1) = 1
@@ -10047,21 +10086,34 @@ def _docente_documental_disciplina(cursor, disciplina_id, disciplina_nome):
         nome = row["nome"]
         if row.get("titulacao"):
             nome += f" ({row['titulacao']})"
+        cursor.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (nome, disciplina_id))
         return nome
 
-    cursor.execute("SELECT docente_documental FROM disciplinas WHERE id = %s", (disciplina_id,))
-    row = cursor.fetchone()
-    if row and row.get("docente_documental"):
-        return row["docente_documental"]
+    # Se não houver vínculo ativo, sorteia somente entre os docentes reais/ativos cadastrados no MEW.
+    cursor.execute("""
+        SELECT id, nome, titulacao
+        FROM docentes
+        WHERE COALESCE(ativo, 1) = 1 AND NULLIF(TRIM(nome), '') IS NOT NULL
+        ORDER BY RANDOM()
+        LIMIT 1
+    """)
+    sorteado = cursor.fetchone()
+    if sorteado and sorteado.get("nome"):
+        docente_id = sorteado["id"]
+        nome = sorteado["nome"]
+        if sorteado.get("titulacao"):
+            nome += f" ({sorteado['titulacao']})"
+        cursor.execute(
+            "INSERT INTO disciplina_docente(disciplina_id,docente_id,ano_semestre) VALUES(%s,%s,%s)",
+            (disciplina_id, docente_id, datetime.now().strftime("%Y.%m"))
+        )
+        cursor.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (nome, disciplina_id))
+        return nome
 
-    # Designação funcional: evita atribuir falsamente a disciplina a uma pessoa real/fictícia.
-    designacao = "Docente Titular"
-    cursor.execute(
-        "UPDATE disciplinas SET docente_documental = %s WHERE id = %s",
-        (designacao, disciplina_id)
-    )
-    return designacao
-
+    # Só chega aqui se o cadastro de docentes estiver realmente vazio.
+    nome = "Docente não cadastrado"
+    cursor.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (nome, disciplina_id))
+    return nome
 
 def _status_disciplina_documentos(aluno_id, disciplina_id, cursor=None):
     """Verifica 20 dias + capítulos + avaliações + final/projeto + aprovação."""
@@ -11019,14 +11071,16 @@ def _limpar_texto_publico(valor, max_len=4000):
     return re.sub(r"[ \t]+", " ", texto).strip()[:max_len]
 
 def _sanitizar_conteudo_plano_publico(conteudo):
-    seguro = {}
-    for chave, valor in (conteudo or {}).items():
-        texto = str(valor or "")
-        # Somente as quebras <br> produzidas pelo gerador são preservadas; qualquer outro HTML é neutralizado.
-        texto = texto.replace("<br>", "__SIGEU_BR__").replace("<br/>", "__SIGEU_BR__").replace("<br />", "__SIGEU_BR__")
-        texto = str(escape(texto)).replace("__SIGEU_BR__", "<br>")
-        seguro[chave] = texto
-    return seguro
+    """Preserva a estrutura JSON do plano e neutraliza HTML/control chars em cada texto."""
+    def limpar(valor):
+        if isinstance(valor, dict):
+            return {str(k): limpar(v) for k, v in valor.items()}
+        if isinstance(valor, (list, tuple)):
+            return [limpar(v) for v in valor]
+        texto = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", str(valor or ""))
+        texto = re.sub(r"<[^>]*>", " ", texto)
+        return re.sub(r"[ \t]+", " ", texto).strip()[:12000]
+    return limpar(conteudo or {})
 
 def _preco_disciplina_publica(carga_horaria):
     try:
@@ -11091,7 +11145,7 @@ def _formatar_docente_publico(nome, titulacao=None):
     nome = _limpar_texto_publico(nome, 180)
     titulo = _limpar_texto_publico(titulacao, 120).lower()
     if not nome:
-        return "Docente Titular"
+        return "Docente não cadastrado"
     if re.match(r"^prof(?:a|essor|essora)?\.?\s", nome, re.I):
         return nome
     if "dout" in titulo or titulo in {"dr", "dr."}:
@@ -11145,19 +11199,17 @@ def _selecionar_docente_publico(cursor, pedido_token, disciplina_nome=None, carg
         excluidos.update(int(r["docente_id"]) for r in cursor.fetchall() if r.get("docente_id"))
 
     cursor.execute(
-        """SELECT d.id,d.nome,d.titulacao,COUNT(dd.id) AS uso
+        """SELECT d.id,d.nome,d.titulacao
            FROM docentes d
-           LEFT JOIN disciplina_docente dd ON dd.docente_id=d.id
-           WHERE COALESCE(d.ativo,1)=1
-           GROUP BY d.id,d.nome,d.titulacao
-           ORDER BY COUNT(dd.id) ASC,d.id ASC"""
+           WHERE COALESCE(d.ativo,1)=1 AND NULLIF(TRIM(d.nome),'') IS NOT NULL
+           ORDER BY RANDOM()"""
     )
     candidatos = cursor.fetchall()
     escolhido = next((r for r in candidatos if int(r["id"]) not in excluidos), None)
     if escolhido is None and candidatos:
         escolhido = candidatos[0]
     if not escolhido:
-        return None, "Docente Titular"
+        return None, "Docente não cadastrado"
     return escolhido["id"], _formatar_docente_publico(escolhido["nome"], escolhido.get("titulacao"))
 
 
@@ -11268,6 +11320,22 @@ def _buscar_disciplina_catalogo(nome):
         conn.close()
 
 
+def _plano_catalogo_atual(disciplina_id):
+    if not disciplina_id:
+        return None
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id,COALESCE(codigo,codigo_autenticacao) AS codigo,conteudo_html,data_emissao
+            FROM documentos_autenticados
+            WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
+            ORDER BY id DESC LIMIT 1
+        """, (disciplina_id,))
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
 @app.route("/api/publico/sugerir-disciplina", methods=["POST"])
 def api_publico_sugerir_disciplina():
     if not _consumir_limite_ia_publica():
@@ -11276,11 +11344,14 @@ def api_publico_sugerir_disciplina():
         dados = request.get_json(silent=True) or {}
         resultado = _normalizar_disciplina_publica_ia(dados.get("disciplina"))
         match = _buscar_disciplina_catalogo(resultado["nome_sugerido"])
+        plano = _plano_catalogo_atual(match.get("id") if match else None)
         return jsonify({
             "success": True,
             "nome_sugerido": resultado["nome_sugerido"],
             "pergunta_curso": resultado.get("pergunta_curso") or f"Sua disciplina é {resultado['nome_sugerido']}. De qual curso ou área ela faz parte?",
             "catalogo": dict(match) if match else None,
+            "plano_existente": bool(plano),
+            "mensagem_plano": ("Esta disciplina já possui plano de ensino institucional. Se a ementa disponível atender ao que você procura, usaremos esse plano. Se desejar outra abordagem, informe abaixo os conteúdos esperados ou específicos." if plano else "A disciplina será consultada na base institucional e, quando necessário, terá o plano preparado conforme a ementa informada."),
         })
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
@@ -11294,6 +11365,7 @@ def api_publico_gerar_previa_plano():
         dados = request.get_json(silent=True) or {}
         disciplina_informada = (dados.get("disciplina") or "").strip()
         curso_area = (dados.get("curso_area") or "").strip()
+        conteudos_esperados = _limpar_texto_publico(dados.get("conteudos_esperados"), 3500)
         pedido_recebido = _limpar_texto_publico(dados.get("pedido_token"), 160)
         carga = int(dados.get("carga_horaria") or 0)
         if carga not in (60, 80, 120):
@@ -11307,6 +11379,11 @@ def api_publico_gerar_previa_plano():
         departamento = str(normalizado.get("departamento_sugerido") or curso_area).strip()
         if not ementa:
             raise ValueError("Não foi possível preparar a ementa-base da disciplina.")
+
+        catalogo = _buscar_disciplina_catalogo(nome)
+        if catalogo and int(catalogo.get("carga_horaria") or 80) != carga:
+            catalogo = None
+        plano_existente = _plano_catalogo_atual(catalogo.get("id") if catalogo else None)
 
         # Pedido/carrinho: várias disciplinas podem ser reunidas antes do checkout.
         conn = get_db_connection(); cur = conn.cursor()
@@ -11330,37 +11407,46 @@ def api_publico_gerar_previa_plano():
             else:
                 pedido_token = "PED-" + secrets.token_urlsafe(18)
                 item_ordem = 1
-
             docente_id, docente_nome = _selecionar_docente_publico(cur, pedido_token, nome, carga)
         finally:
             conn.close()
 
-        from api_planos import consultar_openai_para_plano
-        conteudo_ia = consultar_openai_para_plano({
-            "disciplina": nome,
-            "ementa": ementa,
-            "carga_horaria": f"{carga} horas",
-        })
-        dados_html = _sanitizar_conteudo_plano_publico(conteudo_ia)
-        plano_dados_salvos = dict(dados_html)
-        modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
-        plano_dados_salvos["modalidade"] = modalidade
         token = secrets.token_urlsafe(24)
-        codigo = f"PREVIA-{secrets.token_hex(5).upper()}"
-        hash_doc = hashlib.sha256(f"{token}|{nome}|{carga}".encode("utf-8")).hexdigest()
-        base_url = request.host_url.rstrip("/")
-        qr = gerar_qrcode_base64(f"{base_url}/matricula/{token}")
-        html_plano = gerar_html_plano_ensino(
-            disciplina=nome.upper(),
-            codigo=codigo,
-            hash_completa=hash_doc,
-            carga_horaria=f"{carga} horas",
-            modalidade=modalidade,
-            docente=docente_nome,
-            data_formatada=datetime.now().strftime("%d/%m/%Y"),
-            qr_code_base64=qr,
-            **dados_html,
-        )
+        plano_dados_salvos = {}
+        if plano_existente and not conteudos_esperados:
+            # Reaproveita o plano institucional já existente. A cópia abaixo é apenas a prévia pública.
+            html_plano = str(plano_existente.get("conteudo_html") or "")
+            if not html_plano:
+                plano_existente = None
+
+        if not plano_existente or conteudos_esperados:
+            from api_planos import consultar_openai_para_plano
+            ementa_para_ia = ementa
+            if conteudos_esperados:
+                ementa_para_ia += "\n\nCONFORME SUA EMENTA, priorize e distribua os seguintes conteúdos esperados ou específicos: " + conteudos_esperados
+            conteudo_ia = consultar_openai_para_plano({
+                "disciplina": nome,
+                "ementa": ementa_para_ia,
+                "carga_horaria": f"{carga} horas",
+            })
+            dados_html = _sanitizar_conteudo_plano_publico(conteudo_ia)
+            plano_dados_salvos = dict(dados_html)
+            modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
+            plano_dados_salvos["modalidade"] = modalidade
+            numero_unidades = max(8, min(12, int(plano_dados_salvos.get("numero_unidades") or 8)))
+            plano_dados_salvos["numero_unidades"] = numero_unidades
+            dados_html.pop("numero_unidades", None)
+            codigo = f"PREVIA-{secrets.token_hex(5).upper()}"
+            hash_doc = hashlib.sha256(f"{token}|{nome}|{carga}|{conteudos_esperados}".encode("utf-8")).hexdigest()
+            base_url = request.host_url.rstrip("/")
+            qr = gerar_qrcode_base64(f"{base_url}/matricula/{token}")
+            html_plano = gerar_html_plano_ensino(
+                disciplina=nome.upper(), codigo=codigo, hash_completa=hash_doc,
+                carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
+                data_formatada=datetime.now().strftime("%d/%m/%Y"), qr_code_base64=qr,
+                numero_unidades=numero_unidades, **dados_html,
+            )
+
         aviso = "<style>.sigeu-previa-aviso{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;background:#fff;border:1px solid #111;color:#111;padding:6px 12px;font:700 10px Arial;letter-spacing:.6px}@media print{.sigeu-previa-aviso{display:block}}</style>"
         html_plano = html_plano.replace("</head>", aviso + "<meta name='robots' content='noindex,nofollow'></head>", 1)
         html_plano = html_plano.replace("<body>", "<body><div class='sigeu-previa-aviso'>PRÉVIA DE PLANO DE ENSINO • SEM VALIDADE ACADÊMICA</div>", 1)
@@ -11369,22 +11455,20 @@ def api_publico_gerar_previa_plano():
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute(
             """INSERT INTO solicitacoes_matricula_publica
-            (token,pedido_token,item_ordem,status,disciplina_digitada,disciplina_confirmada,curso_area,departamento,carga_horaria,ementa_sugerida,plano_html,plano_dados_json,valor_total,docente_id,docente_nome,data_criacao,data_plano)
-            VALUES(%s,%s,%s,'previa',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (token, pedido_token, item_ordem, disciplina_informada, nome, normalizado.get("curso_area") or curso_area, departamento, carga, ementa, html_plano, json.dumps(plano_dados_salvos, ensure_ascii=False), _preco_disciplina_publica(carga), docente_id, docente_nome, agora, agora),
+            (token,pedido_token,item_ordem,status,disciplina_digitada,disciplina_confirmada,curso_area,departamento,carga_horaria,ementa_sugerida,plano_html,plano_dados_json,valor_total,docente_id,docente_nome,disciplina_id,plano_documento_id,data_criacao,data_plano)
+            VALUES(%s,%s,%s,'previa',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (token,pedido_token,item_ordem,disciplina_informada,nome,normalizado.get("curso_area") or curso_area,departamento,carga,
+             (ementa + (("\n\nConteúdos esperados/específicos: " + conteudos_esperados) if conteudos_esperados else "")),
+             html_plano,json.dumps(plano_dados_salvos,ensure_ascii=False),_preco_disciplina_publica(carga),docente_id,docente_nome,
+             catalogo.get("id") if catalogo else None,(plano_existente.get("id") if (plano_existente and not conteudos_esperados) else None),agora,agora),
         )
         solicitacao_id = cur.fetchone()["id"]
         conn.commit(); conn.close()
         return jsonify({
-            "success": True,
-            "id": solicitacao_id,
-            "token": token,
-            "pedido_token": pedido_token,
-            "nome_confirmado": nome,
-            "curso_area": normalizado.get("curso_area") or curso_area,
-            "departamento": departamento,
-            "carga_horaria": carga,
-            "docente": docente_nome,
+            "success": True, "id": solicitacao_id, "token": token, "pedido_token": pedido_token,
+            "nome_confirmado": nome, "curso_area": normalizado.get("curso_area") or curso_area,
+            "departamento": departamento, "carga_horaria": carga, "docente": docente_nome,
+            "plano_reutilizado": bool(plano_existente and not conteudos_esperados),
             "url": url_for("matricula_publica_resumo", token=token),
         })
     except Exception as exc:
@@ -11606,7 +11690,7 @@ def _token_solicitacao_publica_retorno_mp():
 
 
 def _assegurar_disciplina_e_plano_publico(solicitacao_id):
-    """Cria/vincula disciplina, docente real cadastrado e plano oficial após o pagamento."""
+    """Cria/vincula a disciplina e garante um único plano institucional corrente por disciplina."""
     sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
     if not sol:
         return None, None
@@ -11616,19 +11700,25 @@ def _assegurar_disciplina_e_plano_publico(solicitacao_id):
     if not nome:
         raise ValueError("Solicitação sem nome de disciplina confirmado.")
 
+    try:
+        dados_plano = json.loads(sol.get("plano_dados_json") or "{}")
+        if not isinstance(dados_plano, dict):
+            dados_plano = {}
+    except Exception:
+        dados_plano = {}
+
     conn = get_db_connection(); cur = conn.cursor()
     disciplina_id = sol.get("disciplina_id")
     plano_documento_id = sol.get("plano_documento_id")
-    pedido = _pedido_token_publico(sol)
     try:
         if disciplina_id:
-            cur.execute("SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE id=%s", (disciplina_id,))
+            cur.execute("SELECT id FROM disciplinas WHERE id=%s", (disciplina_id,))
             if not cur.fetchone():
                 disciplina_id = None
 
         if not disciplina_id:
             cur.execute(
-                "SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND COALESCE(carga_horaria,80)=%s ORDER BY id LIMIT 1",
+                "SELECT id FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND COALESCE(carga_horaria,80)=%s ORDER BY id LIMIT 1",
                 (nome, carga),
             )
             disc = cur.fetchone()
@@ -11646,81 +11736,88 @@ def _assegurar_disciplina_e_plano_publico(solicitacao_id):
                     cur.execute("INSERT INTO provas (capitulo_id,questoes_json) VALUES(%s,'[]')", (capitulo_id,))
             cur.execute("UPDATE solicitacoes_matricula_publica SET disciplina_id=%s WHERE id=%s", (disciplina_id, solicitacao_id))
 
-        # Professor: preserva associação real existente ou usa automaticamente um docente ativo do cadastro MEW.
-        cur.execute(
-            """SELECT doc.id,doc.nome,doc.titulacao
-               FROM disciplina_docente dd JOIN docentes doc ON doc.id=dd.docente_id
-               WHERE dd.disciplina_id=%s AND COALESCE(doc.ativo,1)=1 ORDER BY dd.id DESC LIMIT 1""",
-            (disciplina_id,),
-        )
-        doc_existente = cur.fetchone()
-        if doc_existente:
-            docente_id = doc_existente["id"]
-            docente_nome = _formatar_docente_publico(doc_existente["nome"], doc_existente.get("titulacao"))
-        else:
-            docente_id = sol.get("docente_id")
-            docente_nome = sol.get("docente_nome")
-            if docente_id:
-                cur.execute("SELECT id,nome,titulacao FROM docentes WHERE id=%s AND COALESCE(ativo,1)=1", (docente_id,))
-                drow = cur.fetchone()
-            else:
-                drow = None
-            if not drow:
-                docente_id, docente_nome = _selecionar_docente_publico(cur, pedido, nome, carga, sol.get("aluno_id"))
-                if docente_id:
-                    cur.execute("SELECT id,nome,titulacao FROM docentes WHERE id=%s", (docente_id,))
-                    drow = cur.fetchone()
-            if drow:
-                docente_nome = _formatar_docente_publico(drow["nome"], drow.get("titulacao"))
-                cur.execute(
-                    "INSERT INTO disciplina_docente(disciplina_id,docente_id,ano_semestre) VALUES(%s,%s,%s)",
-                    (disciplina_id, docente_id, datetime.now().strftime("%Y.%m")),
-                )
-            else:
-                docente_id = None
-                docente_nome = "Docente Titular"
-
-        cur.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (docente_nome, disciplina_id))
+        # Sempre usa um docente real já vinculado; se faltar, sorteia um docente ativo do MEW e grava o vínculo.
+        docente_nome = _docente_documental_disciplina(cur, disciplina_id, nome)
+        cur.execute("""
+            SELECT dd.docente_id FROM disciplina_docente dd
+            JOIN docentes d ON d.id=dd.docente_id
+            WHERE dd.disciplina_id=%s AND COALESCE(d.ativo,1)=1
+            ORDER BY dd.id DESC LIMIT 1
+        """, (disciplina_id,))
+        drow = cur.fetchone()
+        docente_id = drow.get("docente_id") if drow else None
         cur.execute(
             "UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
             (disciplina_id, docente_id, docente_nome, solicitacao_id),
         )
 
-        if plano_documento_id:
-            cur.execute("SELECT id FROM documentos_autenticados WHERE id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'", (plano_documento_id,))
-            if not cur.fetchone():
-                plano_documento_id = None
-
-        if not plano_documento_id:
+        # Plano alternativo solicitado: substitui o plano corrente da disciplina, nunca cria duplicata lógica.
+        if dados_plano:
+            modalidade = _limpar_texto_publico(dados_plano.pop("modalidade", None) or "EaD", 40)
             try:
-                dados_plano = json.loads(sol.get("plano_dados_json") or "{}")
+                numero_unidades = max(8, min(12, int(dados_plano.pop("numero_unidades", 8) or 8)))
             except Exception:
-                dados_plano = {}
-            if dados_plano:
-                modalidade = _limpar_texto_publico(dados_plano.pop("modalidade", None) or "EaD", 40)
-                codigo = gerar_codigo_simples()
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                hash_documento = gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}", "PUBLICO", timestamp)
-                data_formatada = datetime.now().strftime("%d/%m/%Y")
-                data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-                data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
-                base_url = (os.getenv("SIGEU_LOGIN_URL") or "").strip().rstrip("/") or request.host_url.rstrip("/")
-                qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
-                metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
-                html_oficial = gerar_html_plano_ensino(
-                    disciplina=nome.upper(), codigo=codigo, hash_completa=hash_documento,
-                    carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
-                    data_formatada=data_formatada, qr_code_base64=qr_code_base64, **dados_plano,
-                )
-                cur.execute(
-                    """INSERT INTO documentos_autenticados
-                    (codigo,aluno_id,aluno_nome,aluno_ra,tipo,conteudo_html,data_geracao,qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
-                    VALUES(%s,NULL,'PLANO INSTITUCIONAL','GERAL','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-                    (codigo, html_oficial, data_emissao, qr_code_base64, hash_documento, data_emissao, data_validade, metadados, disciplina_id),
-                )
+                numero_unidades = 8
+            codigo = gerar_codigo_simples()
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            hash_documento = gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}", "PUBLICO", timestamp)
+            data_formatada = datetime.now().strftime("%d/%m/%Y")
+            data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+            data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+            base_url = (os.getenv("SIGEU_LOGIN_URL") or "").strip().rstrip("/") or request.host_url.rstrip("/")
+            qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+            metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
+            html_oficial = gerar_html_plano_ensino(
+                disciplina=nome.upper(), codigo=codigo, hash_completa=hash_documento,
+                carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
+                data_formatada=data_formatada, qr_code_base64=qr_code_base64,
+                numero_unidades=numero_unidades, **dados_plano,
+            )
+            cur.execute("""
+                SELECT id FROM documentos_autenticados
+                WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
+                ORDER BY id DESC LIMIT 1
+            """, (disciplina_id,))
+            atual = cur.fetchone()
+            if atual:
+                plano_documento_id = atual["id"]
+                cur.execute("""
+                    UPDATE documentos_autenticados
+                    SET codigo=%s,codigo_autenticacao=%s,conteudo_html=%s,data_geracao=%s,qr_code=%s,
+                        hash_documento=%s,data_emissao=%s,data_validade=%s,metadados=%s,
+                        tipo='plano_ensino',tipo_documento='plano_ensino',disciplina_id=%s
+                    WHERE id=%s
+                """, (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,
+                      data_emissao,data_validade,metadados,disciplina_id,plano_documento_id))
+            else:
+                cur.execute("""
+                    INSERT INTO documentos_autenticados
+                    (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,
+                     qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
+                    VALUES(%s,%s,NULL,'PLANO INSTITUCIONAL','GERAL','plano_ensino','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                """, (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,
+                      data_emissao,data_validade,metadados,disciplina_id))
                 plano_documento_id = cur.fetchone()["id"]
-                cur.execute("UPDATE solicitacoes_matricula_publica SET plano_documento_id=%s WHERE id=%s", (plano_documento_id, solicitacao_id))
+        else:
+            # Sem pedido de nova ementa: reutiliza o plano institucional existente, se houver.
+            if plano_documento_id:
+                cur.execute("SELECT id FROM documentos_autenticados WHERE id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'", (plano_documento_id,))
+                if not cur.fetchone():
+                    plano_documento_id = None
+            if not plano_documento_id:
+                cur.execute("""
+                    SELECT id FROM documentos_autenticados
+                    WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
+                    ORDER BY id DESC LIMIT 1
+                """, (disciplina_id,))
+                atual = cur.fetchone()
+                plano_documento_id = atual.get("id") if atual else None
 
+        cur.execute(
+            "UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,plano_documento_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
+            (disciplina_id, plano_documento_id, docente_id, docente_nome, solicitacao_id),
+        )
         conn.commit()
         return disciplina_id, plano_documento_id
     except Exception:
@@ -12101,14 +12198,14 @@ def _parse_unidades_plano_legacy(conteudo_programatico, limite=12):
 
 def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                              modalidade, docente, data_formatada, qr_code_base64,
-                             numero_unidades=4, **kwargs):
-    """Plano institucional padronizado: até 12 unidades, 6 posições por folha."""
+                             numero_unidades=8, **kwargs):
+    """Plano institucional padronizado: 8 a 12 unidades, todas reservadas na página 2."""
     from api_planos import METODOLOGIA_FIXA, SISTEMA_AVALIACAO_FIXO
 
     try:
-        numero_unidades = max(1, min(12, int(numero_unidades or kwargs.get("numero_unidades") or 4)))
+        numero_unidades = max(8, min(12, int(numero_unidades or kwargs.get("numero_unidades") or 8)))
     except Exception:
-        numero_unidades = 4
+        numero_unidades = 8
 
     unidades = kwargs.get("conteudo_programatico_estruturado")
     if not isinstance(unidades, list):
@@ -12120,7 +12217,7 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
         hash_documento=str(hash_completa or ""),
         carga_horaria=str(carga_horaria or ""),
         modalidade=str(modalidade or "EaD"),
-        docente=str(docente or "Docente responsável"),
+        docente=str(docente or "Docente não cadastrado"),
         data_formatada=str(data_formatada or datetime.now().strftime("%d/%m/%Y")),
         qr_code=str(qr_code_base64 or ""),
         objetivo_geral=kwargs.get("objetivo_geral", ""),
@@ -12188,7 +12285,9 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
                 LEFT JOIN aluno_disciplina_datas adt ON adt.aluno_id=%s AND adt.disciplina_id=d.id
                 LEFT JOIN LATERAL (
                     SELECT dd.docente_id FROM disciplina_docente dd
-                    WHERE dd.disciplina_id=d.id ORDER BY dd.ano_semestre DESC,dd.id DESC LIMIT 1
+                    JOIN docentes dx ON dx.id=dd.docente_id
+                    WHERE dd.disciplina_id=d.id AND COALESCE(dx.ativo,1)=1
+                    ORDER BY dd.ano_semestre DESC,dd.id DESC LIMIT 1
                 ) dd_ultimo ON TRUE
                 LEFT JOIN docentes doc ON doc.id=dd_ultimo.docente_id
                 WHERE d.id=ANY(%s)
@@ -12196,11 +12295,15 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             """, (aluno_id, aluno_id, ids))
             for row in cur.fetchall():
                 item = dict(row)
-                nome_doc = item.get("docente_nome") or "Docente responsável"
-                if item.get("titulacao"):
-                    nome_doc = f"{nome_doc} ({item['titulacao']})"
+                if item.get("docente_nome"):
+                    nome_doc = item["docente_nome"]
+                    if item.get("titulacao"):
+                        nome_doc = f"{nome_doc} ({item['titulacao']})"
+                else:
+                    nome_doc = _docente_documental_disciplina(cur, item["id"], item["nome"])
                 item["docente"] = nome_doc
                 enriquecidas.append(item)
+            conn.commit()
     finally:
         conn.close()
 

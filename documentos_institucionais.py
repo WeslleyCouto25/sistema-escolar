@@ -17,8 +17,8 @@ from typing import Iterable
 
 
 ASSINANTES = (
-    ("Tatiane R. L. Costa", "Coordenação Acadêmica e Secretaria Geral - FACOP/SIGEU"),
-    ("Natalia Nunes de Couto", "Coordenação Acadêmica e Secretaria Geral - FACOP/SIGEU"),
+    ("Tatiane R. L. Costa", "Coordenação Acadêmica e Secretaria Geral - SIGEU Educacional - Executora / FACOP Certificadora"),
+    ("Natalia Nunes de Couto", "Coordenação Acadêmica e Secretaria Geral - SIGEU Educacional - Executora / FACOP Certificadora"),
 )
 
 
@@ -133,7 +133,8 @@ def _base_css(codigo: str):
     .doc-headtext {{ flex:1; min-width:0; color:#333; font-size:8.2pt; line-height:1.25; }}
     .doc-headtext strong {{ display:block; font-size:10pt; color:#111; margin-bottom:.8mm; }}
     .cert-box {{ width:55mm; text-align:right; font-size:6.7pt; line-height:1.24; color:#4b4b4b; }}
-    .cert-box b {{ display:block; font-size:8pt; color:#111; text-transform:uppercase; }}
+    .cert-box b {{ display:block; font-size:6.4pt; color:#555; text-transform:uppercase; letter-spacing:.45px; }}
+    .cert-box strong {{ display:block; font-size:7.8pt; color:#111; margin:.5mm 0 .3mm; }}
     .title {{ text-align:center; margin:2.5mm 0 4mm; }}
     .title h1 {{ margin:0; font-size:16.5pt; line-height:1.12; }}
     .title h2 {{ margin:1mm 0 0; font-size:11.2pt; font-weight:700; color:#333; }}
@@ -156,10 +157,12 @@ def _base_css(codigo: str):
     .rich li {{ margin:0 0 .5mm; }}
     .page-note {{
         position:absolute; left:11.5mm; right:11.5mm; bottom:6.1mm; z-index:2;
-        display:flex; justify-content:space-between; gap:5mm; border-top:1px solid #d0d0d0;
-        padding-top:1.6mm; font-size:6.2pt; color:#727272;
+        display:flex; justify-content:space-between; align-items:flex-end; gap:4mm; border-top:1px solid #d0d0d0;
+        padding-top:1.6mm; font-size:6.0pt; color:#727272;
     }}
-    .auth-code {{ font-family:Consolas,'Courier New',monospace; letter-spacing:.12px; }}
+    .page-note > span:first-child {{ flex:1 1 auto; min-width:0; font-size:5.55pt; line-height:1.12; }}
+    .page-note .auth-code {{ flex:0 0 auto; white-space:nowrap; text-align:right; }}
+    .auth-code {{ font-family:Consolas,'Courier New',monospace; letter-spacing:.08px; }}
     .signature {{ text-align:center; margin:3mm auto 2mm; max-width:105mm; }}
     .signature strong {{ display:block; font-size:9.8pt; }}
     .signature .role {{ display:block; font-size:7.5pt; margin-top:.7mm; }}
@@ -185,18 +188,15 @@ def _base_css(codigo: str):
     .summary-grid div {{ flex:1; border:1px solid #c8c8c8; padding:1.7mm; font-size:7.2pt; text-align:center; }}
     .summary-grid b {{ display:block; font-size:8.8pt; margin-top:.5mm; }}
 
-    .unit-table {{ width:100%; table-layout:fixed; border-collapse:collapse; }}
-    .unit-table td {{ width:50%; height:56mm; vertical-align:top; padding:0 3mm 3.5mm 0; border:0; }}
-    .unit-table td:nth-child(even) {{ padding-left:3mm; padding-right:0; }}
-    .unit-slot {{ height:52mm; padding:1mm 1mm 1.2mm; border-bottom:1px solid #d8d8d8; overflow:hidden; }}
-    .unit-slot.empty {{ border-bottom:1px solid #efefef; }}
-    .unit-slot h3 {{ margin:0 0 1.25mm; font-size:8.55pt; line-height:1.16; overflow-wrap:anywhere; }}
-    .unit-slot ul {{ margin:0; padding-left:4.6mm; font-size:7.35pt; line-height:1.24; }}
-    .unit-slot li {{ margin:0 0 .52mm; overflow-wrap:anywhere; }}
-    .unit-slot.dense h3 {{ font-size:8pt; }} .unit-slot.dense ul {{ font-size:6.8pt; line-height:1.2; }}
-    .unit-slot.tight h3 {{ font-size:7.4pt; }} .unit-slot.tight ul {{ font-size:6.15pt; line-height:1.15; }}
-    .unit-slot.micro h3 {{ font-size:6.8pt; }} .unit-slot.micro ul {{ font-size:5.6pt; line-height:1.1; padding-left:4mm; }}
-    .unit-continue {{ display:block; margin-top:1mm; font-size:5.8pt; color:#555; font-style:italic; }}
+    .units-grid {{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,54mm); gap:2mm 2.6mm; width:100%; }}
+    .unit-slot {{ height:54mm; padding:1.2mm 1.35mm; border:1px solid #d8d8d8; background:rgba(255,255,255,.86); overflow:hidden; }}
+    .unit-slot.empty {{ border-color:#efefef; background:rgba(250,250,250,.35); }}
+    .unit-slot h3 {{ margin:0 0 .8mm; font-size:6.2pt; line-height:1.08; overflow-wrap:anywhere; text-transform:none; }}
+    .unit-slot ul {{ margin:0; padding-left:3.6mm; font-size:4.75pt; line-height:1.08; }}
+    .unit-slot li {{ margin:0 0 .22mm; overflow-wrap:anywhere; }}
+    .unit-slot.dense h3 {{ font-size:5.9pt; }} .unit-slot.dense ul {{ font-size:4.5pt; line-height:1.06; }}
+    .unit-slot.tight h3 {{ font-size:5.6pt; }} .unit-slot.tight ul {{ font-size:4.25pt; line-height:1.04; }}
+    .unit-slot.micro h3 {{ font-size:5.3pt; }} .unit-slot.micro ul {{ font-size:4pt; line-height:1.02; padding-left:3.2mm; }}
     .ref-list {{ font-size:7.7pt; line-height:1.33; }}
     .ref-list div {{ margin:0 0 1.6mm; text-align:justify; }}
     .appendix-unit {{ margin-bottom:4mm; }}
@@ -220,22 +220,22 @@ def _logo_data_uri():
     global _LOGO_DATA_URI
     if _LOGO_DATA_URI is not None:
         return _LOGO_DATA_URI
-    logo = Path(__file__).resolve().parent / "static" / "img" / "logoinstitucional.jpeg"
+    logo = Path(__file__).resolve().parent / "static" / "img" / "logo.png"
     try:
         mime = mimetypes.guess_type(str(logo))[0] or "image/jpeg"
         payload = base64.b64encode(logo.read_bytes()).decode("ascii")
         _LOGO_DATA_URI = f"data:{mime};base64,{payload}"
     except Exception:
-        _LOGO_DATA_URI = "/static/img/logoinstitucional.jpeg"
+        _LOGO_DATA_URI = "/static/img/logo.png"
     return _LOGO_DATA_URI
 
 
 def _header(titulo: str, subtitulo: str = ""):
     return f"""
     <div class="doc-header">
-      <img class="doc-logo" src="{_logo_data_uri()}" alt="FACOP e Grupo Educacional Unificado">
-      <div class="doc-headtext"><strong>FACOP/SIGEU - Grupo Educacional Unificado</strong>Sistema Integrado de Gestão Educacional</div>
-      <div class="cert-box"><b>FACOP CERTIFICADORA</b>Faculdade do Centro Oeste Paulista LTDA<br>Atuação exclusivamente como instituição certificadora no âmbito da parceria educacional.</div>
+      <img class="doc-logo" src="{_logo_data_uri()}" alt="FACOP Certificadora e SIGEU Educacional">
+      <div class="doc-headtext"><strong>SIGEU Educacional / FACOP Certificadora</strong>Grupo Educacional Unificado / Faculdade do Centro Oeste Paulista LTDA - Certificadora</div>
+      <div class="cert-box"><b>CERTIFICADORA PARCEIRA</b><strong>FACOP CERTIFICADORA</strong>Razão Social: FACULDADE DO CENTRO OESTE PAULISTA FACOP LTDA<br>CNPJ Matriz: 04.344.730/0001-60<br>Natureza Jurídica: Sociedade Empresária Limitada</div>
     </div>
     <div class="title"><h1>{escape(titulo)}</h1>{f'<h2>{escape(subtitulo)}</h2>' if subtitulo else ''}</div>
     """
@@ -244,7 +244,7 @@ def _header(titulo: str, subtitulo: str = ""):
 def _footer(codigo: str, pagina: int, total: int):
     return (
         "<div class='page-note'>"
-        "<span>GRUPO EDUCACIONAL UNIFICADO • SIGEU EDUCACIONAL • FACOP CERTIFICADORA</span>"
+        "<span>SIGEU EDUCACIONAL / FACOP CERTIFICADORA • GRUPO EDUCACIONAL UNIFICADO / FACULDADE DO CENTRO OESTE PAULISTA LTDA - CERTIFICADORA</span>"
         f"<span class='auth-code'>{escape(codigo)} • Página {pagina} de {total}</span>"
         "</div>"
     )
@@ -256,7 +256,7 @@ def _signature(codigo: str):
     <div class="signature">
       <strong>{escape(nome)}</strong>
       <span class="role">{escape(cargo)}</span>
-      <span class="electronic">Documento assinado eletronicamente. Validação pela certificação institucional FACOP/SIGEU.</span>
+      <span class="electronic">Documento assinado eletronicamente pelo SIGEU Educacional - Executora. Certificação institucional vinculada à FACOP Certificadora.</span>
     </div>
     """
 
@@ -299,7 +299,6 @@ def build_declaration(aluno: dict, disciplina: dict, codigo: str, qr_code: str, 
     freq = disciplina.get("frequencia")
     data_conclusao = disciplina.get("data_realizacao") or disciplina.get("data_conclusao") or datetime.now()
     unidade = aluno.get("curso_referencia") or "Disciplinas / Unidades Curriculares"
-    docente = disciplina.get("docente") or disciplina.get("docente_nome") or "Docente responsável"
 
     body = f"""
     <section class="sheet"><div class="content">
@@ -310,11 +309,12 @@ def build_declaration(aluno: dict, disciplina: dict, codigo: str, qr_code: str, 
         <tr><th>Matrícula / RA</th><td>{_txt(ra)}</td></tr>
         <tr><th>CPF</th><td>{_txt(cpf)}</td></tr>
         <tr><th>Unidade Curricular</th><td>{_txt(unidade)}</td></tr>
+        <tr><th>Instituição</th><td>Grupo Educacional Unificado / Faculdade do Centro Oeste Paulista LTDA - Certificadora</td></tr>
       </table>
       <div class="section-title">Declaração</div>
-      <p class="bodytext">O <b>GRUPO EDUCACIONAL UNIFICADO</b>, por meio do <b>SIGEU Educacional</b>, declara, para os devidos fins, que <b>{_txt(nome)}</b>, matrícula/RA <b>{_txt(ra)}</b>, concluiu com aproveitamento o componente curricular <b>{_txt(disc)}</b>, com carga horária de <b>{carga} horas</b>, frequência acadêmica registrada de <b>{_freq(freq)}</b> e média final <b>{_num(media)}</b>.</p>
-      <p class="bodytext" style="margin-top:4mm">A conclusão acadêmica encontra-se registrada em <b>{_data(data_conclusao)}</b>. Docente/responsável acadêmico: <b>{_txt(docente)}</b>.</p>
-      <p class="bodytext" style="margin-top:4mm">A <b>FACOP CERTIFICADORA</b> - Faculdade do Centro Oeste Paulista LTDA - figura neste documento exclusivamente como instituição certificadora no âmbito da parceria educacional e da emissão documental aplicável.</p>
+      <p class="bodytext">O <b>GRUPO EDUCACIONAL UNIFICADO</b>, por meio do <b>SIGEU Educacional</b>, <b>DECLARA</b>, para os devidos fins, que <b>{_txt(nome)}</b>, matrícula/RA <b>{_txt(ra)}</b>, concluiu com aproveitamento o componente curricular <b>{_txt(disc)}</b>, com carga horária de <b>{carga} horas</b>, frequência acadêmica registrada de <b>{_freq(freq)}</b> e média final <b>{_num(media)}</b>.</p>
+      <p class="bodytext" style="margin-top:4mm">A conclusão acadêmica encontra-se registrada em <b>{_data(data_conclusao)}</b>.</p>
+      <p class="bodytext" style="margin-top:4mm">A correspondente certificação acadêmica encontra-se formalizada pela <b>FACOP CERTIFICADORA – Faculdade do Centro Oeste Paulista LTDA</b>, responsável pela certificação da conclusão da respectiva Unidade Curricular. A presente declaração mantém vinculação documental com os registros da certificadora, sendo sua correspondência registrada e validada internamente no SIGEU Educacional para fins de identificação, controle e verificação acadêmico-documental.</p>
       {_validation(codigo, qr_code, hash_documento)}
     </div>{_footer(codigo, 1, 1)}</section>
     """
@@ -324,7 +324,7 @@ def build_declaration(aluno: dict, disciplina: dict, codigo: str, qr_code: str, 
 def _history_row(d: dict) -> str:
     media = d.get("media_final") if d.get("media_final") is not None else d.get("nota_final")
     nome = str(d.get("nome") or d.get("disciplina_nome") or "")
-    docente = str(d.get("docente") or d.get("docente_nome") or "Docente responsável")
+    docente = str(d.get("docente") or d.get("docente_nome") or "Docente não cadastrado")
     maior = max(len(nome), len(docente))
     soma = len(nome) + len(docente)
     classe = ""
@@ -347,7 +347,7 @@ def _history_row(d: dict) -> str:
 def _paginar_historico(disciplinas: Iterable[dict]) -> list[list[dict]]:
     """Calcula o menor número seguro de folhas sem quebrar linhas.
 
-    - até 5 componentes: uma folha completa (cadastro + tabela + validação);
+    - até 8 componentes: uma folha completa (cadastro + tabela + validação);
     - em duas ou mais folhas: primeira e última comportam até 8 linhas;
     - folhas intermediárias comportam até 12 linhas.
 
@@ -356,7 +356,7 @@ def _paginar_historico(disciplinas: Iterable[dict]) -> list[list[dict]]:
     """
     itens = [dict(x) for x in disciplinas]
     n = len(itens)
-    if n <= 5:
+    if n <= 8:
         return [itens]
 
     paginas = 2
@@ -426,6 +426,7 @@ def build_history(aluno: dict, disciplinas: list[dict], codigo: str, qr_code: st
               <tr><th>Naturalidade</th><td>{_txt(aluno.get('naturalidade'))}</td><th>Estado civil</th><td>{_txt(aluno.get('estado_civil'))}</td></tr>
               <tr><th>Filiação</th><td colspan="3">{_txt(filiacao)}</td></tr>
               <tr><th>Unidade Curricular</th><td>{_txt(aluno.get('curso_referencia'), 'Disciplinas / Unidades Curriculares')}</td><th>Ano</th><td>{_txt(ano_referencia)}</td></tr>
+              <tr><th>Instituição</th><td colspan="3">Grupo Educacional Unificado / Faculdade do Centro Oeste Paulista LTDA - Certificadora</td></tr>
             </table>"""
         else:
             cadastro = f"<div class='history-carry'><b>Aluno:</b> {_txt(aluno.get('nome'))} &nbsp;&nbsp; <b>RA:</b> {_txt(aluno.get('ra'))}</div>"
@@ -439,7 +440,8 @@ def build_history(aluno: dict, disciplinas: list[dict], codigo: str, qr_code: st
               <div>Aprovadas<b>{total_aprovadas}</b></div>
               <div>Carga total<b>{int(carga_total or 0)}h</b></div>
             </div>
-            <div class="compact" style="margin-top:2.2mm"><b>Carga horária aprovada:</b> {int(carga_aprovada or 0)}h. A FACOP é apresentada neste documento exclusivamente como <b>FACOP CERTIFICADORA</b>, no âmbito da parceria educacional registrada.</div>
+            <div class="compact" style="margin-top:2.2mm"><b>Carga horária integralizada:</b> {int(carga_aprovada or 0)}h. Certificação formalizada pela <b>FACOP CERTIFICADORA – Faculdade do Centro Oeste Paulista LTDA</b>, vinculada aos respectivos registros autenticados.</div>
+            <div class="compact" style="margin-top:1.5mm">A FACOP CERTIFICADORA encontra-se identificada neste documento por seus dados cadastrais e institucionais; a certificação vinculada ao histórico é formalizada nos registros da certificadora e submetida aos mecanismos oficiais de regulação, supervisão e verificação institucional aplicáveis ao sistema federal de ensino, conforme a situação regulatória vigente.</div>
             {_validation(codigo, qr_code, hash_documento)}
             """
 
@@ -474,41 +476,26 @@ def _normalizar_topicos(topicos) -> list[str]:
     return []
 
 
-def _slot_unidade(indice: int, unidade: dict, overflow: list[dict]) -> str:
+def _slot_unidade(indice: int, unidade: dict) -> str:
     titulo = str(unidade.get("titulo") or f"UNIDADE {indice}").strip()
     topicos = _normalizar_topicos(unidade.get("topicos"))
     tamanho = len(titulo) + sum(len(x) for x in topicos)
-
-    # O gerador atual produz 3-5 tópicos curtos. Esse fallback protege planos
-    # legados muito extensos sem perder conteúdo: a grade permanece fixa e o
-    # conteúdo integral vai para uma página complementar.
-    precisa_anexo = len(topicos) > 8 or tamanho > 900
-    exibidos = topicos
-    aviso = ""
-    if precisa_anexo:
-        overflow.append({"indice": indice, "titulo": titulo, "topicos": topicos})
-        exibidos = topicos[:6]
-        aviso = "<span class='unit-continue'>Conteúdo integral preservado em página complementar.</span>"
-
     densidade = ""
-    if tamanho > 650:
+    if len(topicos) >= 12 or tamanho > 1050:
         densidade = "micro"
-    elif tamanho > 480:
+    elif len(topicos) >= 11 or tamanho > 850:
         densidade = "tight"
-    elif tamanho > 330:
+    elif len(topicos) >= 9 or tamanho > 650:
         densidade = "dense"
-    lis = "".join(f"<li>{escape(str(t))}</li>" for t in exibidos)
-    return f"<div class='unit-slot {densidade}'><h3>{escape(titulo)}</h3><ul>{lis}</ul>{aviso}</div>"
+    lis = "".join(f"<li>{escape(str(t))}</li>" for t in topicos)
+    return f"<div class='unit-slot {densidade}'><h3>{escape(titulo)}</h3><ul>{lis}</ul></div>"
 
 
-def _unit_table(slots: list[str]) -> str:
-    cells = list(slots[:6])
-    while len(cells) < 6:
+def _units_grid(slots: list[str]) -> str:
+    cells = list(slots[:12])
+    while len(cells) < 12:
         cells.append("<div class='unit-slot empty' aria-hidden='true'></div>")
-    rows = []
-    for i in range(0, 6, 2):
-        rows.append(f"<tr><td>{cells[i]}</td><td>{cells[i + 1]}</td></tr>")
-    return "<table class='unit-table'><tbody>" + "".join(rows) + "</tbody></table>"
+    return "<div class='units-grid'>" + "".join(cells) + "</div>"
 
 
 def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horaria: str,
@@ -517,19 +504,18 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
                habilidades: str = "", pre_requisitos: str = "", enquadramento_curricular: str = "",
                metodologia_html: str = "", avaliacao_html: str = "", bibliografia_basica: str = "",
                bibliografia_complementar: str = "", unidades: list[dict] | None = None,
-               numero_unidades: int = 4) -> str:
+               numero_unidades: int = 8) -> str:
     try:
-        numero_unidades = max(1, min(12, int(numero_unidades or 4)))
+        numero_unidades = max(8, min(12, int(numero_unidades or 8)))
     except Exception:
-        numero_unidades = 4
+        numero_unidades = 8
 
     unidades = list(unidades or [])[:numero_unidades]
-    overflow_units: list[dict] = []
     slots: list[str] = []
     for i in range(12):
         if i < len(unidades):
             u = unidades[i] if isinstance(unidades[i], dict) else {}
-            slots.append(_slot_unidade(i + 1, u, overflow_units))
+            slots.append(_slot_unidade(i + 1, u))
         else:
             slots.append("<div class='unit-slot empty' aria-hidden='true'></div>")
 
@@ -538,15 +524,16 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
     refs_bas_html = "".join(f"<div>{escape(x)}</div>" for x in refs_bas)
     refs_comp_html = "".join(f"<div>{escape(x)}</div>" for x in refs_comp)
 
-    total = 5 + len(overflow_units)
+    total = 4
     p1 = f"""
     <section class="sheet"><div class="content">
       {_header('PLANO DE ENSINO', disciplina)}
       <table class="info-table">
-        <tr><th>Instituição</th><td>SIGEU Educacional - Grupo Educacional Unificado</td></tr>
+        <tr><th>Instituição</th><td>Grupo Educacional Unificado / Faculdade do Centro Oeste Paulista LTDA - Certificadora</td></tr>
+        <tr><th>Identificação institucional</th><td>SIGEU Educacional / FACOP Certificadora</td></tr>
         <tr><th>Pré-requisito</th><td>{_txt(pre_requisitos, 'Nenhum')}</td></tr>
         <tr><th>Nome da Disciplina</th><td>{_txt(disciplina)}</td></tr>
-        <tr><th>Coordenação</th><td>Coordenação Acadêmica - FACOP/SIGEU</td></tr>
+        <tr><th>Coordenação</th><td>Coordenação Acadêmica - SIGEU Educacional / FACOP Certificadora</td></tr>
         <tr><th>Núcleo</th><td>{_txt(enquadramento_curricular, 'Unidade Curricular / Formação Acadêmica')}</td></tr>
         <tr><th>Oferta</th><td>Oferta acadêmica vinculada ao SIGEU Educacional</td></tr>
         <tr><th>Carga Horária</th><td>{_txt(carga_horaria)}</td></tr>
@@ -561,43 +548,25 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
     p2 = f"""
     <section class="sheet"><div class="content">
       {_header('PLANO DE ENSINO', disciplina)}
-      <div class="section-title">Plano de Ensino - Unidades 1 a 6</div>
-      {_unit_table(slots[:6])}
+      <div class="section-title">Plano de Ensino - Unidades 1 a 12</div>
+      {_units_grid(slots)}
     </div>{_footer(codigo, 2, total)}</section>"""
 
     p3 = f"""
     <section class="sheet"><div class="content">
       {_header('PLANO DE ENSINO', disciplina)}
-      <div class="section-title">Plano de Ensino - Unidades 7 a 12</div>
-      {_unit_table(slots[6:12])}
+      <div class="section-title">Metodologia</div><div class="rich compact">{_strip_inline_style(metodologia_html)}</div>
+      <div class="section-title">Avaliação da Aprendizagem</div><div class="rich compact">{_strip_inline_style(avaliacao_html)}</div>
     </div>{_footer(codigo, 3, total)}</section>"""
 
     p4 = f"""
     <section class="sheet"><div class="content">
       {_header('PLANO DE ENSINO', disciplina)}
-      <div class="section-title">Metodologia</div><div class="rich compact">{_strip_inline_style(metodologia_html)}</div>
-      <div class="section-title">Avaliação da Aprendizagem</div><div class="rich compact">{_strip_inline_style(avaliacao_html)}</div>
-    </div>{_footer(codigo, 4, total)}</section>"""
-
-    p5 = f"""
-    <section class="sheet"><div class="content">
-      {_header('PLANO DE ENSINO', disciplina)}
       <div class="section-title">Referências Básicas</div><div class="ref-list">{refs_bas_html or '<div>N/I</div>'}</div>
       <div class="section-title">Referências Complementares</div><div class="ref-list">{refs_comp_html or '<div>N/I</div>'}</div>
       <div class="section-title">Validação Institucional</div>
-      <div class="compact">Plano emitido em {_txt(data_formatada)}. A FACOP consta exclusivamente como <b>FACOP CERTIFICADORA</b> no âmbito da parceria institucional. Código de autenticação, QR Code e hash permitem a conferência eletrônica do documento.</div>
+      <div class="compact">Plano emitido em {_txt(data_formatada)}. Certificação formalizada pela <b>FACOP CERTIFICADORA – Faculdade do Centro Oeste Paulista LTDA</b>, vinculada aos respectivos registros autenticados. Código de autenticação, QR Code e hash permitem a conferência eletrônica do documento.</div>
       {_validation(codigo, qr_code, hash_documento)}
-    </div>{_footer(codigo, 5, total)}</section>"""
+    </div>{_footer(codigo, 4, total)}</section>"""
 
-    anexos = []
-    for offset, u in enumerate(overflow_units, start=6):
-        lis = "".join(f"<li>{escape(t)}</li>" for t in u["topicos"])
-        anexos.append(f"""
-        <section class="sheet"><div class="content">
-          {_header('PLANO DE ENSINO', disciplina)}
-          <div class="section-title">Conteúdo Programático Complementar</div>
-          <div class="appendix-unit"><h3>{escape(u['titulo'])}</h3><ul>{lis}</ul></div>
-          <div class="compact">Esta página preserva integralmente um bloco cuja extensão ultrapassa a área fixa reservada na grade de unidades. A posição original da unidade permanece inalterada.</div>
-        </div>{_footer(codigo, offset, total)}</section>""")
-
-    return _document_start(codigo) + p1 + p2 + p3 + p4 + p5 + "".join(anexos) + _document_end()
+    return _document_start(codigo) + p1 + p2 + p3 + p4 + _document_end()
