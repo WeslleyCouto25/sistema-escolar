@@ -5025,7 +5025,7 @@ def buscar_disciplinas_por_aluno_id(aluno_id):
         carga_horaria = disc['carga_horaria'] if disc['carga_horaria'] else 80
 
         # Determinar docente
-        docente_display = "Docente Responsável — Coordenação Acadêmica SIGEU"
+        docente_display = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
         if disc['docente_nome']:
             docente_display = disc['docente_nome']
             if disc['docente_titulacao']:
@@ -5498,7 +5498,7 @@ def gerar_historico_automatico(aluno_id, disciplinas, dados_aluno, qr_code_base6
             if info_disc.get('titulacao'):
                 docente += f" ({info_disc['titulacao']})"
         else:
-            docente = 'Docente Responsável — Coordenação Acadêmica SIGEU'
+            docente = 'Tatiane R. Costa — Coordenação Acadêmica SIGEU'
 
         data_inicio_disc = info_disc.get('data_inicio')
         if data_inicio_disc:
@@ -8315,8 +8315,8 @@ def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                 <div class="academic-signature">
                     <div class="academic-signature-line"></div>
                     <strong>{docente}</strong>
-                    <span>Docente / Responsável Acadêmico</span>
-                    <small>Registro eletrônico vinculado ao código e ao hash deste plano.</small>
+                    <span>Assinado eletronicamente em {data_formatada}</span>
+                    <small>Registro eletrônico validado por Certificação Digital</small>
                 </div>
             </div>
 
@@ -9910,7 +9910,7 @@ def _docente_documental_disciplina(cursor, disciplina_id, disciplina_nome):
         return row["docente_documental"]
 
     # Designação funcional: evita atribuir falsamente a disciplina a uma pessoa real/fictícia.
-    designacao = "Docente Responsável — Coordenação Acadêmica SIGEU"
+    designacao = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
     cursor.execute(
         "UPDATE disciplinas SET docente_documental = %s WHERE id = %s",
         (designacao, disciplina_id)
@@ -10941,7 +10941,7 @@ def _formatar_docente_publico(nome, titulacao=None):
     nome = _limpar_texto_publico(nome, 180)
     titulo = _limpar_texto_publico(titulacao, 120).lower()
     if not nome:
-        return "Docente Responsável — Coordenação Acadêmica SIGEU"
+        return "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
     if re.match(r"^prof(?:a|essor|essora)?\.?\s", nome, re.I):
         return nome
     if "dout" in titulo or titulo in {"dr", "dr."}:
@@ -11007,7 +11007,7 @@ def _selecionar_docente_publico(cursor, pedido_token, disciplina_nome=None, carg
     if escolhido is None and candidatos:
         escolhido = candidatos[0]
     if not escolhido:
-        return None, "Docente Responsável — Coordenação Acadêmica SIGEU"
+        return None, "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
     return escolhido["id"], _formatar_docente_publico(escolhido["nome"], escolhido.get("titulacao"))
 
 
@@ -11528,7 +11528,7 @@ def _assegurar_disciplina_e_plano_publico(solicitacao_id):
                 )
             else:
                 docente_id = None
-                docente_nome = "Docente Responsável — Coordenação Acadêmica SIGEU"
+                docente_nome = "Tatiane R. Costa — Coordenação Acadêmica SIGEU"
 
         cur.execute("UPDATE disciplinas SET docente_documental=%s WHERE id=%s", (docente_nome, disciplina_id))
         cur.execute(
