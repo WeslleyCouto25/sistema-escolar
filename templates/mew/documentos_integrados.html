@@ -182,7 +182,18 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 <tr><td>#{{ s.id }}</td><td><b>{{ s.aluno_nome }}</b><br><small>RA {{ s.aluno_ra }}</small></td>
 <td>{% if s.tipo_solicitacao == 'integrado' %}Histórico + Declaração + Plano{% elif s.tipo_solicitacao == 'historico' %}Histórico{% elif s.tipo_solicitacao == 'conclusao' %}Declaração{% else %}Plano de Ensino{% endif %}</td>
 <td>{{ s.disciplinas_nomes or 'N/A' }}</td><td>{{ s.data_solicitacao }}</td><td><span class="badge {{ s.status }}">{{ s.status|replace('_',' ')|upper }}</span></td><td class="msg">{{ s.mensagem_status or '' }}</td>
-<td>{% if s.status == 'aprovado' %}<span class="btn ok">✓ Liberado</span>{% else %}<a class="btn primary" href="/mew/documentos-integrados/{{ s.id }}/conferir">{% if s.status in ['pendente','erro'] %}Gerar / Conferir{% else %}Conferir PDF{% endif %}</a>{% endif %}</td></tr>
+<td>
+{% if s.status == 'aprovado' %}
+  <span class="btn ok">✓ Liberado</span>
+{% else %}
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+    <a class="btn primary" href="/mew/documentos-integrados/{{ s.id }}/conferir">{% if s.status in ['pendente','erro'] %}Gerar / Conferir{% else %}Conferir PDF{% endif %}</a>
+    <form method="post" action="/mew/documentos-integrados/{{ s.id }}/excluir" style="margin:0" onsubmit="return confirm('Excluir esta solicitação e a prévia atual? O Plano de Ensino da disciplina não será apagado.')">
+      <button class="btn" type="submit" style="background:#a12727;color:#fff;border:0;cursor:pointer">Excluir</button>
+    </form>
+  </div>
+{% endif %}
+</td></tr>
 {% endfor %}
 </tbody></table>
 {% else %}<div style="text-align:center;padding:50px;color:#777"><i class="fas fa-inbox" style="font-size:52px"></i><h3>Nenhuma solicitação integrada</h3></div>{% endif %}

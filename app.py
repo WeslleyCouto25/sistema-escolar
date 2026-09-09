@@ -10702,6 +10702,68 @@ def mew_regerar_documentos_integrados(solicitacao_id):
     return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro={url_quote(erro or 'Erro')}")
 
 
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/excluir", methods=["POST"])
+def mew_excluir_documentos_integrados(solicitacao_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, status, arquivo_r2_key, componentes_json
+        FROM solicitacoes_documentos_integrados
+        WHERE id=%s
+    """, (solicitacao_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return redirect("/mew/documentos-integrados?erro=Solicitação+não+encontrada")
+
+    if row.get("status") == "aprovado":
+        conn.close()
+        return redirect("/mew/documentos-integrados?erro=Documento+já+aprovado.+A+exclusão+foi+bloqueada+para+preservar+o+registro+liberado+ao+aluno")
+
+    # Remove apenas os documentos temporários criados por esta solicitação.
+    # O Plano de Ensino institucional já existente NÃO é apagado.
+    ids_componentes = []
+    try:
+        componentes = json.loads(row.get("componentes_json") or "[]")
+        ids_componentes = [
+            int(c.get("id")) for c in componentes
+            if c.get("id") and c.get("tipo") in ("historico", "declaracao_conclusao")
+        ]
+    except Exception:
+        ids_componentes = []
+
+    try:
+        if ids_componentes:
+            cursor.execute(
+                "DELETE FROM documentos_autenticados WHERE id = ANY(%s)",
+                (ids_componentes,)
+            )
+        cursor.execute(
+            "DELETE FROM solicitacoes_documentos_integrados WHERE id=%s",
+            (solicitacao_id,)
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return redirect("/mew/documentos-integrados?erro=Não+foi+possível+excluir+a+solicitação")
+    finally:
+        if not conn.closed:
+            conn.close()
+
+    key = row.get("arquivo_r2_key")
+    if key:
+        try:
+            delete_object(key)
+        except Exception:
+            pass
+
+    return redirect("/mew/documentos-integrados?sucesso=Solicitação+excluída.+Agora+é+possível+gerar+uma+nova")
+
+
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/aprovar", methods=["POST"])
 def mew_aprovar_documentos_integrados(solicitacao_id):
     if not session.get("mew_admin"): return redirect("/mew/login")

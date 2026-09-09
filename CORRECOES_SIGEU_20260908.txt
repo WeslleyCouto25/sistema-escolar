@@ -76,3 +76,10 @@ SIGEU - PACOTE FINAL CONSOLIDADO - 08/09/2026
 - Procfile e migrações preservados.
 - .env, __pycache__, *.pyc e arquivos temporários não fazem parte do pacote final.
 - O banco de produção não é sobrescrito pelo ZIP; as migrações são executadas pelo fluxo de deploy existente.
+
+AJUSTE MEW - DOCUMENTOS INTEGRADOS
+- Adicionado botão Excluir ao lado de Gerar/Conferir ou Conferir PDF enquanto a solicitação não estiver aprovada.
+- Adicionado botão Excluir solicitação na tela de conferência da prévia.
+- A exclusão remove a solicitação/prévia atual e os componentes temporários de histórico/declaração gerados por ela.
+- O Plano de Ensino institucional da disciplina NÃO é apagado.
+- Solicitações já aprovadas permanecem protegidas contra exclusão por esta ação.
