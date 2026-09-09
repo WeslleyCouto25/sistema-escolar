@@ -479,7 +479,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     </select>
                 </div>
                 <div class="info-box" style="background:#f1f3f4; border-left-color:#59636a;">
-                    <i>📐</i> <strong>Estrutura automática:</strong> antes da geração, o sistema sorteia entre <b>8 e 12 unidades</b>. Cada unidade recebe entre <b>8 e 12 tópicos</b>. As posições 1 a 12 ficam reservadas na <b>segunda página</b>; posições não utilizadas permanecem vazias sem alterar a formação do documento.
+                    <i>📐</i> <strong>Estrutura automática:</strong> antes da geração, o sistema sorteia entre <b>6 e 8 unidades</b>. Cada unidade recebe entre <b>8 e 10 tópicos</b>. A <b>segunda página</b> possui exatamente 8 posições possíveis; se forem sorteadas 6 ou 7 unidades, as posições restantes ficam vazias. A página 3 começa diretamente em Metodologia.
                 </div>
 
                 <div class="form-group">
@@ -518,7 +518,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     </button>
                 </div>
                 <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-                    <strong>📄 Organização:</strong> Estrutura institucional fixa, com até 12 unidades em posições reservadas, marca d’água e autenticação em todas as páginas
+                    <strong>📄 Organização:</strong> Estrutura institucional fixa, com 6 a 8 unidades somente na página 2, marca d’água e autenticação em todas as páginas
                 </div>
             </div>
         </div>
@@ -564,7 +564,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <p><strong>📘 Disciplina:</strong> ${result.disciplina}</p>
                         <p><strong>⏱️ Carga horária:</strong> ${result.carga_horaria}</p>
                         <p><strong>👨‍🏫 Docente:</strong> ${result.docente}</p>
-                        <p><strong>🔢 Unidades:</strong> ${result.numero_unidades || 8}</p>
+                        <p><strong>🔢 Unidades:</strong> ${result.numero_unidades || 6}</p>
                         <p><strong>🤖 Bibliografias:</strong> geradas automaticamente pela IA</p>
                         <p><strong>🔑 Código:</strong> ${result.codigo}</p>
                         <p><strong>📅 Emissão:</strong> ${result.data_emissao}</p>

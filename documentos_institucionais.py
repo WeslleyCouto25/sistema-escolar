@@ -188,15 +188,15 @@ def _base_css(codigo: str):
     .summary-grid div {{ flex:1; border:1px solid #c8c8c8; padding:1.7mm; font-size:7.2pt; text-align:center; }}
     .summary-grid b {{ display:block; font-size:8.8pt; margin-top:.5mm; }}
 
-    .units-grid {{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(4,54mm); gap:2mm 2.6mm; width:100%; }}
-    .unit-slot {{ height:54mm; padding:1.2mm 1.35mm; border:1px solid #d8d8d8; background:rgba(255,255,255,.86); overflow:hidden; }}
+    .units-grid {{ display:grid; grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(4,50.5mm); gap:2.2mm 3mm; width:100%; }}
+    .unit-slot {{ height:50.5mm; padding:1.5mm 1.7mm; border:1px solid #d8d8d8; background:rgba(255,255,255,.86); overflow:hidden; }}
     .unit-slot.empty {{ border-color:#efefef; background:rgba(250,250,250,.35); }}
-    .unit-slot h3 {{ margin:0 0 .8mm; font-size:6.2pt; line-height:1.08; overflow-wrap:anywhere; text-transform:none; }}
-    .unit-slot ul {{ margin:0; padding-left:3.6mm; font-size:4.75pt; line-height:1.08; }}
+    .unit-slot h3 {{ margin:0 0 .8mm; font-size:6.6pt; line-height:1.08; overflow-wrap:anywhere; text-transform:none; }}
+    .unit-slot ul {{ margin:0; padding-left:3.8mm; font-size:5.35pt; line-height:1.09; }}
     .unit-slot li {{ margin:0 0 .22mm; overflow-wrap:anywhere; }}
-    .unit-slot.dense h3 {{ font-size:5.9pt; }} .unit-slot.dense ul {{ font-size:4.5pt; line-height:1.06; }}
-    .unit-slot.tight h3 {{ font-size:5.6pt; }} .unit-slot.tight ul {{ font-size:4.25pt; line-height:1.04; }}
-    .unit-slot.micro h3 {{ font-size:5.3pt; }} .unit-slot.micro ul {{ font-size:4pt; line-height:1.02; padding-left:3.2mm; }}
+    .unit-slot.dense h3 {{ font-size:6.2pt; }} .unit-slot.dense ul {{ font-size:5.0pt; line-height:1.07; }}
+    .unit-slot.tight h3 {{ font-size:5.9pt; }} .unit-slot.tight ul {{ font-size:4.8pt; line-height:1.05; }}
+    .unit-slot.micro h3 {{ font-size:5.6pt; }} .unit-slot.micro ul {{ font-size:4.55pt; line-height:1.03; padding-left:3.4mm; }}
     .ref-list {{ font-size:7.7pt; line-height:1.33; }}
     .ref-list div {{ margin:0 0 1.6mm; text-align:justify; }}
     .appendix-unit {{ margin-bottom:4mm; }}
@@ -492,8 +492,8 @@ def _slot_unidade(indice: int, unidade: dict) -> str:
 
 
 def _units_grid(slots: list[str]) -> str:
-    cells = list(slots[:12])
-    while len(cells) < 12:
+    cells = list(slots[:8])
+    while len(cells) < 8:
         cells.append("<div class='unit-slot empty' aria-hidden='true'></div>")
     return "<div class='units-grid'>" + "".join(cells) + "</div>"
 
@@ -504,15 +504,15 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
                habilidades: str = "", pre_requisitos: str = "", enquadramento_curricular: str = "",
                metodologia_html: str = "", avaliacao_html: str = "", bibliografia_basica: str = "",
                bibliografia_complementar: str = "", unidades: list[dict] | None = None,
-               numero_unidades: int = 8) -> str:
+               numero_unidades: int = 6) -> str:
     try:
-        numero_unidades = max(8, min(12, int(numero_unidades or 8)))
+        numero_unidades = max(6, min(8, int(numero_unidades or 6)))
     except Exception:
-        numero_unidades = 8
+        numero_unidades = 6
 
     unidades = list(unidades or [])[:numero_unidades]
     slots: list[str] = []
-    for i in range(12):
+    for i in range(8):
         if i < len(unidades):
             u = unidades[i] if isinstance(unidades[i], dict) else {}
             slots.append(_slot_unidade(i + 1, u))
@@ -548,7 +548,7 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
     p2 = f"""
     <section class="sheet"><div class="content">
       {_header('PLANO DE ENSINO', disciplina)}
-      <div class="section-title">Plano de Ensino - Unidades 1 a 12</div>
+      <div class="section-title">Plano de Ensino - Unidades 1 a 8</div>
       {_units_grid(slots)}
     </div>{_footer(codigo, 2, total)}</section>"""
 

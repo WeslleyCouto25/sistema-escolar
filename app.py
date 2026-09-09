@@ -7328,7 +7328,7 @@ def mew_processar_plano_ensino():
         # Modalidade e pré-requisitos são gerados pela IA; metodologia e avaliação continuam institucionais/fixas.
         dados_html = dict(conteudo_ia)
         modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
-        numero_unidades = max(8, min(12, int(conteudo_ia.get("numero_unidades") or 8)))
+        numero_unidades = max(6, min(8, int(conteudo_ia.get("numero_unidades") or 6)))
         dados_html.pop("numero_unidades", None)
 
         data_formatada = datetime.now().strftime("%d/%m/%Y")
@@ -11433,7 +11433,7 @@ def api_publico_gerar_previa_plano():
             plano_dados_salvos = dict(dados_html)
             modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
             plano_dados_salvos["modalidade"] = modalidade
-            numero_unidades = max(8, min(12, int(plano_dados_salvos.get("numero_unidades") or 8)))
+            numero_unidades = max(6, min(8, int(plano_dados_salvos.get("numero_unidades") or 6)))
             plano_dados_salvos["numero_unidades"] = numero_unidades
             dados_html.pop("numero_unidades", None)
             codigo = f"PREVIA-{secrets.token_hex(5).upper()}"
@@ -11755,9 +11755,9 @@ def _assegurar_disciplina_e_plano_publico(solicitacao_id):
         if dados_plano:
             modalidade = _limpar_texto_publico(dados_plano.pop("modalidade", None) or "EaD", 40)
             try:
-                numero_unidades = max(8, min(12, int(dados_plano.pop("numero_unidades", 8) or 8)))
+                numero_unidades = max(6, min(8, int(dados_plano.pop("numero_unidades", 6) or 6)))
             except Exception:
-                numero_unidades = 8
+                numero_unidades = 6
             codigo = gerar_codigo_simples()
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             hash_documento = gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}", "PUBLICO", timestamp)
@@ -12178,7 +12178,7 @@ from documentos_institucionais import (
 )
 
 
-def _parse_unidades_plano_legacy(conteudo_programatico, limite=12):
+def _parse_unidades_plano_legacy(conteudo_programatico, limite=8):
     """Converte o texto antigo de conteúdo programático em blocos de unidades."""
     texto = str(conteudo_programatico or "").strip()
     if not texto:
@@ -12198,14 +12198,14 @@ def _parse_unidades_plano_legacy(conteudo_programatico, limite=12):
 
 def gerar_html_plano_ensino(disciplina, codigo, hash_completa, carga_horaria,
                              modalidade, docente, data_formatada, qr_code_base64,
-                             numero_unidades=8, **kwargs):
-    """Plano institucional padronizado: 8 a 12 unidades, todas reservadas na página 2."""
+                             numero_unidades=6, **kwargs):
+    """Plano institucional padronizado: 6 a 8 unidades, todas na página 2."""
     from api_planos import METODOLOGIA_FIXA, SISTEMA_AVALIACAO_FIXO
 
     try:
-        numero_unidades = max(8, min(12, int(numero_unidades or kwargs.get("numero_unidades") or 8)))
+        numero_unidades = max(6, min(8, int(numero_unidades or kwargs.get("numero_unidades") or 6)))
     except Exception:
-        numero_unidades = 8
+        numero_unidades = 6
 
     unidades = kwargs.get("conteudo_programatico_estruturado")
     if not isinstance(unidades, list):

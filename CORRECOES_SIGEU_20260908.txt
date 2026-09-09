@@ -38,8 +38,8 @@ SIGEU - PACOTE FINAL CONSOLIDADO - 08/09/2026
 - Teste de 40 componentes: 4 páginas, com fechamento completo na última.
 
 5. PLANO DE ENSINO
-- Estrutura sorteada ANTES da IA: de 8 a 12 unidades.
-- Cada unidade recebe, também antes da IA, de 8 a 12 tópicos.
+- Estrutura sorteada ANTES da IA: de 6 a 8 unidades.
+- Cada unidade recebe, também antes da IA, de 8 a 10 tópicos.
 - Página 2 contém SEMPRE as 12 posições de unidades em grade fixa.
 - Se forem geradas apenas 8 unidades, as posições 9 a 12 permanecem vazias sem alterar a formação.
 - Página 3 inicia diretamente em METODOLOGIA.
@@ -66,7 +66,7 @@ SIGEU - PACOTE FINAL CONSOLIDADO - 08/09/2026
 - 11 arquivos Python: py_compile OK.
 - 68 templates HTML/Jinja: parse OK.
 - 160 rotas Flask efetivas: sem duplicidade pelo AST.
-- Plano de teste com 12 unidades: 4 páginas.
+- Plano de teste com 8 unidades: 4 páginas; todas as unidades ficam somente na página 2.
 - Plano de teste com 8 unidades: 4 páginas, posições 9-12 vazias.
 - Histórico de teste com 40 componentes: 4 páginas.
 - Declaração de teste: 1 página.
