@@ -28,6 +28,10 @@ def _build_pool():
         connect_timeout=int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
         application_name=os.getenv("DB_APPLICATION_NAME", "sigeu-web"),
         options=options,
+        keepalives=1,
+        keepalives_idle=int(os.getenv("DB_KEEPALIVES_IDLE", "30")),
+        keepalives_interval=int(os.getenv("DB_KEEPALIVES_INTERVAL", "10")),
+        keepalives_count=int(os.getenv("DB_KEEPALIVES_COUNT", "5")),
     )
 
 
@@ -89,13 +93,40 @@ class PooledConnection:
         return False
 
 
+def _connection_is_healthy(conn):
+    """Valida também conexões SSL que parecem abertas localmente mas já morreram no servidor."""
+    if conn is None or conn.closed:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        # SELECT inicia uma transação no psycopg2; devolvemos a conexão limpa ao chamador.
+        conn.rollback()
+        return True
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return False
+
+
 def get_db_connection():
     pool = _get_pool()
-    conn = pool.getconn()
-    if conn.closed:
-        pool.putconn(conn, close=True)
+    ultimo_erro = None
+    for _ in range(3):
         conn = pool.getconn()
-    return PooledConnection(pool, conn)
+        if _connection_is_healthy(conn):
+            return PooledConnection(pool, conn)
+        try:
+            pool.putconn(conn, close=True)
+        except Exception as exc:
+            ultimo_erro = exc
+    raise psycopg2.OperationalError(
+        "Não foi possível obter uma conexão PostgreSQL saudável do pool."
+        + (f" Detalhe: {ultimo_erro}" if ultimo_erro else "")
+    )
 
 
 def pool_stats():

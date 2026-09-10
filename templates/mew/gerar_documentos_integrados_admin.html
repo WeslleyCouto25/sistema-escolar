@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEW - Gerar Pacote Integrado</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=portal-academico-2026">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/portal07.css') }}?v=portal07-final-20260904">
+<style>
+body{background:#e9ecef;font-family:Tahoma,"Segoe UI",Arial,sans-serif;color:#202428;margin:0}.wrap{max-width:1380px;margin:0 auto;padding:22px}.top{background:#343a40;color:#fff;border-bottom:3px solid #c86d20;padding:15px 18px;display:flex;align-items:center;justify-content:space-between}.top a{color:#fff;text-decoration:none}.card{background:#fff;border:1px solid #c9d0d5;margin-top:18px;padding:20px}.title{font-size:19px;font-weight:700;margin-bottom:5px}.muted{color:#667078;font-size:12px}.select{width:100%;padding:10px;border:1px solid #bfc8ce;background:#fff;font-size:14px}.btn{display:inline-block;border:0;padding:10px 14px;text-decoration:none;cursor:pointer;font-weight:700;border-radius:2px}.primary{background:#343a40;color:#fff}.orange{background:#c86d20;color:#fff}.green{background:#176b3a;color:#fff}.sec{background:#6f7880;color:#fff}.alert{padding:12px;margin-top:14px;border:1px solid}.error{background:#f8d7da;color:#721c24;border-color:#f0b9bf}.info{background:#f7f8f9;border-left:4px solid #c86d20;padding:12px;margin:14px 0}.student{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-top:12px}.history-box{border:1px solid #c9d0d5;padding:14px;margin:16px 0;background:#fafbfb}.matrix{width:100%;border-collapse:collapse}.matrix th,.matrix td{border:1px solid #dfe4e7;padding:10px;vertical-align:top;text-align:left}.matrix th{background:#eceff1}.ok{color:#176b3a;font-weight:700}.missing{color:#9a6300;font-weight:700}.bad{color:#a12727;font-weight:700}.docopt{display:flex;gap:8px;align-items:flex-start}.docopt input{margin-top:3px}.regen{display:block;margin-top:6px;font-size:11px;color:#8a4d12}.code{font-family:monospace;font-size:11px;color:#586169}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.hint{font-size:11px;color:#586169;margin-top:4px}@media(max-width:820px){.student{grid-template-columns:1fr}.matrix{font-size:12px}.wrap{padding:10px}.actions .btn{width:100%}}
+</style>
+</head>
+<body class="portal07 admin-page">
+<div class="top"><div><b>📦 MEW — Gerar documentos integrados para o aluno</b><div style="font-size:11px;margin-top:3px">Use documentos existentes ou gere somente o que estiver faltando / o que você quiser substituir.</div></div><a href="/mew/documentos-integrados">← Documentos Integrados</a></div>
+<div class="wrap">
+{% if request.args.get('erro') %}<div class="alert error">{{ request.args.get('erro') }}</div>{% endif %}
+<div class="card">
+  <div class="title">1. Escolha o aluno</div>
+  <div class="muted">Ao selecionar, o sistema mostra o que já existe no banco para esse aluno e para cada disciplina.</div>
+  <form method="get" action="/mew/documentos-integrados/novo" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+    <select name="aluno_id" class="select" style="flex:1;min-width:300px" required>
+      <option value="">Selecione o aluno...</option>
+      {% for a in alunos %}<option value="{{ a.id }}" {% if aluno_id == a.id %}selected{% endif %}>{{ a.nome }} — RA {{ a.ra }}{% if a.email %} — {{ a.email }}{% endif %}</option>{% endfor %}
+    </select>
+    <button class="btn primary" type="submit">Ver documentos disponíveis</button>
+  </form>
+</div>
+
+{% if aluno %}
+<div class="card">
+  <div class="title">2. Monte o pacote de {{ aluno.nome }}</div>
+  <div class="student"><div><b>Aluno:</b> {{ aluno.nome }}</div><div><b>RA:</b> {{ aluno.ra }}</div><div><b>E-mail:</b> {{ aluno.email or 'N/I' }}</div></div>
+  <div class="info"><b>Como funciona:</b> marque o que deve entrar no PDF. Se já existe, o sistema usa a versão atual. Se não existe, gera automaticamente. Para substituir um documento existente, marque também <b>“Gerar nova versão”</b>. Tudo o que for incluído aparece junto na prévia final.</div>
+
+  <form method="post" action="/mew/documentos-integrados/novo" id="packageForm">
+    <input type="hidden" name="aluno_id" value="{{ aluno.id }}">
+
+    <div class="history-box">
+      <label class="docopt">
+        <input type="checkbox" name="itens_incluir" value="historico" class="include-check">
+        <span><b>Histórico acadêmico</b><br>
+          {% if historico %}<span class="ok">✓ Já existe no banco</span> <span class="code">{{ historico.codigo }}</span> <a href="/ver-documento/{{ historico.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% else %}<span class="missing">● Ainda não existe — será gerado automaticamente</span>{% endif %}
+          <div class="hint">O histórico reúne todas as disciplinas elegíveis do aluno.</div>
+          {% if historico %}<label class="regen"><input type="checkbox" name="itens_regenerar" value="historico" class="regen-check"> Gerar nova versão e substituir o histórico atual no banco</label>{% endif %}
+        </span>
+      </label>
+    </div>
+
+    <div style="overflow:auto">
+    <table class="matrix">
+      <thead><tr><th>Disciplina</th><th>Declaração de conclusão</th><th>Plano de Ensino</th></tr></thead>
+      <tbody>
+      {% for d in disciplinas %}
+      <tr>
+        <td><b>{{ d.nome }}</b><br><span class="code">{{ d.carga_horaria }}h</span><br>{% if d.elegivel %}<span class="ok">✓ Elegível</span>{% else %}<span class="bad">Bloqueada</span><div class="hint">{{ d.motivo }}</div>{% endif %}</td>
+        <td>
+          <label class="docopt">
+            <input type="checkbox" name="itens_incluir" value="conclusao:{{ d.id }}" class="include-check" {% if not d.elegivel %}disabled{% endif %}>
+            <span><b>Incluir declaração</b><br>
+              {% if d.declaracao_existente %}<span class="ok">✓ Já existe</span> <span class="code">{{ d.declaracao_existente.codigo }}</span> <a href="/ver-documento/{{ d.declaracao_existente.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% else %}<span class="missing">● Não existe — será gerada</span>{% endif %}
+              {% if d.declaracao_existente and d.elegivel %}<label class="regen"><input type="checkbox" name="itens_regenerar" value="conclusao:{{ d.id }}" class="regen-check"> Gerar nova versão e substituir no banco</label>{% endif %}
+            </span>
+          </label>
+        </td>
+        <td>
+          <label class="docopt">
+            <input type="checkbox" name="itens_incluir" value="plano_ensino:{{ d.id }}" class="include-check" {% if not d.elegivel %}disabled{% endif %}>
+            <span><b>Incluir Plano de Ensino</b><br>
+              {% if d.plano_existente %}<span class="ok">✓ Já existe</span> <span class="code">{{ d.plano_existente.codigo }}</span> <a href="/ver-documento/{{ d.plano_existente.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% else %}<span class="missing">● Não existe — a IA vai gerar</span>{% endif %}
+              {% if d.plano_existente and d.elegivel %}<label class="regen"><input type="checkbox" name="itens_regenerar" value="plano_ensino:{{ d.id }}" class="regen-check"> Gerar NOVO pela IA e substituir o plano atual</label>{% endif %}
+            </span>
+          </label>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn sec" onclick="marcarExistentes()">Selecionar todos os documentos disponíveis</button>
+      <button type="button" class="btn sec" onclick="limparTudo()">Limpar seleção</button>
+      <button type="submit" name="acao" value="conferir" class="btn orange">📑 Gerar pacote e CONFERIR</button>
+      <button type="submit" name="acao" value="enviar" class="btn green" onclick="return confirm('Gerar o pacote e liberar diretamente ao aluno sem nova conferência?')">✓ Gerar e ENVIAR DIRETAMENTE</button>
+    </div>
+  </form>
+</div>
+<script>
+function limparTudo(){document.querySelectorAll('#packageForm input[type=checkbox]').forEach(function(x){x.checked=false;});}
+function marcarExistentes(){document.querySelectorAll('.include-check:not(:disabled)').forEach(function(x){x.checked=true;});}
+document.getElementById('packageForm').addEventListener('submit',function(e){
+  var incluidos=Array.from(document.querySelectorAll('.include-check:checked')).map(function(x){return x.value;});
+  if(!incluidos.length){e.preventDefault();alert('Selecione ao menos um documento para o pacote.');return;}
+  var invalidos=Array.from(document.querySelectorAll('.regen-check:checked')).filter(function(x){return !incluidos.includes(x.value);});
+  if(invalidos.length){e.preventDefault();alert('Para gerar nova versão, marque também o mesmo documento para INCLUIR no pacote.');}
+});
+</script>
+{% endif %}
+</div>
+</body>
+</html>

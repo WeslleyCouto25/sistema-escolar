@@ -1,0 +1,21 @@
+SIGEU — MEW / GERAR PACOTE INTEGRADO DIRETAMENTE PARA O ALUNO
+Data: 10/09/2026
+
+Base utilizada: SIGEU_CORRIGIDO_INTERNAL_SERVER_ERROR_20260910.zip
+
+Implementado:
+- Novo botão "Gerar pacote para aluno" em MEW > Documentos Integrados.
+- Nova tela /mew/documentos-integrados/novo.
+- Seleção de aluno e visualização do que já existe no banco.
+- Histórico: mostra existente/ausente e permite reutilizar ou gerar nova versão.
+- Declaração: seleção individual por disciplina; reutiliza existente, gera ausente ou substitui se solicitado.
+- Plano de Ensino: seleção individual por disciplina; reutiliza existente, gera pela IA se ausente ou substitui se solicitado.
+- Todos os componentes escolhidos são unidos no mesmo PDF de prévia.
+- Botão "Gerar pacote e conferir".
+- Botão "Gerar e enviar diretamente".
+- Pacotes administrativos aparecem na mesma lista de Documentos Integrados.
+- Regeneração seletiva posterior respeita EXATAMENTE os componentes incluídos no pacote administrativo.
+- Excluir pacote criado pelo MEW não apaga documentos oficiais reutilizados/gerados no banco.
+- Erro anterior não é mais regenerado automaticamente só por abrir a tela de conferência.
+- Mantida correção de conexão PostgreSQL: IA/PDF/R2 fora de transações longas.
+- Nova coluna idempotente: solicitacoes_documentos_integrados.configuracao_admin_json.

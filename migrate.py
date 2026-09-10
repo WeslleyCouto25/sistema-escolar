@@ -171,6 +171,7 @@ def ensure_extra_schema():
             "ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS foto_assinatura_mime TEXT",
             "ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS pdf_assinado_r2_key TEXT",
             "ALTER TABLE solicitacoes_documentos_integrados ADD COLUMN IF NOT EXISTS arquivo_r2_key TEXT",
+            "ALTER TABLE solicitacoes_documentos_integrados ADD COLUMN IF NOT EXISTS configuracao_admin_json TEXT",
             "ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS arquivo_r2_key TEXT",
             "ALTER TABLE projetos_finais ADD COLUMN IF NOT EXISTS arquivo_atividade_r2_key TEXT",
             "ALTER TABLE documentos_autenticados ADD COLUMN IF NOT EXISTS arquivo_r2_key TEXT",

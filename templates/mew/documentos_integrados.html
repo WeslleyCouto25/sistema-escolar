@@ -172,7 +172,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 </style>
 </head>
 <body class="portal07 admin-page"><div class="wrap">
-<div class="top"><div><h2 style="margin:0">📄 Documentos Acadêmicos Integrados</h2><small>Prévia automática → conferência → aprovação → PDF na plataforma do aluno</small></div><a href="/mew/dashboard">← Dashboard MEW</a></div>
+<div class="top"><div><h2 style="margin:0">📄 Documentos Acadêmicos Integrados</h2><small>Prévia automática → conferência → aprovação → PDF na plataforma do aluno</small></div><div style="display:flex;gap:10px;align-items:center"><a class="btn" style="background:#c86d20;color:#fff;font-weight:700" href="/mew/documentos-integrados/novo">＋ Gerar pacote para aluno</a><a href="/mew/dashboard">← Dashboard MEW</a></div></div>
 {% if request.args.get('sucesso') %}<div class="alert success">{{ request.args.get('sucesso') }}</div>{% endif %}
 {% if request.args.get('erro') %}<div class="alert error">{{ request.args.get('erro') }}</div>{% endif %}
 <div class="card"><div class="table-wrap">
@@ -180,7 +180,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 <table><thead><tr><th>ID</th><th>Aluno</th><th>Tipo</th><th>Disciplinas</th><th>Data</th><th>Status</th><th>Mensagem</th><th>Ação</th></tr></thead><tbody>
 {% for s in solicitacoes %}
 <tr><td>#{{ s.id }}</td><td><b>{{ s.aluno_nome }}</b><br><small>RA {{ s.aluno_ra }}</small></td>
-<td>{% if s.tipo_solicitacao == 'integrado' %}Histórico + Declaração + Plano{% elif s.tipo_solicitacao == 'historico' %}Histórico{% elif s.tipo_solicitacao == 'conclusao' %}Declaração{% else %}Plano de Ensino{% endif %}</td>
+<td>{% if s.tipo_solicitacao == 'admin_integrado' %}<b>Pacote criado pelo MEW</b>{% elif s.tipo_solicitacao == 'integrado' %}Histórico + Declaração + Plano{% elif s.tipo_solicitacao == 'historico' %}Histórico{% elif s.tipo_solicitacao == 'conclusao' %}Declaração{% else %}Plano de Ensino{% endif %}</td>
 <td>{{ s.disciplinas_nomes or 'N/A' }}</td><td>{{ s.data_solicitacao }}</td><td><span class="badge {{ s.status }}">{{ s.status|replace('_',' ')|upper }}</span></td><td class="msg">{{ s.mensagem_status or '' }}</td>
 <td>
 {% if s.status == 'aprovado' %}
