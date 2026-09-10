@@ -7444,8 +7444,9 @@ def mew_planos_ensino():
         LEFT JOIN LATERAL (SELECT COUNT(*) AS total_envios FROM documentos_enviados WHERE documento_original_id=lista.id) e ON TRUE
         ORDER BY lista.id DESC LIMIT 500
     """); planos=cursor.fetchall()
-    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome"); disciplinas=cursor.fetchall(); conn.close()
-    return render_template("mew/planos_ensino.html",planos=planos,total_planos=len(planos),disciplinas=disciplinas)
+    cursor.execute("SELECT id,nome FROM disciplinas ORDER BY nome"); disciplinas=cursor.fetchall()
+    cursor.execute("SELECT id,nome,ra FROM alunos ORDER BY nome"); alunos=cursor.fetchall(); conn.close()
+    return render_template("mew/planos_ensino.html",planos=planos,total_planos=len(planos),disciplinas=disciplinas,alunos=alunos)
 
 
 
@@ -10452,6 +10453,154 @@ def _salvar_componente_autenticado(cursor, aluno, tipo, html_texto, codigo, hash
     return cursor.fetchone()["id"]
 
 
+def _extrair_ementa_plano_integrado(conteudo_html, disciplina_nome):
+    """Recupera a ementa do plano atual para permitir uma nova versão pela IA."""
+    from html import unescape as _html_unescape
+    texto = str(conteudo_html or "")
+    bloco = ""
+    padroes = [
+        r'class=["\'][^"\']*ementa-topicos[^"\']*["\'][^>]*>(.*?)</td>',
+        r'>\s*3\)\s*EMENTA\s*</th>.*?<td[^>]*>(.*?)</td>',
+    ]
+    for padrao in padroes:
+        m = re.search(padrao, texto, flags=re.I | re.S)
+        if m:
+            bloco = m.group(1)
+            break
+    if bloco:
+        bloco = re.sub(r'<br\s*/?>', '\n', bloco, flags=re.I)
+        bloco = re.sub(r'<[^>]+>', ' ', bloco)
+        bloco = _html_unescape(bloco)
+        bloco = re.sub(r'\s+', ' ', bloco).strip()
+    if not bloco:
+        bloco = (
+            f"Ementa-base da disciplina {disciplina_nome}. Desenvolver os fundamentos, conceitos, "
+            "procedimentos, aplicações e competências essenciais da área, com progressão do básico ao aplicado."
+        )
+    return bloco[:4000]
+
+
+def _preparar_plano_regenerado_integrado(disciplina_id, base_url):
+    """Gera uma NOVA versão do plano pela IA, sem gravá-la até a prévia seletiva ser montada."""
+    if not os.getenv("OPENAI_API_KEY"):
+        raise ValueError("OPENAI_API_KEY não configurada no Render.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT id,nome,COALESCE(carga_horaria,80) AS carga_horaria FROM disciplinas WHERE id=%s",
+            (disciplina_id,),
+        )
+        disc = cursor.fetchone()
+        if not disc:
+            raise ValueError(f"Disciplina {disciplina_id} não encontrada.")
+        docente = _docente_documental_disciplina(cursor, disciplina_id, disc["nome"])
+        cursor.execute("""
+            SELECT id,conteudo_html FROM documentos_autenticados
+            WHERE COALESCE(tipo,tipo_documento)='plano_ensino' AND disciplina_id=%s
+            ORDER BY id DESC LIMIT 1
+        """, (disciplina_id,))
+        atual = cursor.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+
+    ementa_base = _extrair_ementa_plano_integrado((atual or {}).get("conteudo_html"), disc["nome"])
+    from api_planos import consultar_openai_para_plano
+    conteudo_ia = consultar_openai_para_plano({
+        "disciplina": disc["nome"],
+        "ementa": ementa_base,
+        "carga_horaria": f"{int(disc.get('carga_horaria') or 80)} horas",
+    })
+    if not conteudo_ia:
+        raise ValueError(f"A IA retornou conteúdo vazio para {disc['nome']}.")
+
+    dados_html = dict(conteudo_ia)
+    modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
+    try:
+        numero_unidades = max(6, min(8, int(conteudo_ia.get("numero_unidades") or 6)))
+    except Exception:
+        numero_unidades = 6
+    dados_html.pop("numero_unidades", None)
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    codigo = gerar_codigo_simples()
+    hash_documento = gerar_hash_documento(
+        f"plano_ensino_regenerado_{disciplina_id}_{timestamp}_{secrets.token_hex(2)}", "ADMIN", timestamp
+    )
+    qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+    data_formatada = datetime.now().strftime("%d/%m/%Y")
+    data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
+    data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+    metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
+    html_completo = gerar_html_plano_ensino(
+        disciplina=disc["nome"].upper(),
+        codigo=codigo,
+        hash_completa=hash_documento,
+        carga_horaria=f"{int(disc.get('carga_horaria') or 80)} horas",
+        modalidade=modalidade,
+        docente=docente,
+        data_formatada=data_formatada,
+        qr_code_base64=qr_code_base64,
+        numero_unidades=numero_unidades,
+        **dados_html,
+    )
+    return {
+        "disciplina_id": disciplina_id,
+        "disciplina_nome": disc["nome"],
+        "documento_id": (atual or {}).get("id"),
+        "codigo": codigo,
+        "hash_documento": hash_documento,
+        "qr_code": qr_code_base64,
+        "conteudo_html": html_completo,
+        "data_emissao": data_emissao,
+        "data_validade": data_validade,
+        "metadados": metadados,
+    }
+
+
+def _atualizar_ou_criar_componente_integrado(cursor, aluno, tipo, html_texto, codigo, hash_doc,
+                                               disciplina_id=None, qr_code=None, documento_id=None):
+    """Substitui o componente da solicitação no mesmo registro quando ele já existe."""
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
+    meta = json.dumps({"origem": "solicitacao_integrada", "versao": "2.0", "regenerado_mew": True}, ensure_ascii=False)
+    if documento_id:
+        cursor.execute("""
+            UPDATE documentos_autenticados
+            SET codigo=%s,codigo_autenticacao=%s,aluno_id=%s,aluno_nome=%s,aluno_ra=%s,
+                tipo=%s,tipo_documento=%s,conteudo_html=%s,data_geracao=%s,qr_code=%s,
+                hash_documento=%s,data_emissao=%s,data_validade=%s,metadados=%s,disciplina_id=%s
+            WHERE id=%s
+            RETURNING id
+        """, (codigo,codigo,aluno["id"],aluno.get("nome"),aluno.get("ra"),tipo,tipo,html_texto,agora,
+              qr_code,hash_doc,agora,validade,meta,disciplina_id,documento_id))
+        row = cursor.fetchone()
+        if row:
+            return row["id"]
+    return _salvar_componente_autenticado(
+        cursor, aluno, tipo, html_texto, codigo, hash_doc, disciplina_id, qr_code
+    )
+
+
+def _mapear_componentes_integrados(componentes):
+    mapa = {"historico": None, "declaracao_conclusao": {}, "plano_ensino": {}}
+    for c in componentes or []:
+        if not isinstance(c, dict):
+            continue
+        tipo = c.get("tipo")
+        if tipo == "historico":
+            mapa["historico"] = c
+        elif tipo in ("declaracao_conclusao", "plano_ensino"):
+            try:
+                did = int(c.get("disciplina_id"))
+            except Exception:
+                continue
+            mapa[tipo][did] = c
+    return mapa
+
+
 def _gerar_previa_solicitacao_integrada(solicitacao_id):
     """Gera o pacote em arquivos temporários e envia um único PDF ao R2."""
     if not r2_is_configured():
@@ -10669,14 +10818,67 @@ def mew_documentos_integrados():
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/conferir")
 def mew_conferir_documentos_integrados(solicitacao_id):
-    if not session.get("mew_admin"): return redirect("/mew/login")
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+
     def buscar():
-        conn=get_db_connection(); cur=conn.cursor(); cur.execute("""SELECT s.id,s.aluno_id,s.tipo_solicitacao,s.tipos_documentos,s.disciplinas_ids,s.status,s.mensagem_status,s.codigo_pacote,s.nome_arquivo,s.hash_pdf,s.data_solicitacao,s.data_preparacao,s.data_aprovacao,s.arquivo_r2_key,(s.pdf_previa IS NOT NULL) AS tem_pdf_previa,a.nome AS aluno_nome,a.ra AS aluno_ra FROM solicitacoes_documentos_integrados s JOIN alunos a ON a.id=s.aluno_id WHERE s.id=%s""",(solicitacao_id,)); row=cur.fetchone(); conn.close(); return row
-    sol=buscar()
-    if not sol: return "Solicitação não encontrada",404
-    if sol.get("status") in ("pendente","erro") or not (sol.get("arquivo_r2_key") or sol.get("tem_pdf_previa")):
-        _gerar_previa_solicitacao_integrada(solicitacao_id); sol=buscar()
-    return render_template("mew/conferir_documentos_integrados.html",solicitacao=sol)
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute("""
+            SELECT s.id,s.aluno_id,s.tipo_solicitacao,s.tipos_documentos,s.disciplinas_ids,s.status,
+                   s.mensagem_status,s.codigo_pacote,s.nome_arquivo,s.hash_pdf,s.data_solicitacao,
+                   s.data_preparacao,s.data_aprovacao,s.arquivo_r2_key,s.componentes_json,
+                   (s.pdf_previa IS NOT NULL) AS tem_pdf_previa,a.nome AS aluno_nome,a.ra AS aluno_ra
+            FROM solicitacoes_documentos_integrados s
+            JOIN alunos a ON a.id=s.aluno_id
+            WHERE s.id=%s
+        """, (solicitacao_id,))
+        row = cur.fetchone(); conn.close(); return row
+
+    sol = buscar()
+    if not sol:
+        return "Solicitação não encontrada", 404
+    if sol.get("status") in ("pendente", "erro") or not (sol.get("arquivo_r2_key") or sol.get("tem_pdf_previa")):
+        _gerar_previa_solicitacao_integrada(solicitacao_id)
+        sol = buscar()
+
+    tipos = json.loads(sol.get("tipos_documentos") or "[]")
+    ids = [int(x) for x in str(sol.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+    disciplinas = []
+    if ids:
+        conn = get_db_connection(); cur = conn.cursor()
+        cur.execute("SELECT id,nome FROM disciplinas WHERE id = ANY(%s) ORDER BY nome", (ids,))
+        disciplinas = cur.fetchall(); conn.close()
+
+    opcoes_regeneracao = []
+    if "historico" in tipos:
+        opcoes_regeneracao.append({
+            "valor": "historico",
+            "tipo": "Histórico acadêmico",
+            "disciplina": "Todas as disciplinas desta solicitação",
+            "gera_ia": False,
+        })
+    if "conclusao" in tipos:
+        for d in disciplinas:
+            opcoes_regeneracao.append({
+                "valor": f"conclusao:{d['id']}",
+                "tipo": "Declaração de conclusão",
+                "disciplina": d["nome"],
+                "gera_ia": False,
+            })
+    if "plano_ensino" in tipos:
+        for d in disciplinas:
+            opcoes_regeneracao.append({
+                "valor": f"plano_ensino:{d['id']}",
+                "tipo": "Plano de Ensino",
+                "disciplina": d["nome"],
+                "gera_ia": True,
+            })
+
+    return render_template(
+        "mew/conferir_documentos_integrados.html",
+        solicitacao=sol,
+        opcoes_regeneracao=opcoes_regeneracao,
+    )
 
 
 
@@ -10690,6 +10892,253 @@ def mew_pdf_previa_integrada(solicitacao_id):
     if row.get("pdf_previa") is not None: return send_file(BytesIO(bytes(row["pdf_previa"])),mimetype="application/pdf",as_attachment=False,download_name=nome)
     return "Prévia não disponível",404
 
+
+
+@app.route("/mew/documentos-integrados/<int:solicitacao_id>/regenerar-seletivo", methods=["POST"])
+def mew_regenerar_documentos_integrados_seletivo(solicitacao_id):
+    """Regenera apenas os componentes marcados e reconstrói a prévia integrada.
+
+    Histórico/declaração são substituídos no próprio registro da solicitação.
+    Plano de Ensino marcado é recriado pela IA e substitui o plano institucional corrente
+    daquela disciplina no banco de dados.
+    """
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    itens = [str(x).strip() for x in request.form.getlist("itens_regenerar") if str(x).strip()]
+    if not itens:
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Selecione+ao+menos+um+documento+para+regenerar")
+    if not r2_is_configured():
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Cloudflare+R2+não+configurado")
+
+    conn = get_db_connection(); cur = conn.cursor()
+    cur.execute("""
+        SELECT id,aluno_id,tipo_solicitacao,tipos_documentos,disciplinas_ids,status,
+               componentes_json,arquivo_r2_key
+        FROM solicitacoes_documentos_integrados WHERE id=%s
+    """, (solicitacao_id,))
+    sol = cur.fetchone(); conn.close()
+    if not sol:
+        return redirect("/mew/documentos-integrados?erro=Solicitação+não+encontrada")
+    if sol.get("status") == "aprovado":
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Documento+já+aprovado.+Regeneração+bloqueada")
+
+    tipos = json.loads(sol.get("tipos_documentos") or "[]")
+    ids = [int(x) for x in str(sol.get("disciplinas_ids") or "").split(",") if x.strip().isdigit()]
+    ids_set = set(ids)
+    selecionados = {"historico": False, "conclusao": set(), "plano_ensino": set()}
+    for item in itens:
+        if item == "historico":
+            if "historico" not in tipos:
+                return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Histórico+não+faz+parte+desta+solicitação")
+            selecionados["historico"] = True
+            continue
+        if ":" not in item:
+            return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Seleção+inválida")
+        tipo_item, did_txt = item.split(":", 1)
+        try:
+            did = int(did_txt)
+        except Exception:
+            return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Disciplina+inválida")
+        if did not in ids_set:
+            return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Disciplina+fora+desta+solicitação")
+        if tipo_item == "conclusao" and "conclusao" in tipos:
+            selecionados["conclusao"].add(did)
+        elif tipo_item == "plano_ensino" and "plano_ensino" in tipos:
+            selecionados["plano_ensino"].add(did)
+        else:
+            return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro=Tipo+de+documento+inválido")
+
+    base_url = request.host_url.rstrip("/")
+    planos_preparados = {}
+    try:
+        # A chamada de IA acontece antes da transação que substitui os documentos.
+        for did in sorted(selecionados["plano_ensino"]):
+            planos_preparados[did] = _preparar_plano_regenerado_integrado(did, base_url)
+    except Exception as exc:
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro={url_quote('Não foi possível regenerar o plano: ' + str(exc))}")
+
+    temporarios = []
+    chave_antiga = sol.get("arquivo_r2_key")
+    conn = get_db_connection(); cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id,aluno_id,tipos_documentos,disciplinas_ids,componentes_json FROM solicitacoes_documentos_integrados WHERE id=%s FOR UPDATE", (solicitacao_id,))
+        atual = cursor.fetchone()
+        if not atual:
+            raise ValueError("Solicitação não encontrada.")
+        aluno = _dados_aluno_documentos(atual["aluno_id"])
+        if not aluno:
+            raise ValueError("Aluno não encontrado.")
+
+        disciplinas_status = {}
+        for did in ids:
+            st = _status_disciplina_documentos(atual["aluno_id"], did, cursor)
+            if not st.get("elegivel"):
+                raise ValueError(f"{st.get('nome','Disciplina')}: {st.get('motivo')}")
+            disciplinas_status[did] = st
+
+        try:
+            componentes = json.loads(atual.get("componentes_json") or "[]")
+        except Exception:
+            componentes = []
+        mapa = _mapear_componentes_integrados(componentes)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
+        # 1) Plano(s) selecionado(s): atualiza o plano institucional no MESMO registro sempre que possível.
+        for did, novo in planos_preparados.items():
+            documento_id = novo.get("documento_id")
+            if documento_id:
+                cursor.execute("""
+                    UPDATE documentos_autenticados
+                    SET codigo=%s,codigo_autenticacao=%s,aluno_id=NULL,aluno_nome='ADMIN - MEW',aluno_ra='ADMIN',
+                        tipo='plano_ensino',tipo_documento='plano_ensino',conteudo_html=%s,data_geracao=%s,
+                        qr_code=%s,hash_documento=%s,data_emissao=%s,data_validade=%s,metadados=%s,disciplina_id=%s
+                    WHERE id=%s
+                """, (novo["codigo"],novo["codigo"],novo["conteudo_html"],novo["data_emissao"],novo["qr_code"],
+                      novo["hash_documento"],novo["data_emissao"],novo["data_validade"],novo["metadados"],did,documento_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO documentos_autenticados
+                    (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,
+                     qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
+                    VALUES(%s,%s,NULL,'ADMIN - MEW','ADMIN','plano_ensino','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id
+                """, (novo["codigo"],novo["codigo"],novo["conteudo_html"],novo["data_emissao"],novo["qr_code"],
+                      novo["hash_documento"],novo["data_emissao"],novo["data_validade"],novo["metadados"],did))
+                documento_id = cursor.fetchone()["id"]
+                novo["documento_id"] = documento_id
+            cursor.execute("""
+                DELETE FROM documentos_autenticados
+                WHERE COALESCE(tipo,tipo_documento)='plano_ensino' AND disciplina_id=%s AND id<>%s
+                  AND id NOT IN (SELECT COALESCE(documento_original_id,0) FROM documentos_enviados)
+            """, (did, documento_id))
+            mapa["plano_ensino"][did] = {"id": documento_id, "tipo": "plano_ensino", "disciplina_id": did, "codigo": novo["codigo"]}
+
+        # 2) Histórico selecionado: substitui o componente anterior, sem criar lixo lógico.
+        if selecionados["historico"]:
+            disciplinas_lista = [disciplinas_status[did] for did in ids]
+            codigo = f"HIST-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
+            hash_doc = gerar_hash_documento(f"historico-integrado-regenerado-{solicitacao_id}-{secrets.token_hex(2)}", aluno["ra"], timestamp)
+            qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+            html_h = _html_historico_integrado(aluno, disciplinas_lista, codigo, qr, hash_doc)
+            antigo = mapa.get("historico") or {}
+            doc_id = _atualizar_ou_criar_componente_integrado(cursor, aluno, "historico", html_h, codigo, hash_doc, None, qr, antigo.get("id"))
+            mapa["historico"] = {"id": doc_id, "tipo": "historico", "codigo": codigo}
+
+        # 3) Declarações selecionadas: cada disciplina é independente.
+        for did in sorted(selecionados["conclusao"]):
+            d = disciplinas_status[did]
+            codigo = f"DECL-{aluno['ra']}-{did}-{timestamp}-{secrets.token_hex(2).upper()}"
+            hash_doc = gerar_hash_documento(f"declaracao-regenerada-{solicitacao_id}-{did}-{secrets.token_hex(2)}", aluno["ra"], timestamp)
+            qr = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+            html_d = _html_declaracao_integrada(aluno, d, codigo, qr, hash_doc)
+            antigo = mapa["declaracao_conclusao"].get(did) or {}
+            doc_id = _atualizar_ou_criar_componente_integrado(cursor, aluno, "declaracao_conclusao", html_d, codigo, hash_doc, did, qr, antigo.get("id"))
+            mapa["declaracao_conclusao"][did] = {"id": doc_id, "tipo": "declaracao_conclusao", "disciplina_id": did, "codigo": codigo}
+
+        # 4) Reconstrói a prévia usando o componente antigo onde NÃO houve regeneração.
+        componentes_novos = []
+        htmls_ordenados = []
+
+        def obter_html_documento(doc_id, descricao):
+            cursor.execute("SELECT id,codigo,conteudo_html FROM documentos_autenticados WHERE id=%s", (doc_id,))
+            row = cursor.fetchone()
+            if not row or not row.get("conteudo_html"):
+                raise ValueError(f"{descricao} não está disponível no banco.")
+            return row
+
+        if "historico" in tipos:
+            hist = mapa.get("historico")
+            if not hist or not hist.get("id"):
+                raise ValueError("Histórico da prévia não foi localizado.")
+            row = obter_html_documento(hist["id"], "Histórico")
+            htmls_ordenados.append(row["conteudo_html"])
+            componentes_novos.append({"id": row["id"], "tipo": "historico", "codigo": row.get("codigo")})
+
+        if "conclusao" in tipos:
+            for did in ids:
+                comp = mapa["declaracao_conclusao"].get(did)
+                if not comp or not comp.get("id"):
+                    raise ValueError(f"Declaração da disciplina {disciplinas_status[did]['nome']} não foi localizada.")
+                row = obter_html_documento(comp["id"], "Declaração")
+                htmls_ordenados.append(row["conteudo_html"])
+                componentes_novos.append({"id": row["id"], "tipo": "declaracao_conclusao", "disciplina_id": did, "codigo": row.get("codigo")})
+
+        if "plano_ensino" in tipos:
+            for did in ids:
+                comp = mapa["plano_ensino"].get(did)
+                if not comp or not comp.get("id"):
+                    cursor.execute("""
+                        SELECT id,codigo,conteudo_html FROM documentos_autenticados
+                        WHERE COALESCE(tipo,tipo_documento)='plano_ensino' AND disciplina_id=%s
+                        ORDER BY id DESC LIMIT 1
+                    """, (did,))
+                    p = cursor.fetchone()
+                    if not p:
+                        raise ValueError(f"Plano de Ensino não localizado para {disciplinas_status[did]['nome']}.")
+                    comp = {"id": p["id"], "tipo": "plano_ensino", "disciplina_id": did, "codigo": p.get("codigo")}
+                    mapa["plano_ensino"][did] = comp
+                row = obter_html_documento(comp["id"], "Plano de Ensino")
+                htmls_ordenados.append(row["conteudo_html"])
+                componentes_novos.append({"id": row["id"], "tipo": "plano_ensino", "disciplina_id": did, "codigo": row.get("codigo")})
+
+        if not htmls_ordenados:
+            raise ValueError("Nenhum componente disponível para montar a prévia.")
+
+        for html_texto in htmls_ordenados:
+            tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False); tmp.close(); temporarios.append(tmp.name)
+            render_html_to_pdf_file(html_texto, tmp.name, base_url)
+        merged = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False); merged.close(); temporarios.append(merged.name)
+        merge_pdf_files(temporarios[:-1], merged.name)
+
+        h = hashlib.sha256()
+        with open(merged.name, "rb") as fh:
+            while True:
+                chunk = fh.read(1024 * 1024)
+                if not chunk:
+                    break
+                h.update(chunk)
+        hash_pdf = h.hexdigest().upper()
+        codigo_pacote = f"PAC-{aluno['ra']}-{timestamp}-{secrets.token_hex(3).upper()}"
+        nome_arquivo = f"SIGEU_documentos_{aluno['ra']}_{timestamp}_{secrets.token_hex(2)}.pdf"
+        nova_chave = make_key("documentos-integrados", nome_arquivo, solicitacao_id)
+        with open(merged.name, "rb") as fh:
+            r2_upload_fileobj(fh, nova_chave, "application/pdf", {"solicitacao_id": solicitacao_id, "hash": hash_pdf})
+
+        agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        resumo = []
+        if selecionados["historico"]:
+            resumo.append("Histórico")
+        if selecionados["conclusao"]:
+            resumo.append(f"{len(selecionados['conclusao'])} declaração(ões)")
+        if selecionados["plano_ensino"]:
+            resumo.append(f"{len(selecionados['plano_ensino'])} plano(s) de ensino")
+        cursor.execute("""
+            UPDATE solicitacoes_documentos_integrados
+            SET status='aguardando_aprovacao',mensagem_status=%s,codigo_pacote=%s,arquivo_r2_key=%s,
+                pdf_previa=NULL,pdf_final=NULL,nome_arquivo=%s,hash_pdf=%s,componentes_json=%s,data_preparacao=%s
+            WHERE id=%s
+        """, (
+            "Prévia atualizada pelo MEW. Regenerado: " + ", ".join(resumo) + ".",
+            codigo_pacote,nova_chave,nome_arquivo,hash_pdf,json.dumps(componentes_novos,ensure_ascii=False),agora,solicitacao_id,
+        ))
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?erro={url_quote(str(exc))}")
+    finally:
+        conn.close()
+        for caminho in temporarios:
+            try:
+                os.remove(caminho)
+            except Exception:
+                pass
+
+    if chave_antiga and chave_antiga != nova_chave:
+        try:
+            delete_object(chave_antiga)
+        except Exception:
+            pass
+    return redirect(f"/mew/documentos-integrados/{solicitacao_id}/conferir?sucesso={url_quote('Regeneração seletiva concluída. Apenas os documentos marcados foram substituídos.')}" )
 
 
 @app.route("/mew/documentos-integrados/<int:solicitacao_id>/regerar", methods=["POST"])

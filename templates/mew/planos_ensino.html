@@ -530,9 +530,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                     <a href="/ver-documento/{{ plano.codigo or 'SEM-CÓDIGO' }}" target="_blank" class="btn btn-sm btn-info" title="Visualizar">
                                         <i>👁️</i>
                                     </a>
-                                    <a href="/mew/enviar-plano-aluno/{{ plano.id }}" class="btn btn-sm btn-warning" title="Enviar para Aluno">
+                                    <button type="button" class="btn btn-sm btn-warning" title="Enviar para Aluno"
+                                            onclick='abrirEnvioPlano({{ plano.id }}, {{ (plano.disciplina or "Disciplina")|tojson }}, {{ (plano.codigo or "SEM-CÓDIGO")|tojson }})'>
                                         <i>📤</i>
-                                    </a>
+                                    </button>
                                     {% if plano.disciplina_id %}
                                     <a href="/mew/gerar-plano-ensino?disciplina_id={{ plano.disciplina_id }}" class="btn btn-sm btn-primary" title="Gerar novamente / substituir">
                                         <i>🔄</i>
@@ -561,7 +562,84 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </div>
     </div>
     
+    <!-- Modal de envio do Plano de Ensino -->
+    <div id="modalEnvioPlano" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#fff;width:min(560px,96vw);border-radius:8px;padding:22px;box-shadow:0 18px 55px rgba(0,0,0,.25);">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;">
+                <div>
+                    <h3 style="margin:0 0 4px;color:#222;">Enviar Plano de Ensino</h3>
+                    <div id="envioPlanoInfo" style="font-size:13px;color:#666;"></div>
+                </div>
+                <button type="button" onclick="fecharEnvioPlano()" style="border:0;background:transparent;font-size:26px;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+            <label for="envioPlanoAluno" style="display:block;font-weight:700;margin-bottom:6px;">Aluno</label>
+            <select id="envioPlanoAluno" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;margin-bottom:14px;" required>
+                <option value="">Selecione um aluno...</option>
+                {% for aluno in alunos %}
+                <option value="{{ aluno.id }}">{{ aluno.nome }} (RA: {{ aluno.ra }})</option>
+                {% endfor %}
+            </select>
+            <label for="envioPlanoMensagem" style="display:block;font-weight:700;margin-bottom:6px;">Mensagem opcional</label>
+            <textarea id="envioPlanoMensagem" rows="4" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;resize:vertical;" placeholder="Mensagem para o aluno..."></textarea>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+                <button type="button" class="btn" onclick="fecharEnvioPlano()">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnEnviarPlanoAluno" onclick="confirmarEnvioPlano()">Enviar plano</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let planoEnvioId = null;
+
+        function abrirEnvioPlano(id, disciplina, codigo) {
+            planoEnvioId = id;
+            document.getElementById('envioPlanoAluno').value = '';
+            document.getElementById('envioPlanoMensagem').value = '';
+            document.getElementById('envioPlanoInfo').textContent = `${disciplina} • ${codigo}`;
+            const modal = document.getElementById('modalEnvioPlano');
+            modal.style.display = 'flex';
+        }
+
+        function fecharEnvioPlano() {
+            document.getElementById('modalEnvioPlano').style.display = 'none';
+            planoEnvioId = null;
+        }
+
+        async function confirmarEnvioPlano() {
+            if (!planoEnvioId) return;
+            const alunoId = document.getElementById('envioPlanoAluno').value;
+            const mensagem = document.getElementById('envioPlanoMensagem').value;
+            if (!alunoId) {
+                alert('Selecione um aluno.');
+                return;
+            }
+            const btn = document.getElementById('btnEnviarPlanoAluno');
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            try {
+                const response = await fetch(`/mew/enviar-plano-aluno/${planoEnvioId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','Accept':'application/json'},
+                    body: JSON.stringify({aluno_id: Number(alunoId), mensagem: mensagem})
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível enviar o plano.');
+                alert(data.message || 'Plano enviado com sucesso.');
+                fecharEnvioPlano();
+                location.reload();
+            } catch (err) {
+                alert('Erro: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+            }
+        }
+
+        document.getElementById('modalEnvioPlano').addEventListener('click', function(event) {
+            if (event.target === this) fecharEnvioPlano();
+        });
+
         async function deletarPlano(id) {
             if (!confirm('Tem certeza que deseja excluir este plano de ensino?')) return;
             try {

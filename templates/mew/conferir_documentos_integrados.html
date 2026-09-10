@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MEW - Conferir Documentos</title>
-<style>body{margin:0;font-family:Arial;background:#eef1f4;color:#1f2937}.top{background:#343a40;color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center}.top a{color:#fff}.wrap{padding:18px;max-width:1500px;margin:auto}.info{background:#fff;padding:15px;border-radius:8px;margin-bottom:14px;display:flex;gap:25px;flex-wrap:wrap}.erro{background:#f8d7da;color:#721c24;padding:18px;border-radius:8px}.acoes{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.btn{padding:11px 16px;border:0;border-radius:6px;cursor:pointer;text-decoration:none;font-weight:bold}.ok{background:#176b3a;color:#fff}.sec{background:#6b7280;color:#fff}.warn{background:#b8860b;color:#fff}iframe{width:100%;height:78vh;border:1px solid #aaa;background:#fff;border-radius:8px}</style>    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
+<style>body{margin:0;font-family:Arial;background:#eef1f4;color:#1f2937}.top{background:#343a40;color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center}.top a{color:#fff}.wrap{padding:18px;max-width:1500px;margin:auto}.info{background:#fff;padding:15px;border-radius:8px;margin-bottom:14px;display:flex;gap:25px;flex-wrap:wrap}.erro{background:#f8d7da;color:#721c24;padding:18px;border-radius:8px}.acoes{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.btn{padding:11px 16px;border:0;border-radius:6px;cursor:pointer;text-decoration:none;font-weight:bold}.ok{background:#176b3a;color:#fff}.sec{background:#6b7280;color:#fff}.warn{background:#b8860b;color:#fff}iframe{width:100%;height:78vh;border:1px solid #aaa;background:#fff;border-radius:8px}.regen-box{display:none;background:#fff;border:1px solid #c9d0d5;border-left:4px solid #c86d20;padding:16px;margin:12px 0 16px}.regen-box.aberto{display:block}.regen-title{font-size:16px;font-weight:700;margin-bottom:5px}.regen-help{font-size:12px;color:#586169;margin-bottom:12px}.regen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:8px}.regen-item{display:flex;align-items:flex-start;gap:9px;border:1px solid #dfe4e7;background:#f7f8f9;padding:10px;cursor:pointer}.regen-item input{margin-top:3px}.regen-item b{display:block;font-size:12px}.regen-item small{display:block;color:#586169;margin-top:2px}.regen-ia{font-size:10px;font-weight:700;color:#a85616;margin-top:4px;display:block}.regen-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}@media(max-width:650px){.regen-grid{grid-template-columns:1fr}}</style>    <!-- SIGEU PORTAL THEME - LATE OVERRIDE -->
     <link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/portal07.css') }}?v=portal07-final-20260904">
 <style id="portal07-total-inline">
@@ -170,7 +170,43 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 <div class="erro"><b>Não foi possível montar a prévia:</b><br>{{ solicitacao.mensagem_status }}<br><br>Se o problema for Plano de Ensino ausente, gere/vincule o plano à disciplina em <a href="/mew/gerar-plano-ensino">Planos de Ensino</a>.</div>
 <div class="acoes"><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/regerar"><button class="btn warn">Tentar gerar novamente</button></form><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/excluir" onsubmit="return confirm('Excluir esta solicitação?')"><button class="btn" style="background:#a12727;color:#fff">Excluir solicitação</button></form></div>
 {% elif solicitacao.arquivo_r2_key or solicitacao.tem_pdf_previa %}
-<div class="acoes"><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/aprovar" onsubmit="return confirm('Confirma que você conferiu o PDF e deseja liberá-lo ao aluno?')"><button class="btn ok">✓ APROVAR E ENVIAR AO ALUNO</button></form><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/regerar"><button class="btn warn">↻ Regenerar prévia</button></form><form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/excluir" onsubmit="return confirm('Excluir esta solicitação e a prévia atual? O Plano de Ensino da disciplina não será apagado.')"><button class="btn" style="background:#a12727;color:#fff">Excluir solicitação</button></form><a class="btn sec" target="_blank" href="/mew/documentos-integrados/{{ solicitacao.id }}/pdf-previa">Abrir em nova aba</a></div>
+<div class="acoes">
+<form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/aprovar" onsubmit="return confirm('Confirma que você conferiu o PDF e deseja liberá-lo ao aluno?')"><button class="btn ok">✓ APROVAR E ENVIAR AO ALUNO</button></form>
+<button type="button" class="btn warn" onclick="document.getElementById('regenBox').classList.toggle('aberto')">↻ Regenerar o que eu escolher</button>
+<form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/excluir" onsubmit="return confirm('Excluir esta solicitação e a prévia atual? O Plano de Ensino da disciplina não será apagado.')"><button class="btn" style="background:#a12727;color:#fff">Excluir solicitação</button></form>
+<a class="btn sec" target="_blank" href="/mew/documentos-integrados/{{ solicitacao.id }}/pdf-previa">Abrir em nova aba</a>
+</div>
+
+<div id="regenBox" class="regen-box">
+  <div class="regen-title">Escolha exatamente o documento que deseja refazer</div>
+  <div class="regen-help">Somente os itens marcados serão substituídos. Histórico e declaração são atualizados na própria solicitação. Se marcar um <b>Plano de Ensino</b>, a IA gera uma nova versão e ela substitui diretamente o plano institucional atual daquela disciplina no banco de dados.</div>
+  <form method="post" action="/mew/documentos-integrados/{{ solicitacao.id }}/regenerar-seletivo" onsubmit="return validarRegeneracaoSeletiva()">
+    <div class="regen-grid">
+      {% for opcao in opcoes_regeneracao %}
+      <label class="regen-item">
+        <input type="checkbox" name="itens_regenerar" value="{{ opcao.valor }}" class="regen-check">
+        <span><b>{{ opcao.tipo }}</b><small>{{ opcao.disciplina }}</small>{% if opcao.gera_ia %}<span class="regen-ia">NOVA VERSÃO GERADA PELA IA + SUBSTITUIÇÃO NO BANCO</span>{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="regen-actions">
+      <button type="button" class="btn sec" onclick="marcarTodosRegeneracao(true)">Marcar todos</button>
+      <button type="button" class="btn sec" onclick="marcarTodosRegeneracao(false)">Limpar seleção</button>
+      <button type="submit" class="btn warn">↻ Regenerar somente os selecionados</button>
+    </div>
+  </form>
+</div>
+
 <iframe src="/mew/documentos-integrados/{{ solicitacao.id }}/pdf-previa"></iframe>
+<script>
+function marcarTodosRegeneracao(valor){document.querySelectorAll('.regen-check').forEach(function(c){c.checked=valor;});}
+function validarRegeneracaoSeletiva(){
+  var marcados=document.querySelectorAll('.regen-check:checked');
+  if(!marcados.length){alert('Selecione ao menos um documento para regenerar.');return false;}
+  var temPlano=Array.from(marcados).some(function(c){return c.value.indexOf('plano_ensino:')===0;});
+  var msg=temPlano ? 'Os itens marcados serão substituídos. ATENÇÃO: cada Plano de Ensino marcado será gerado novamente pela IA e substituirá o plano institucional atual da disciplina no banco. Continuar?' : 'Regenerar somente os documentos marcados e substituir a versão atual desta prévia?';
+  return confirm(msg);
+}
+</script>
 {% else %}<div class="erro">Prévia ainda não disponível.</div>{% endif %}
 </div></body></html>

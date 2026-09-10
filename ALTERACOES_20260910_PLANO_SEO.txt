@@ -50,3 +50,10 @@ VALIDAÇÕES
 - PDF com 6 unidades x 8 itens: 4 páginas.
 - Página 3 dos dois testes inicia em METODOLOGIA.
 - Ocupação vertical do primeiro quadrante nos testes: aproximadamente 92% da altura útil.
+
+CORREÇÃO 10/09/2026 - ENVIO DE PLANO NO MEW
+- Corrigido erro HTTP 405 em /mew/enviar-plano-aluno/<id>.
+- A tela de Planos de Ensino não abre mais a rota POST como link GET.
+- Botão de envio agora abre modal para selecionar aluno e mensagem opcional.
+- Envio é realizado via fetch POST JSON para a rota existente.
+- Lista de alunos passou a ser fornecida à tela /mew/planos-ensino.
