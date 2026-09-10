@@ -12666,6 +12666,233 @@ def api_fechar_aviso_academico(aviso_id):
 
 
 
+# ============================================================
+# PÁGINAS PÚBLICAS SEO - SERVIÇOS DE APOIO
+# Não são inseridas na navegação da página inicial; a descoberta pública
+# ocorre pelas URLs diretas e pelo sitemap.xml.
+# ============================================================
+
+_WHATSAPP_PUBLICO = "https://wa.me/5521990020262"
+_BASE_PUBLICA = "https://sigeueducacional.com.br"
+
+_SERVICOS_PUBLICOS_SEO = {
+    "projeto-arquitetura-tcc": {
+        "title": "Projeto final e TCC de Arquitetura | Mentoria técnica | SIGEU Educacional",
+        "description": "Mentoria técnica para projeto final e TCC de Arquitetura e Urbanismo: metodologia, CAD/BIM, pranchas, memorial, apresentação e revisão acadêmica.",
+        "keywords": "TCC arquitetura, projeto final arquitetura, projeto arquitetônico TCC, CAD TCC, BIM TCC, pranchas arquitetura, memorial descritivo, orientação TCC arquitetura",
+        "breadcrumb": "Projeto final de Arquitetura", "kicker": "Arquitetura e Urbanismo",
+        "h1": "Dificuldade com seu projeto final ou TCC de Arquitetura?",
+        "lead": "Tenha apoio de profissionais para organizar metodologia, partido arquitetônico, representação técnica, CAD/BIM, pranchas, memorial, apresentação e revisão do projeto acadêmico.",
+        "badges": ["TCC de Arquitetura", "CAD e BIM", "Pranchas", "Memorial", "Orientação técnica"],
+        "cta_title": "Seu projeto precisa destravar?", "cta_text": "Envie a etapa em que você está e receba orientação sobre o próximo passo.",
+        "section_title": "Apoio técnico para desenvolver e apresentar melhor seu projeto",
+        "paragraphs": [
+            "O suporte pode acompanhar desde a delimitação do problema e do programa de necessidades até a revisão técnica das peças gráficas e do texto acadêmico.",
+            "A proposta é ajudar o estudante a compreender decisões de projeto, organizar evidências e melhorar a comunicação técnica do trabalho final."
+        ],
+        "cards": [
+            {"title":"CAD, BIM e representação", "text":"Orientação para organização de desenhos, modelagem, compatibilização, escalas, cotas e apresentação gráfica."},
+            {"title":"Memorial e metodologia", "text":"Revisão da coerência entre problema, objetivos, diagnóstico, programa, partido e justificativas técnicas."},
+            {"title":"Pranchas e banca", "text":"Apoio na hierarquia visual, sequência narrativa, quadro de áreas e preparação da apresentação final."}
+        ],
+        "integrity_note": "O apoio é de mentoria, revisão e orientação técnica. A autoria, as decisões acadêmicas e a apresentação do trabalho permanecem com o estudante.",
+        "faqs": [
+            {"q":"Vocês ajudam em TCC de Arquitetura e Urbanismo?", "a":"Sim. O suporte pode envolver metodologia, organização de conteúdo, representação CAD/BIM, pranchas, memorial e preparação para apresentação."},
+            {"q":"Posso enviar um projeto já iniciado?", "a":"Sim. A análise pode partir do estágio atual e priorizar os pontos técnicos que precisam de revisão ou desenvolvimento pelo estudante."},
+            {"q":"O suporte substitui a orientação da faculdade?", "a":"Não. É apoio complementar; as regras, decisões acadêmicas e validações do curso continuam sendo as da instituição de ensino do estudante."}
+        ]
+    },
+    "comprar-tcc": {
+        "title": "Comprar TCC? Veja apoio e orientação acadêmica para seu TCC | SIGEU",
+        "description": "Procura por comprar TCC ou ajuda para fazer TCC? Conheça orientação, revisão, estruturação, metodologia, ABNT e apoio acadêmico responsável.",
+        "keywords": "comprar TCC, venda de TCC, fazer TCC, ajuda TCC, orientação TCC, revisão TCC, ABNT TCC, consultoria acadêmica",
+        "breadcrumb": "Apoio para TCC", "kicker": "TCC, artigo e trabalho final",
+        "h1": "Faça seu TCC com orientação acadêmica e suporte profissional",
+        "lead": "Receba apoio para estruturar tema, problema, objetivos, método, revisão bibliográfica, análise, normalização e apresentação, preservando sua autoria acadêmica.",
+        "badges": ["TCC", "Artigo científico", "ABNT", "Metodologia", "Revisão"],
+        "cta_title": "Precisa organizar seu TCC?", "cta_text": "Fale com a equipe e informe curso, tema, prazo e estágio atual do trabalho.",
+        "section_title": "Apoio do início à entrega, sem substituir a autoria do estudante",
+        "paragraphs": [
+            "Buscas por “comprar TCC” ou “venda de TCC” frequentemente misturam serviços muito diferentes. O atendimento do SIGEU é voltado a orientação, revisão, mentoria metodológica e suporte técnico para que o próprio estudante desenvolva seu trabalho.",
+            "O acompanhamento pode ser adaptado a graduação, especialização, mestrado, doutorado e ensino técnico, sempre respeitando o manual e as exigências da instituição do estudante."
+        ],
+        "cards": [
+            {"title":"Estrutura e metodologia", "text":"Apoio para problema de pesquisa, objetivos, método, critérios, instrumentos, resultados e coerência interna."},
+            {"title":"Pesquisa e referências", "text":"Orientação para estratégias de busca, seleção de fontes, organização bibliográfica e normalização acadêmica."},
+            {"title":"Revisão e apresentação", "text":"Revisão textual, ABNT, figuras, tabelas, slides e preparação para defesa, conforme a necessidade."}
+        ],
+        "integrity_note": "Não comercializamos trabalhos acadêmicos prontos para submissão como se fossem de autoria do comprador. O serviço é de apoio, mentoria, revisão e orientação.",
+        "faqs": [
+            {"q":"Vocês vendem TCC pronto para eu entregar como meu?", "a":"Não. O serviço é de orientação, revisão, metodologia, estruturação e apoio técnico para o desenvolvimento do trabalho pelo estudante."},
+            {"q":"Atendem quais níveis?", "a":"Ensino técnico, graduação, especialização, mestrado e doutorado, conforme a natureza e as regras do trabalho."},
+            {"q":"Posso pedir ajuda apenas em uma parte?", "a":"Sim. O suporte pode ser pontual, por exemplo em metodologia, referências, análise, ABNT, revisão ou preparação da apresentação."}
+        ]
+    },
+    "projetos-de-extensao": {
+        "title": "Projetos de extensão universitária | Apoio e orientação | SIGEU Educacional",
+        "description": "Apoio para planejar projetos de extensão: diagnóstico, público, objetivos, atividades, cronograma, evidências, relatório e apresentação.",
+        "keywords": "projeto de extensão, extensão universitária, atividades extensionistas, relatório de extensão, projeto integrador, curricularização da extensão",
+        "breadcrumb": "Projetos de extensão", "kicker": "Extensão universitária",
+        "h1": "Precisa desenvolver um projeto de extensão?",
+        "lead": "Organize diagnóstico, público, objetivos, plano de ação, cronograma, evidências, resultados e relatório final com orientação metodológica e técnica.",
+        "badges": ["Extensão", "Projeto integrador", "Plano de ação", "Relatório", "Evidências"],
+        "cta_title": "Tem uma atividade de extensão para entregar?", "cta_text": "Informe curso, tema, instituição e etapa atual para direcionarmos o suporte.",
+        "section_title": "Estrutura para projetos de extensão claros, verificáveis e coerentes",
+        "paragraphs": ["O apoio prioriza a ligação entre problema real, público participante, objetivos, atividades executáveis e evidências de resultado.", "Também é possível revisar formulários, cronogramas, relatórios, registros fotográficos e apresentação, conforme as exigências da disciplina."],
+        "cards": [
+            {"title":"Diagnóstico e público", "text":"Delimitação do contexto, necessidade, público envolvido e justificativa do projeto."},
+            {"title":"Plano de ação", "text":"Objetivos, atividades, recursos, cronograma, responsáveis e indicadores de acompanhamento."},
+            {"title":"Relatório e evidências", "text":"Organização dos registros, resultados, reflexão crítica e documentação final do projeto."}
+        ],
+        "integrity_note": "Atividades de extensão devem corresponder a ações e evidências reais. O suporte não cria comprovações falsas nem substitui participação exigida pela instituição.",
+        "faqs": [
+            {"q":"Vocês ajudam a estruturar projeto de extensão?", "a":"Sim, com orientação para diagnóstico, objetivos, plano de ação, cronograma, indicadores, registros e relatório."},
+            {"q":"Dá para revisar um projeto já executado?", "a":"Sim. O suporte pode organizar evidências reais, resultados e apresentação final sem alterar o que efetivamente ocorreu."},
+            {"q":"Fazem documentos de comprovação falsos?", "a":"Não. O apoio trabalha somente com atividades e evidências legítimas fornecidas ou realizadas pelo estudante e sua equipe."}
+        ]
+    },
+    "horas-complementares": {
+        "title": "Atividades extracurriculares e horas complementares | SIGEU Educacional",
+        "description": "Orientação para organizar atividades extracurriculares, horas complementares, documentação, relatórios e conferência das exigências acadêmicas.",
+        "keywords": "horas complementares, atividades extracurriculares, atividades complementares faculdade, relatório horas complementares, AAC, documentação acadêmica",
+        "breadcrumb": "Horas complementares", "kicker": "Atividades acadêmicas complementares",
+        "h1": "Precisa organizar atividades extracurriculares e horas complementares?",
+        "lead": "Receba orientação para classificar atividades, organizar documentos, montar relatórios e conferir o que pode ser aproveitado conforme as regras da sua instituição.",
+        "badges": ["Horas complementares", "Atividades extracurriculares", "Relatórios", "Documentação", "Organização"],
+        "cta_title": "Está com horas pendentes?", "cta_text": "Envie o regulamento e os comprovantes que você já possui para organizar o caminho mais adequado.",
+        "section_title": "Organização acadêmica para evitar perda de prazo e documentação incompleta",
+        "paragraphs": ["Cada instituição define categorias, limites e documentos aceitos. Por isso, o primeiro passo é interpretar o regulamento aplicável e separar o que já pode ser comprovado.", "O suporte ajuda a organizar relatórios e documentação, mas não substitui atividades obrigatórias nem cria certificados ou comprovantes inexistentes."],
+        "cards": [
+            {"title":"Leitura do regulamento", "text":"Identificação de categorias, limites de horas, documentos e procedimentos de protocolo."},
+            {"title":"Organização de comprovantes", "text":"Checklist e classificação dos certificados, declarações e registros legítimos já obtidos."},
+            {"title":"Relatórios e protocolo", "text":"Apoio na redação de relatórios sobre atividades realmente realizadas e montagem do conjunto para envio."}
+        ],
+        "integrity_note": "Não emitimos certificados falsos nem inventamos participação em atividades. Trabalhamos apenas com documentação e experiências legítimas.",
+        "faqs": [
+            {"q":"Vocês conferem se meus certificados podem valer horas?", "a":"Podemos ajudar a comparar os documentos com o regulamento da sua instituição; a validação final é sempre da faculdade."},
+            {"q":"Ajudam a fazer relatórios de atividades?", "a":"Sim, desde que sejam baseados em atividades efetivamente realizadas pelo estudante."},
+            {"q":"Vocês conseguem criar horas que eu não fiz?", "a":"Não. O suporte é de organização e orientação, não de criação de comprovantes ou participações fictícias."}
+        ]
+    },
+    "tcc-sem-inteligencia-artificial": {
+        "title": "TCC sem inteligência artificial | Orientação humana | SIGEU Educacional",
+        "description": "Mentoria humana para TCC sem uso de inteligência artificial na produção do conteúdo: metodologia, pesquisa, revisão e acompanhamento acadêmico.",
+        "keywords": "TCC sem inteligência artificial, TCC sem IA, orientação humana TCC, revisão humana, mentoria acadêmica, fazer TCC sem ChatGPT",
+        "breadcrumb": "TCC sem inteligência artificial", "kicker": "Acompanhamento humano",
+        "h1": "Quer desenvolver seu TCC sem inteligência artificial?",
+        "lead": "Conte com orientação humana para planejar, pesquisar, revisar e melhorar seu trabalho acadêmico sem depender de geração automática de texto.",
+        "badges": ["Sem IA generativa", "Orientação humana", "Pesquisa", "Metodologia", "Revisão"],
+        "cta_title": "Prefere acompanhamento humano?", "cta_text": "Converse com a equipe sobre o seu tema, regulamento e prazo.",
+        "section_title": "Apoio humano para leitura, método, escrita e revisão",
+        "paragraphs": ["O acompanhamento pode ser conduzido com leitura crítica, discussão de estrutura, pesquisa bibliográfica e revisão humana do material produzido pelo estudante.", "Essa modalidade é adequada quando o curso possui restrições ao uso de IA, quando o estudante prefere um processo tradicional ou quando precisa documentar melhor seu próprio percurso de pesquisa."],
+        "cards": [
+            {"title":"Planejamento", "text":"Tema, problema, objetivos, estrutura e cronograma de trabalho."},
+            {"title":"Pesquisa", "text":"Estratégias de busca, leitura crítica, fichamento e organização das referências."},
+            {"title":"Revisão humana", "text":"Coerência, clareza, normalização e preparação da versão para avaliação do orientador."}
+        ],
+        "integrity_note": "A orientação não substitui o estudante como autor. A produção acadêmica submetida deve refletir seu próprio trabalho e cumprir as regras do curso.",
+        "faqs": [
+            {"q":"É possível receber apoio sem usar IA generativa?", "a":"Sim. O acompanhamento pode ser realizado com orientação e revisão humana durante todo o processo."},
+            {"q":"Vocês seguem o manual da minha faculdade?", "a":"Sim, quando o estudante fornece o manual ou as instruções do curso, o suporte pode ser alinhado a essas exigências."},
+            {"q":"Posso contratar apenas revisão final?", "a":"Sim. O apoio pode ser limitado à revisão textual, metodológica ou normativa da versão produzida pelo estudante."}
+        ]
+    },
+    "software-app-preco-social": {
+        "title": "Precisa de software, sistema, aplicação ou app? Desenvolvimento com preço social | SIGEU",
+        "description": "Apoio para encontrar solução de software, sistema web, aplicação, automação, API, site ou app com escopo claro e preço social.",
+        "keywords": "desenvolvimento software preço social, criar aplicativo, criar sistema web, desenvolver app, software sob medida, automação, API, site, sistema acadêmico",
+        "breadcrumb": "Software e aplicativos", "kicker": "Tecnologia e desenvolvimento",
+        "h1": "Precisa de software, aplicação, sistema ou app com preço social?",
+        "lead": "Descreva o problema e ajudamos a transformar a necessidade em escopo técnico, prioridades, arquitetura e proposta de desenvolvimento adequada ao orçamento.",
+        "badges": ["Software", "Aplicativos", "Sistemas web", "Automação", "APIs"],
+        "cta_title": "Tem uma ideia ou problema para resolver?", "cta_text": "Envie o objetivo, usuários, prazo e funções principais para uma triagem inicial.",
+        "section_title": "Do problema ao escopo técnico de uma solução viável",
+        "paragraphs": ["O atendimento pode envolver sistemas web, portais, dashboards, automações, integrações, APIs, aplicativos e protótipos, com definição de escopo antes da implementação.", "A proposta de preço social busca priorizar o núcleo funcional necessário, reduzindo complexidade desnecessária e permitindo evolução por etapas."],
+        "cards": [
+            {"title":"Escopo e requisitos", "text":"Mapeamento de usuários, funções, dados, integrações, regras e prioridades."},
+            {"title":"Arquitetura e protótipo", "text":"Definição da solução técnica e, quando adequado, protótipo navegável antes do desenvolvimento completo."},
+            {"title":"Implementação e evolução", "text":"Entrega por etapas, testes, publicação e planejamento das próximas versões conforme orçamento."}
+        ],
+        "integrity_note": "A contratação é definida após análise do escopo. A estimativa inicial não substitui levantamento técnico de requisitos.",
+        "faqs": [
+            {"q":"Vocês desenvolvem aplicativo e sistema web?", "a":"Sim. O escopo pode incluir apps, sistemas web, portais, dashboards, automações, APIs e integrações."},
+            {"q":"O que significa preço social?", "a":"É a busca por uma solução tecnicamente viável com foco no núcleo essencial, priorização de requisitos e implantação por etapas quando necessário."},
+            {"q":"Posso apresentar apenas uma ideia?", "a":"Sim. A triagem inicial pode transformar a ideia em requisitos, funcionalidades e uma proposta de caminho técnico."}
+        ]
+    }
+}
+
+
+def _schema_servico_publico(slug, page):
+    canonical = f"{_BASE_PUBLICA}/{slug}"
+    faqs = [{"@type":"Question","name":f["q"],"acceptedAnswer":{"@type":"Answer","text":f["a"]}} for f in page.get("faqs", [])]
+    return {
+        "@context": "https://schema.org",
+        "@graph": [
+            {"@type":"Organization","@id":f"{_BASE_PUBLICA}/#organization","name":"Grupo Educacional Unificado / SIGEU Educacional","url":_BASE_PUBLICA,"logo":f"{_BASE_PUBLICA}/static/img/logo.png","contactPoint":{"@type":"ContactPoint","contactType":"customer service","telephone":"+55 21 99002-0262","availableLanguage":"Portuguese"}},
+            {"@type":"WebPage","@id":canonical+"#webpage","url":canonical,"name":page["title"],"description":page["description"],"inLanguage":"pt-BR","isPartOf":{"@id":f"{_BASE_PUBLICA}/#website"},"about":{"@id":canonical+"#service"}},
+            {"@type":"WebSite","@id":f"{_BASE_PUBLICA}/#website","url":_BASE_PUBLICA,"name":"SIGEU Educacional","publisher":{"@id":f"{_BASE_PUBLICA}/#organization"},"inLanguage":"pt-BR"},
+            {"@type":"Service","@id":canonical+"#service","name":page["h1"],"serviceType":page["breadcrumb"],"description":page["description"],"provider":{"@id":f"{_BASE_PUBLICA}/#organization"},"areaServed":{"@type":"Country","name":"Brasil"},"url":canonical},
+            {"@type":"FAQPage","@id":canonical+"#faq","mainEntity":faqs},
+            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SIGEU Educacional","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":page["breadcrumb"],"item":canonical}]}
+        ]
+    }
+
+
+@app.route("/projeto-arquitetura-tcc")
+@app.route("/comprar-tcc")
+@app.route("/projetos-de-extensao")
+@app.route("/horas-complementares")
+@app.route("/tcc-sem-inteligencia-artificial")
+@app.route("/software-app-preco-social")
+def pagina_servico_publico_seo():
+    slug = request.path.strip("/")
+    page = dict(_SERVICOS_PUBLICOS_SEO[slug])
+    page["canonical"] = f"{_BASE_PUBLICA}/{slug}"
+    return render_template("servico_publico_seo.html", page=page, schema=_schema_servico_publico(slug, page), whatsapp=_WHATSAPP_PUBLICO)
+
+
+@app.route("/venda-de-tcc")
+def alias_venda_tcc():
+    # Mantém uma URL semanticamente procurada, mas consolida a indexação no serviço legítimo de apoio.
+    return redirect("/comprar-tcc", code=301)
+
+
+@app.route("/calcular-preco-tcc")
+def calcular_preco_tcc_publico():
+    schema = {
+        "@context":"https://schema.org",
+        "@graph":[
+            {"@type":"WebApplication","name":"Calculadora de apoio para TCC","url":f"{_BASE_PUBLICA}/calcular-preco-tcc","applicationCategory":"EducationalApplication","operatingSystem":"Web","description":"Calculadora de estimativa para orientação, revisão e apoio técnico acadêmico por nível e número de páginas."},
+            {"@type":"Organization","name":"Grupo Educacional Unificado / SIGEU Educacional","url":_BASE_PUBLICA,"telephone":"+55 21 99002-0262"},
+            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SIGEU Educacional","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":"Calculadora de apoio para TCC","item":f"{_BASE_PUBLICA}/calcular-preco-tcc"}]}
+        ]
+    }
+    return render_template("calculadora_apoio_tcc.html", schema=schema)
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    paths = [
+        "/", "/disciplinas-isoladas", "/validar-documento", "/suporte",
+        "/projeto-arquitetura-tcc", "/comprar-tcc", "/projetos-de-extensao",
+        "/horas-complementares", "/calcular-preco-tcc", "/tcc-sem-inteligencia-artificial",
+        "/software-app-preco-social"
+    ]
+    urls = "".join(
+        f"<url><loc>{_BASE_PUBLICA}{path}</loc><lastmod>2026-09-10</lastmod><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
+        for path in paths
+    )
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    return app.response_class(xml, mimetype="application/xml")
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    txt = f"User-agent: *\nAllow: /\nDisallow: /mew/\nDisallow: /api/\nSitemap: {_BASE_PUBLICA}/sitemap.xml\n"
+    return app.response_class(txt, mimetype="text/plain")
+
+
 
 if __name__ == "__main__":
     # Em desenvolvimento local, faz a mesma migração usada pelo Procfile do Render.

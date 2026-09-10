@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Calcular preço de apoio para TCC | SIGEU Educacional</title>
+  <meta name="description" content="Calculadora de estimativa para orientação, revisão e apoio técnico em TCC por área, nível acadêmico e quantidade de páginas.">
+  <meta name="keywords" content="calcular preço TCC, orçamento TCC, orientação TCC, revisão TCC, preço por página, graduação, mestrado, doutorado, especialização, ensino técnico">
+  <meta name="robots" content="index,follow,max-snippet:-1"><link rel="canonical" href="https://sigeueducacional.com.br/calcular-preco-tcc">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/servicos_publicos.css') }}">
+  <script type="application/ld+json">{{ schema|tojson }}</script>
+</head>
+<body class="svc-page">
+{% include '_public_header.html' %}
+<main class="svc-main">
+  <div class="svc-breadcrumb"><a href="/">SIGEU Educacional</a> › Calculadora de apoio para TCC</div>
+  <section class="svc-hero">
+    <div><div class="svc-kicker">Estimativa imediata</div><h1>Calcule uma estimativa de apoio para seu TCC</h1><p>Informe qualquer área, a quantidade de páginas e o nível acadêmico. A calculadora mostra a estimativa de orientação, revisão e suporte técnico conforme a faixa selecionada.</p></div>
+    <aside class="svc-cta-box"><strong>Quer analisar seu projeto?</strong><p>Depois do cálculo, envie a estimativa e as características do trabalho para a equipe.</p><a class="svc-btn" href="https://wa.me/5521990020262" target="_blank" rel="noopener">Falar no WhatsApp</a></aside>
+  </section>
+  <section class="svc-section calc-wrap">
+    <div class="calc-form">
+      <h2>Calculadora</h2>
+      <label for="area">Área do trabalho</label><input id="area" type="text" placeholder="Ex.: Psicologia, Engenharia, Direito, Administração" autocomplete="off">
+      <label for="paginas">Quantidade de páginas</label><input id="paginas" type="number" min="1" max="1000" step="1" placeholder="Ex.: 30">
+      <label for="nivel">Nível acadêmico</label>
+      <select id="nivel">
+        <option value="tecnico" data-rate="14">Ensino técnico — R$ 14/página</option>
+        <option value="graduacao" data-rate="15" selected>Graduação — R$ 15/página</option>
+        <option value="especializacao" data-rate="17">Especialização — R$ 17/página</option>
+        <option value="mestrado" data-rate="18">Mestrado — R$ 18/página</option>
+        <option value="doutorado" data-rate="21">Doutorado — R$ 21/página</option>
+      </select>
+      <button class="svc-btn" id="calcular" type="button" style="margin-top:16px">Calcular estimativa</button>
+      <div class="svc-note">A estimativa refere-se a serviços legítimos de orientação, revisão, estruturação e apoio técnico. O trabalho acadêmico e sua autoria permanecem sob responsabilidade do estudante.</div>
+    </div>
+    <aside class="calc-result" aria-live="polite">
+      <strong>Estimativa</strong><div class="price" id="preco">R$ 0,00</div>
+      <div id="detalhe">Preencha área, páginas e nível para calcular.</div>
+      <a class="svc-btn" id="waCalc" href="https://wa.me/5521990020262" target="_blank" rel="noopener">Enviar estimativa no WhatsApp</a>
+      <small>Valor de referência calculado por página conforme o nível selecionado; a necessidade real de apoio pode variar.</small>
+    </aside>
+  </section>
+  <section class="svc-section"><h2>Como o cálculo funciona</h2><p>O valor é obtido multiplicando a quantidade informada de páginas pela tarifa do nível acadêmico. A área é livre: a calculadora aceita qualquer área de formação digitada pelo usuário.</p></section>
+</main>
+{% include '_public_footer.html' %}
+<script>
+(function(){
+ const area=document.getElementById('area'),pag=document.getElementById('paginas'),nivel=document.getElementById('nivel');
+ const preco=document.getElementById('preco'),det=document.getElementById('detalhe'),wa=document.getElementById('waCalc');
+ function calc(){
+   const a=(area.value||'').trim(); const p=parseInt(pag.value,10); const opt=nivel.options[nivel.selectedIndex]; const rate=Number(opt.dataset.rate||0);
+   if(!a){area.focus();det.textContent='Informe a área do trabalho.';return} if(!p||p<1){pag.focus();det.textContent='Informe uma quantidade válida de páginas.';return}
+   const total=p*rate; const fmt=total.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); preco.textContent=fmt;
+   det.textContent=a+' • '+p+' páginas • '+opt.textContent.split('—')[0].trim()+' • '+rate.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' por página.';
+   const msg='Olá! Fiz a estimativa de apoio acadêmico no site SIGEU. Área: '+a+'. Nível: '+opt.textContent.split('—')[0].trim()+'. Páginas: '+p+'. Estimativa: '+fmt+'. Gostaria de conversar sobre o suporte.';
+   wa.href='https://wa.me/5521990020262?text='+encodeURIComponent(msg);
+ }
+ document.getElementById('calcular').addEventListener('click',calc);
+ [area,pag,nivel].forEach(el=>el.addEventListener('change',()=>{if(area.value&&pag.value)calc()}));
+})();
+</script>
+</body></html>

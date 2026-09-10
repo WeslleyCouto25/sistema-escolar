@@ -189,14 +189,13 @@ def _base_css(codigo: str):
     .summary-grid b {{ display:block; font-size:8.8pt; margin-top:.5mm; }}
 
     .units-grid {{ display:grid; grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(4,50.5mm); gap:2.2mm 3mm; width:100%; }}
-    .unit-slot {{ height:50.5mm; padding:1.5mm 1.7mm; border:1px solid #d8d8d8; background:rgba(255,255,255,.86); overflow:hidden; }}
-    .unit-slot.empty {{ border-color:#efefef; background:rgba(250,250,250,.35); }}
-    .unit-slot h3 {{ margin:0 0 .8mm; font-size:6.6pt; line-height:1.08; overflow-wrap:anywhere; text-transform:none; }}
-    .unit-slot ul {{ margin:0; padding-left:3.8mm; font-size:5.35pt; line-height:1.09; }}
-    .unit-slot li {{ margin:0 0 .22mm; overflow-wrap:anywhere; }}
-    .unit-slot.dense h3 {{ font-size:6.2pt; }} .unit-slot.dense ul {{ font-size:5.0pt; line-height:1.07; }}
-    .unit-slot.tight h3 {{ font-size:5.9pt; }} .unit-slot.tight ul {{ font-size:4.8pt; line-height:1.05; }}
-    .unit-slot.micro h3 {{ font-size:5.6pt; }} .unit-slot.micro ul {{ font-size:4.55pt; line-height:1.03; padding-left:3.4mm; }}
+    .unit-slot {{ height:50.5mm; padding:1.8mm 2mm 1.6mm; border:1px solid #d8d8d8; background:rgba(255,255,255,.88); overflow:hidden; display:flex; flex-direction:column; }}
+    .unit-slot.empty {{ border-color:#eeeeee; background:rgba(250,250,250,.28); }}
+    .unit-slot h3 {{ margin:0 0 1.05mm; flex:0 0 auto; font-size:7.55pt; line-height:1.12; overflow-wrap:anywhere; text-transform:none; }}
+    .unit-slot ul {{ margin:0; padding-left:4.5mm; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:space-between; font-size:7.05pt; line-height:1.14; }}
+    .unit-slot li {{ margin:0; padding:0 .4mm 0 0; overflow-wrap:anywhere; hyphens:none; }}
+    .unit-slot.dense h3 {{ font-size:7.25pt; }} .unit-slot.dense ul {{ font-size:6.72pt; line-height:1.11; }}
+    .unit-slot.tight h3 {{ font-size:7.0pt; }} .unit-slot.tight ul {{ font-size:6.45pt; line-height:1.08; }}
     .ref-list {{ font-size:7.7pt; line-height:1.33; }}
     .ref-list div {{ margin:0 0 1.6mm; text-align:justify; }}
     .appendix-unit {{ margin-bottom:4mm; }}
@@ -481,11 +480,12 @@ def _slot_unidade(indice: int, unidade: dict) -> str:
     topicos = _normalizar_topicos(unidade.get("topicos"))
     tamanho = len(titulo) + sum(len(x) for x in topicos)
     densidade = ""
-    if len(topicos) >= 12 or tamanho > 1050:
-        densidade = "micro"
-    elif len(topicos) >= 11 or tamanho > 850:
+    # A geração normal trabalha em uma faixa controlada de caracteres para
+    # permitir fonte legível. Redução é somente uma proteção contra conteúdo
+    # legado/excepcional, nunca chegando às fontes minúsculas da versão antiga.
+    if tamanho > 760:
         densidade = "tight"
-    elif len(topicos) >= 9 or tamanho > 650:
+    elif tamanho > 680:
         densidade = "dense"
     lis = "".join(f"<li>{escape(str(t))}</li>" for t in topicos)
     return f"<div class='unit-slot {densidade}'><h3>{escape(titulo)}</h3><ul>{lis}</ul></div>"

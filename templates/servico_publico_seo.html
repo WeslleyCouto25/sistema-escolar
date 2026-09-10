@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ page.title }}</title>
+  <meta name="description" content="{{ page.description }}">
+  <meta name="keywords" content="{{ page.keywords }}">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <link rel="canonical" href="{{ page.canonical }}">
+  <meta property="og:locale" content="pt_BR"><meta property="og:type" content="website">
+  <meta property="og:title" content="{{ page.title }}"><meta property="og:description" content="{{ page.description }}">
+  <meta property="og:url" content="{{ page.canonical }}"><meta property="og:site_name" content="SIGEU Educacional">
+  <meta name="twitter:card" content="summary"><meta name="twitter:title" content="{{ page.title }}"><meta name="twitter:description" content="{{ page.description }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/servicos_publicos.css') }}">
+  <script type="application/ld+json">{{ schema|tojson }}</script>
+</head>
+<body class="svc-page">
+  {% include '_public_header.html' %}
+  <main class="svc-main">
+    <div class="svc-breadcrumb"><a href="/">SIGEU Educacional</a> › {{ page.breadcrumb }}</div>
+    <section class="svc-hero">
+      <div>
+        <div class="svc-kicker">{{ page.kicker }}</div>
+        <h1>{{ page.h1 }}</h1>
+        <p>{{ page.lead }}</p>
+        <div class="svc-badges">{% for badge in page.badges %}<span class="svc-badge">{{ badge }}</span>{% endfor %}</div>
+      </div>
+      <aside class="svc-cta-box">
+        <strong>{{ page.cta_title }}</strong>
+        <p>{{ page.cta_text }}</p>
+        <a class="svc-btn" href="{{ whatsapp }}" target="_blank" rel="noopener">Falar com a equipe no WhatsApp</a>
+      </aside>
+    </section>
+
+    <section class="svc-section">
+      <h2>{{ page.section_title }}</h2>
+      {% for paragraph in page.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+      <div class="svc-grid">
+        {% for card in page.cards %}
+          <article class="svc-card"><strong>{{ card.title }}</strong><p>{{ card.text }}</p></article>
+        {% endfor %}
+      </div>
+      {% if page.integrity_note %}<div class="svc-note">{{ page.integrity_note }}</div>{% endif %}
+    </section>
+
+    <section class="svc-section svc-faq">
+      <h2>Perguntas frequentes</h2>
+      {% for faq in page.faqs %}
+      <details><summary>{{ faq.q }}</summary><p>{{ faq.a }}</p></details>
+      {% endfor %}
+    </section>
+
+    <section class="svc-section">
+      <h2>Outros serviços relacionados</h2>
+      <p>Conheça outras formas de apoio técnico, acadêmico e profissional disponibilizadas pelo grupo.</p>
+      <div class="svc-related">
+        <a href="/projeto-arquitetura-tcc">Projeto final de Arquitetura</a>
+        <a href="/comprar-tcc">Apoio para TCC</a>
+        <a href="/projetos-de-extensao">Projetos de extensão</a>
+        <a href="/horas-complementares">Horas complementares</a>
+        <a href="/calcular-preco-tcc">Calculadora de apoio</a>
+        <a href="/tcc-sem-inteligencia-artificial">TCC com orientação humana</a>
+        <a href="/software-app-preco-social">Software e aplicativos</a>
+      </div>
+    </section>
+  </main>
+  {% include '_public_footer.html' %}
+</body>
+</html>

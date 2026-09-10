@@ -105,7 +105,7 @@ ROMANOS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "X
 
 
 def sortear_estrutura_plano(numero_unidades=None):
-    """Define a estrutura antes da IA: 6-8 unidades e 8-10 tópicos por unidade."""
+    """Define ANTES da IA: 6-8 unidades e 8-10 tópicos por unidade."""
     try:
         n = int(numero_unidades) if numero_unidades not in (None, "", 0, "0") else 0
     except Exception:
@@ -113,6 +113,23 @@ def sortear_estrutura_plano(numero_unidades=None):
     if not 6 <= n <= 8:
         n = random.randint(6, 8)
     return n, [random.randint(8, 10) for _ in range(n)]
+
+
+def _faixa_caracteres_topico(qtd_topicos):
+    """Faixa textual pensada para ocupar visualmente 90-100% do quadrante A4.
+
+    O número de itens é sorteado antes da IA. Quanto mais itens houver no
+    quadrante, menor deve ser cada descrição para preservar legibilidade.
+    """
+    try:
+        qtd = int(qtd_topicos)
+    except Exception:
+        qtd = 8
+    return {
+        8: (55, 80),
+        9: (50, 72),
+        10: (46, 66),
+    }.get(qtd, (50, 72))
 
 
 def _get_client():
@@ -222,6 +239,26 @@ def _validar_e_normalizar(plano, numero_unidades=6, topicos_por_unidade_alvo=Non
             alvo = int(alvos[i - 1])
             if len(topicos) != alvo:
                 erros.append(f"unidade {i} deve ter exatamente {alvo} tópicos (recebeu {len(topicos)})")
+                continue
+
+            minimo, maximo = _faixa_caracteres_topico(alvo)
+            curtos = [n + 1 for n, t in enumerate(topicos) if len(str(t).strip()) < minimo]
+            longos = [n + 1 for n, t in enumerate(topicos) if len(str(t).strip()) > maximo]
+            total_chars = sum(len(str(t).strip()) for t in topicos)
+            total_min = alvo * minimo
+            total_max = alvo * maximo
+            if curtos:
+                erros.append(
+                    f"unidade {i}: tópicos {curtos} curtos demais; cada tópico deve ter de {minimo} a {maximo} caracteres"
+                )
+            if longos:
+                erros.append(
+                    f"unidade {i}: tópicos {longos} longos demais; cada tópico deve ter de {minimo} a {maximo} caracteres"
+                )
+            if not total_min <= total_chars <= total_max:
+                erros.append(
+                    f"unidade {i}: conteúdo deve totalizar entre {total_min} e {total_max} caracteres (recebeu {total_chars})"
+                )
     if not 8 <= len(habilidades) <= 12:
         erros.append(f"habilidades deve ter de 8 a 12 itens (recebeu {len(habilidades)})")
     if len(basica) != 5:
@@ -265,6 +302,10 @@ def gerar_prompt_simplificado(dados, correcao=""):
     if len(alvos) != numero_unidades:
         alvos = [8] * numero_unidades
     regra_topicos = "; ".join(f"Unidade {i+1}: {alvos[i]} tópicos" for i in range(numero_unidades))
+    regra_extensao = "; ".join(
+        f"Unidade {i+1}: {alvos[i]} tópicos, cada um entre {_faixa_caracteres_topico(alvos[i])[0]} e {_faixa_caracteres_topico(alvos[i])[1]} caracteres"
+        for i in range(numero_unidades)
+    )
 
     return f"""
 Você é especialista brasileiro em elaboração de planos de ensino de educação superior.
@@ -284,7 +325,11 @@ REGRAS OBRIGATÓRIAS:
 3. Gere EXATAMENTE 5 objetivos específicos, iniciados por verbos no infinitivo.
 4. Gere EXATAMENTE 20 tópicos de ementa expandida, sem citações.
 5. Gere EXATAMENTE {numero_unidades} unidades de conteúdo programático.
-6. Respeite EXATAMENTE esta distribuição de tópicos: {regra_topicos}. Cada tópico deve ser curto, específico e ter no máximo 8 palavras, de modo a caber no quadro compacto da página 2.
+6. Respeite EXATAMENTE esta distribuição de tópicos: {regra_topicos}.
+   A página 2 possui 8 quadrantes fixos; cada unidade deve ocupar visualmente quase todo o seu quadrante, com texto legível e tecnicamente útil.
+   Use estas faixas de extensão: {regra_extensao}.
+   NÃO gere rótulos telegráficos de 2 a 5 palavras. Cada tópico deve ser uma descrição acadêmica objetiva, como “Panorama da psicologia humanista: conceito, fundamentos e características aplicadas ao estudo da pessoa”.
+   Evite redundância, frases vazias e preenchimento artificial. O tamanho deve vir de conteúdo pedagógico real.
 7. Os títulos das unidades devem ser curtos. Use “UNIDADE 1 — ...”, “UNIDADE 2 — ...” e assim sucessivamente.
 8. Gere de 8 a 12 habilidades coerentes com a disciplina.
 9. Gere pré-requisitos acadêmicos realistas. Se não forem necessários, escreva explicitamente que não há pré-requisitos formais.
@@ -329,8 +374,8 @@ def consultar_openai_para_plano(dados):
     modelo = _modelo_planos()
     erro_anterior = ""
 
-    # Duas tentativas: a segunda informa ao modelo exatamente o que faltou.
-    for tentativa in range(2):
+    # Até três tentativas: as seguintes informam exatamente o que precisa ser corrigido.
+    for tentativa in range(3):
         prompt = gerar_prompt_simplificado(dados, erro_anterior)
         response = client.responses.create(
             model=modelo,
@@ -348,7 +393,7 @@ def consultar_openai_para_plano(dados):
             return _validar_e_normalizar(bruto, numero_unidades=dados["numero_unidades"], topicos_por_unidade_alvo=dados["topicos_por_unidade_alvo"])
         except Exception as e:
             erro_anterior = str(e)
-            if tentativa == 1:
+            if tentativa == 2:
                 raise RuntimeError(f"A IA não retornou o plano no formato esperado: {erro_anterior}")
 
     raise RuntimeError("Falha inesperada ao gerar plano de ensino.")

@@ -1,0 +1,52 @@
+SIGEU - AJUSTE FOCADO EM PLANO DE ENSINO + PÁGINAS PÚBLICAS SEO
+Data: 10/09/2026
+
+PLANO DE ENSINO
+- Mantido o sorteio ANTES da IA: 6 a 8 unidades.
+- Mantido o sorteio ANTES da IA: 8 a 10 tópicos por unidade.
+- A página 2 continua sendo a única página de unidades, com 8 quadrantes fixos.
+- Página 3 continua iniciando em METODOLOGIA.
+- Fonte dos quadrantes ampliada para leitura real (título ~7,55 pt; itens ~7,05 pt).
+- Removidas reduções extremas de fonte da versão antiga.
+- Lista usa distribuição vertical para ocupar o quadrante de forma equilibrada.
+- IA recebe faixa de caracteres por tópico conforme o número de itens:
+  8 itens: 55-80 caracteres por tópico
+  9 itens: 50-72 caracteres por tópico
+  10 itens: 46-66 caracteres por tópico
+- Validador rejeita conteúdo curto/longo fora dessas faixas e solicita nova geração.
+- Até 3 tentativas de correção automática da resposta da IA.
+
+PÁGINAS PÚBLICAS SEO (não adicionadas à index)
+- /projeto-arquitetura-tcc
+- /comprar-tcc (apoio/mentoria acadêmica; não vende trabalho pronto)
+- /venda-de-tcc (redirecionamento 301 para /comprar-tcc)
+- /projetos-de-extensao
+- /horas-complementares
+- /calcular-preco-tcc
+- /tcc-sem-inteligencia-artificial
+- /software-app-preco-social
+
+SEO TÉCNICO
+- Title, meta description, keywords, canonical, robots e Open Graph.
+- Dados estruturados JSON-LD: Organization, WebSite, WebPage, Service, FAQPage e BreadcrumbList.
+- /sitemap.xml com as novas páginas.
+- /robots.txt apontando para o sitemap e bloqueando /mew/ e /api/.
+
+CALCULADORA
+- Ensino técnico: R$ 14/página
+- Graduação: R$ 15/página
+- Especialização: R$ 17/página
+- Mestrado: R$ 18/página
+- Doutorado: R$ 21/página
+- Área aceita texto livre.
+- CTA para WhatsApp: +55 21 99002-0262.
+
+VALIDAÇÕES
+- Python py_compile: OK.
+- 70 templates Jinja: sintaxe OK.
+- 171 rotas Flask por AST: sem duplicidade.
+- 1000 sorteios: apenas 6/7/8 unidades e 8/9/10 itens.
+- PDF extremo 8 unidades x 10 itens: 4 páginas.
+- PDF com 6 unidades x 8 itens: 4 páginas.
+- Página 3 dos dois testes inicia em METODOLOGIA.
+- Ocupação vertical do primeiro quadrante nos testes: aproximadamente 92% da altura útil.
