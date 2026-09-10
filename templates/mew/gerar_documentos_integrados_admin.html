@@ -66,8 +66,8 @@ body{background:#e9ecef;font-family:Tahoma,"Segoe UI",Arial,sans-serif;color:#20
           <label class="docopt">
             <input type="checkbox" name="itens_incluir" value="plano_ensino:{{ d.id }}" class="include-check" {% if not d.elegivel %}disabled{% endif %}>
             <span><b>Incluir Plano de Ensino</b><br>
-              {% if d.plano_existente %}<span class="ok">✓ Já existe</span> <span class="code">{{ d.plano_existente.codigo }}</span> <a href="/ver-documento/{{ d.plano_existente.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% else %}<span class="missing">● Não existe — a IA vai gerar</span>{% endif %}
-              {% if d.plano_existente and d.elegivel %}<label class="regen"><input type="checkbox" name="itens_regenerar" value="plano_ensino:{{ d.id }}" class="regen-check"> Gerar NOVO pela IA e substituir o plano atual</label>{% endif %}
+              {% if d.plano_existente and d.plano_padrao_atual %}<span class="ok">✓ Já existe no padrão atual</span> <span class="code">{{ d.plano_existente.codigo }}</span> <a href="/ver-documento/{{ d.plano_existente.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% elif d.plano_existente %}<span class="bad">⚠ Plano existente em formato antigo/curto — será regenerado automaticamente</span> <span class="code">{{ d.plano_existente.codigo }}</span> <a href="/ver-documento/{{ d.plano_existente.codigo }}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px">ver atual</a>{% else %}<span class="missing">● Não existe — a IA vai gerar</span>{% endif %}
+              {% if d.plano_existente and d.plano_padrao_atual and d.elegivel %}<label class="regen"><input type="checkbox" name="itens_regenerar" value="plano_ensino:{{ d.id }}" class="regen-check"> Gerar NOVO pela IA e substituir o plano atual</label>{% endif %}
             </span>
           </label>
         </td>

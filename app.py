@@ -10489,6 +10489,42 @@ def _extrair_ementa_plano_integrado(conteudo_html, disciplina_nome):
     return bloco[:4000]
 
 
+
+def _plano_html_atende_padrao_visual_atual(conteudo_html):
+    """Valida plano já salvo antes de permitir reaproveitamento em pacote integrado.
+
+    Regra invariável do SIGEU: página 2 com 6 a 8 unidades e cada unidade com
+    8 a 10 tópicos nas faixas de extensão definidas pelo gerador atual.
+    Planos legados/curtos nunca devem furar o validador só por já estarem no banco.
+    """
+    html = str(conteudo_html or "")
+    if not html:
+        return False
+
+    # O layout atual renderiza cada unidade em um .unit-slot com h3 + ul/li.
+    blocos = re.findall(
+        r"<div\s+class=['\"][^'\"]*\bunit-slot\b[^'\"]*['\"][^>]*>\s*<h3[^>]*>.*?</h3>\s*<ul[^>]*>(.*?)</ul>\s*</div>",
+        html,
+        flags=re.I | re.S,
+    )
+    if not 6 <= len(blocos) <= 8:
+        return False
+
+    faixas = {8: (55, 80), 9: (50, 72), 10: (46, 66)}
+    for bloco in blocos:
+        itens_html = re.findall(r"<li[^>]*>(.*?)</li>", bloco, flags=re.I | re.S)
+        if len(itens_html) not in faixas:
+            return False
+        minimo, maximo = faixas[len(itens_html)]
+        for item_html in itens_html:
+            texto = re.sub(r"<[^>]+>", " ", item_html)
+            texto = _html_unescape(texto)
+            texto = re.sub(r"\s+", " ", texto).strip()
+            if not (minimo <= len(texto) <= maximo):
+                return False
+    return True
+
+
 def _preparar_plano_regenerado_integrado(disciplina_id, base_url):
     """Gera uma NOVA versão do plano pela IA, sem gravá-la até a prévia seletiva ser montada."""
     if not os.getenv("OPENAI_API_KEY"):
@@ -10823,8 +10859,11 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
         planos_preparados = {}
         for did in sorted(selecao["plano_ensino"]):
             atual = existentes["plano_ensino"].get(did)
-            precisa_gerar = (atual is None) or (f"plano_ensino:{did}" in regenerar_canon)
+            plano_fora_padrao = bool(atual and not _plano_html_atende_padrao_visual_atual(atual.get("conteudo_html")))
+            precisa_gerar = (atual is None) or plano_fora_padrao or (f"plano_ensino:{did}" in regenerar_canon)
             if precisa_gerar:
+                # Mesmo se o administrador marcou apenas "incluir", plano legado/curto
+                # é regenerado automaticamente para nunca furar a regra visual vigente.
                 planos_preparados[did] = _preparar_plano_regenerado_integrado(did, base_url)
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -11374,6 +11413,7 @@ def _opcoes_admin_documentos_aluno(aluno_id):
             """, (did,))
             plano = cur.fetchone()
             d["plano_existente"] = dict(plano) if plano else None
+            d["plano_padrao_atual"] = bool(plano and _plano_html_atende_padrao_visual_atual(plano.get("conteudo_html")))
         conn.rollback()
     finally:
         conn.close()
@@ -12705,7 +12745,13 @@ def _plano_catalogo_atual(disciplina_id):
             WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
             ORDER BY id DESC LIMIT 1
         """, (disciplina_id,))
-        return cur.fetchone()
+        plano = cur.fetchone()
+        # Regra permanente: plano legado/curto não pode ser tratado como plano
+        # institucional reutilizável. Assim nenhum fluxo público contorna o
+        # padrão visual/IA atual apenas porque existe um registro antigo no banco.
+        if plano and not _plano_html_atende_padrao_visual_atual(plano.get("conteudo_html")):
+            return None
+        return plano
     finally:
         conn.close()
 
