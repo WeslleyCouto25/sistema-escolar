@@ -57,6 +57,18 @@ from r2_storage import (
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 install_perf_monitor(app)
 
+# Migração permanente de domínio: preserva a rota e a query string.
+# Somente o domínio antigo é redirecionado; sigeueducacional.com.br continua sendo servido normalmente.
+@app.before_request
+def redirecionar_campus_virtual_para_sigeu():
+    host = (request.host or "").split(":", 1)[0].lower().rstrip(".")
+    if host in {"campusvirtualfacop.com.br", "www.campusvirtualfacop.com.br"}:
+        destino = "https://sigeueducacional.com.br" + (request.full_path or "/")
+        if destino.endswith("?"):
+            destino = destino[:-1]
+        return redirect(destino, code=301)
+
+
 # Bloqueio barato de scanners conhecidos antes de abrir conexão com o banco.
 _SCANNER_PATH_RE = re.compile(
     r"(?:^|/)(?:\.env(?:\.|$)|\.git(?:/|$)|phpinfo(?:\.php)?$|wp-config(?:\.php)?|"
@@ -14177,6 +14189,84 @@ _SERVICOS_PUBLICOS_SEO = {
             {"q":"O que significa preço social?", "a":"É a busca por uma solução tecnicamente viável com foco no núcleo essencial, priorização de requisitos e implantação por etapas quando necessário."},
             {"q":"Posso apresentar apenas uma ideia?", "a":"Sim. A triagem inicial pode transformar a ideia em requisitos, funcionalidades e uma proposta de caminho técnico."}
         ]
+    },
+    "estagio-supervisionado": {
+        "title": "Estágio supervisionado | Organização, relatório e orientação | SIGEU Educacional",
+        "description": "Apoio para organizar estágio supervisionado: plano de atividades, cronograma, registros, relatório, apresentação e documentação acadêmica.",
+        "keywords": "estágio supervisionado, relatório de estágio, plano de estágio, estágio curricular, estágio obrigatório, relatório acadêmico de estágio",
+        "breadcrumb": "Estágio supervisionado", "kicker": "Estágio e prática profissional",
+        "h1": "Precisa organizar seu estágio supervisionado e o relatório final?",
+        "lead": "Receba orientação para estruturar plano de atividades, registros, cronograma, relatório, apresentação e documentação exigida pela instituição.",
+        "badges": ["Estágio supervisionado", "Plano de atividades", "Relatório", "Cronograma", "Revisão"],
+        "cta_title": "Está com prazo de estágio ou relatório?", "cta_text": "Envie curso, instituição, área de estágio e o que já possui para receber orientação objetiva.",
+        "section_title": "Apoio para transformar a experiência de estágio em documentação acadêmica organizada",
+        "paragraphs": [
+            "O suporte pode começar pelo plano de atividades e seguir pela organização dos registros, descrição do campo de estágio, atividades realizadas, análise crítica, resultados e conclusão.",
+            "Também é possível revisar formulários, termos, cronogramas e apresentação final conforme o manual ou modelo fornecido pela instituição."
+        ],
+        "cards": [
+            {"title":"Plano e cronograma", "text":"Organização de objetivos, atividades, carga horária, etapas, responsáveis e cronograma do estágio."},
+            {"title":"Relatório de estágio", "text":"Estruturação e revisão do relatório a partir das atividades realmente realizadas e dos registros do estudante."},
+            {"title":"Documentação e apresentação", "text":"Conferência de itens obrigatórios, anexos, evidências e preparação da apresentação quando exigida."}
+        ],
+        "integrity_note": "O suporte não cria horas, assinaturas, registros ou experiências fictícias. A documentação deve refletir o estágio efetivamente realizado pelo estudante.",
+        "faqs": [
+            {"q":"Vocês ajudam com relatório de estágio?", "a":"Sim. O apoio inclui estrutura, revisão, organização dos registros e adequação ao modelo da instituição."},
+            {"q":"Atendem estágio obrigatório e não obrigatório?", "a":"Sim, desde que o suporte seja compatível com as exigências do curso e com as atividades realmente realizadas."},
+            {"q":"Posso enviar o modelo da minha faculdade?", "a":"Sim. O atendimento pode seguir o formulário, manual ou template institucional informado pelo estudante."}
+        ]
+    },
+    "formacao-continuada": {
+        "title": "Formação continuada e capacitação profissional | SIGEU Educacional",
+        "description": "Formação continuada, capacitação e atualização profissional com planejamento de conteúdos, trilhas, oficinas, cursos e ações educacionais sob demanda.",
+        "keywords": "formação continuada, capacitação profissional, atualização profissional, cursos livres, oficinas, formação de equipes, treinamento educacional",
+        "breadcrumb": "Formação continuada", "kicker": "Capacitação e desenvolvimento",
+        "h1": "Formação continuada para profissionais, equipes e instituições",
+        "lead": "Planejamos ações de atualização e capacitação conforme público, objetivos, carga horária, área de conhecimento e necessidades da organização.",
+        "badges": ["Formação continuada", "Capacitação", "Cursos livres", "Oficinas", "Treinamentos"],
+        "cta_title": "Precisa estruturar uma formação?", "cta_text": "Informe público, área, objetivo e carga horária desejada para receber uma proposta inicial.",
+        "section_title": "Formação organizada a partir da necessidade real do público",
+        "paragraphs": [
+            "As ações podem ser estruturadas como cursos, oficinas, trilhas de aprendizagem, encontros formativos ou programas de atualização, presenciais ou mediados por tecnologia, conforme o projeto.",
+            "O desenho considera objetivos de aprendizagem, conteúdo, sequência didática, recursos, atividades, avaliação e documentação da ação formativa."
+        ],
+        "cards": [
+            {"title":"Diagnóstico e desenho", "text":"Definição de público, necessidades, objetivos, carga horária, conteúdos e formato da formação."},
+            {"title":"Materiais e atividades", "text":"Organização de roteiros, materiais de apoio, exercícios, oficinas e instrumentos de acompanhamento."},
+            {"title":"Execução e avaliação", "text":"Apoio à implementação, registro, avaliação da ação e planejamento de continuidade quando aplicável."}
+        ],
+        "integrity_note": "A emissão de certificados ou documentos depende da modalidade contratada e das regras institucionais aplicáveis a cada ação formativa.",
+        "faqs": [
+            {"q":"Vocês montam formação para equipes?", "a":"Sim. A proposta pode ser desenhada para grupos profissionais, organizações, escolas, projetos sociais e outras instituições."},
+            {"q":"Pode ser uma formação sob medida?", "a":"Sim. Conteúdo, duração, atividades e formato podem ser definidos a partir da necessidade apresentada."},
+            {"q":"Atendem diferentes áreas?", "a":"A viabilidade é avaliada conforme tema, público, escopo e disponibilidade de profissionais adequados à área solicitada."}
+        ]
+    },
+    "projeto-arquitetura-completo": {
+        "title": "Projeto de Arquitetura completo a partir de R$ 2.500 | SIGEU Educacional",
+        "description": "Projeto de Arquitetura completo para demandas acadêmicas e projetos gerais, com escopo técnico definido e valor a partir de R$ 2.500.",
+        "keywords": "projeto arquitetura completo, projeto arquitetônico 2500, projeto de arquitetura preço, projeto acadêmico arquitetura, TCC arquitetura, pranchas arquitetura, CAD BIM",
+        "breadcrumb": "Projeto de Arquitetura completo", "kicker": "Arquitetura e representação técnica",
+        "h1": "Projeto de Arquitetura completo a partir de R$ 2.500",
+        "lead": "Atendimento para projetos acadêmicos de Arquitetura e demandas gerais, com definição de escopo, desenvolvimento técnico, representação gráfica e documentação conforme a necessidade apresentada.",
+        "badges": ["A partir de R$ 2.500", "Projeto completo", "CAD/BIM", "Pranchas", "Memorial"],
+        "cta_title": "Quer avaliar seu projeto?", "cta_text": "Envie área aproximada, finalidade, etapa atual, prazo e materiais disponíveis para análise do escopo.",
+        "section_title": "Escopo técnico definido antes do início do projeto",
+        "paragraphs": [
+            "O valor-base de R$ 2.500 considera um projeto com escopo previamente delimitado. Complexidade, área, quantidade de ambientes, nível de detalhamento, revisões e entregáveis podem alterar a proposta final.",
+            "Em demandas acadêmicas, o atendimento é estruturado como apoio técnico e desenvolvimento acompanhado, respeitando as exigências da instituição e preservando a responsabilidade acadêmica do estudante. Em projetos gerais, o escopo é definido conforme finalidade e documentação necessária."
+        ],
+        "cards": [
+            {"title":"Estudo e desenvolvimento", "text":"Organização de necessidades, referências, programa, soluções espaciais e evolução do projeto conforme o escopo contratado."},
+            {"title":"Desenhos e representação", "text":"Plantas, cortes, fachadas, detalhamentos, CAD/BIM, pranchas e demais peças previstas na proposta."},
+            {"title":"Memorial e entrega", "text":"Memorial, organização dos arquivos, revisão técnica e composição da entrega final conforme o conjunto contratado."}
+        ],
+        "integrity_note": "Valor a partir de R$ 2.500. O preço final depende do escopo. Projetos que exijam responsabilidade técnica, aprovação legal ou atribuições profissionais regulamentadas dependem de profissional habilitado e contratação específica.",
+        "faqs": [
+            {"q":"O projeto completo custa R$ 2.500?", "a":"O valor é a partir de R$ 2.500. O orçamento final depende de área, complexidade, prazo, nível de detalhamento e entregáveis."},
+            {"q":"Atendem TCC e projeto geral?", "a":"Sim. Há atendimento para demandas acadêmicas de Arquitetura e para projetos gerais, com escopo adequado a cada finalidade."},
+            {"q":"O que preciso enviar para orçamento?", "a":"Finalidade, área aproximada, programa de necessidades, prazo, referências e arquivos já existentes, quando houver."}
+        ]
     }
 }
 
@@ -14203,6 +14293,9 @@ def _schema_servico_publico(slug, page):
 @app.route("/horas-complementares")
 @app.route("/tcc-sem-inteligencia-artificial")
 @app.route("/software-app-preco-social")
+@app.route("/estagio-supervisionado")
+@app.route("/formacao-continuada")
+@app.route("/projeto-arquitetura-completo")
 def pagina_servico_publico_seo():
     slug = request.path.strip("/")
     page = dict(_SERVICOS_PUBLICOS_SEO[slug])
@@ -14235,7 +14328,8 @@ def sitemap_xml():
         "/", "/disciplinas-isoladas", "/validar-documento", "/suporte",
         "/projeto-arquitetura-tcc", "/comprar-tcc", "/projetos-de-extensao",
         "/horas-complementares", "/calcular-preco-tcc", "/tcc-sem-inteligencia-artificial",
-        "/software-app-preco-social"
+        "/software-app-preco-social", "/estagio-supervisionado", "/formacao-continuada",
+        "/projeto-arquitetura-completo"
     ]
     urls = "".join(
         f"<url><loc>{_BASE_PUBLICA}{path}</loc><lastmod>2026-09-10</lastmod><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
