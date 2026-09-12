@@ -1,0 +1,18 @@
+<section class="public-query-section" id="consultar-disciplina">
+  <div class="public-query-card"><div class="public-color-strip"></div>
+    <div class="public-query-head"><div class="public-query-kicker">Consulta acadêmica</div><h2>Consulte sua disciplina</h2><p>Informe a disciplina, o curso ou área e a carga horária. O SIGEU consulta a disponibilidade acadêmica e apresenta um plano simplificado para conferência.</p></div>
+    <div class="public-query-body">
+      <form id="discIsoForm"><div class="public-query-grid">
+        <div class="public-query-field"><label for="discIsoNome">Disciplina</label><input id="discIsoNome" maxlength="180" placeholder="Ex.: Biologia Celular" required></div>
+        <div class="public-query-field"><label for="discIsoArea">Curso ou área</label><input id="discIsoArea" maxlength="180" placeholder="Ex.: Ciências Biológicas" required></div>
+        <div class="public-query-field"><label for="discIsoCarga">Carga horária</label><select id="discIsoCarga"><option value="60">60 horas</option><option value="80" selected>80 horas</option><option value="120">120 horas</option></select></div>
+        <div class="public-query-action"><button id="discIsoBtn" type="submit">Consultar disciplina</button></div>
+      </div></form>
+      <div class="public-query-status" id="discIsoStatus" aria-live="polite"></div>
+      <p class="public-query-note"><strong>Para sua conferência:</strong> a consulta apresenta a síntese acadêmica e as unidades principais; depois você escolhe se deseja prosseguir pela plataforma ou falar diretamente com nosso atendimento.</p>
+    </div>
+  </div>
+</section>
+<script>
+(()=>{const f=document.getElementById('discIsoForm');if(!f)return;const n=document.getElementById('discIsoNome'),a=document.getElementById('discIsoArea'),c=document.getElementById('discIsoCarga'),b=document.getElementById('discIsoBtn'),s=document.getElementById('discIsoStatus');const pedido=new URLSearchParams(location.search).get('pedido')||'';function st(m,e=false){s.textContent=m;s.className='public-query-status'+(e?' error':'');s.style.display='block'}f.addEventListener('submit',async ev=>{ev.preventDefault();const dn=n.value.trim(),ar=a.value.trim();if(dn.length<2)return st('Digite o nome da disciplina.',true);if(ar.length<2)return st('Informe o curso ou a área.',true);b.disabled=true;b.textContent='Consultando...';st('ESTAMOS CONSULTANDO DISCIPLINAS...');try{const r=await fetch('/api/publico/gerar-previa-plano',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({disciplina:dn,curso_area:ar,carga_horaria:Number(c.value),pedido_token:pedido})});const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Não foi possível concluir a consulta.');st('DISCIPLINA LOCALIZADA. ABRINDO A SÍNTESE PARA CONFERÊNCIA...');location.href=d.url}catch(err){st(err.message||'Não foi possível concluir a consulta.',true);b.disabled=false;b.textContent='Consultar disciplina'}})})();
+</script>

@@ -626,43 +626,31 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
  body.portal07 .card-actions .btn,body.portal07 .action-buttons .btn{width:100%!important}
 }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/public_rebuild.css') }}?v=20260911b">
 </head>
-<body class="portal07 student-page">
-    <!-- Header -->
-    <header class="main-header">
-        <div class="container header-content">
-            <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
-                <div class="logo-text">
-                    <div class="logo-main"></div>SiGEU Educação - FACOP Certificadora</div>
-                    <div class="logo-subtitle">Disciplinas Isoladas</div>
-                </div>
-            </div>
-            <a href="/" class="back-button">
-                <i class="fas fa-arrow-left"></i> Voltar para Dashboard
-            </a>
-        </div>
-    </header>
-
+<body class="disciplinas-page">
+    {% include '_public_header.html' %}
     <!-- Hero Section -->
-    <section class="hero-section">
+    <section class="hero-section disciplinas-hero">
         <div class="container">
-            <h1 class="hero-title">Disciplinas Isoladas SiGEU Educação - FACOP</h1>
+            <h1 class="hero-title">Disciplinas Isoladas no SIGEU Educacional</h1>
             <p class="hero-subtitle">
-                Estude apenas as disciplinas que você precisa, sem precisar cursar uma graduação completa.
-                Flexibilidade total com certificação reconhecida pelo MEC.
+                Consulte unidades curriculares por área e carga horária, confira uma síntese acadêmica antes da contratação e prossiga pelo fluxo do SIGEU Educacional. A FACOP atua como certificadora parceira quando aplicável.
             </p>
             <div class="hero-badge">
-                <i class="fas fa-award"></i> Certificação FACOP - Código MEC: 1135
+                <i class="fas fa-award"></i> FACOP Certificadora • parceria aplicável
             </div>
             <div class="hero-badge">
                 <i class="fas fa-clock"></i> Carga horária flexível: 60h, 80h, 120h
             </div>
             <div class="hero-badge">
-                <i class="fas fa-graduation-cap"></i> Créditos aproveitáveis em cursos regulares
+                <i class="fas fa-graduation-cap"></i> Consulta e contratação pelo SIGEU
             </div>
         </div>
     </section>
+
+    {% include '_consulta_disciplina_publica.html' %}
+
 
     <!-- O Que São Section -->
     <section class="section">
@@ -704,7 +692,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <h3 class="card-title">Certificação</h3>
                     <p>
                         Ao concluir a disciplina, você recebe um certificado de conclusão válido nacionalmente,
-                        emitido pela FACOP (instituição mantenedora credenciada pelo MEC).
+                        emitido pela FACOP, quando aplicável, na condição de certificadora parceira conforme a oferta.
                     </p>
                 </div>
             </div>
@@ -883,7 +871,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <i class="fas fa-file-contract"></i>
                     </div>
                     <h3 class="card-title">Reconhecimento MEC</h3>
-                    <p>Certificação emitida pela FACOP, instituição mantenedora credenciada pelo MEC (Código 1135).</p>
+                    <p>Certificação e/ou emissão documental pela FACOP quando aplicável, na condição de certificadora parceira conforme a oferta.</p>
                 </div>
                 
                 <div class="card">
@@ -891,7 +879,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <i class="fas fa-exchange-alt"></i>
                     </div>
                     <h3 class="card-title">Aproveitamento Futuro</h3>
-                    <p>Créditos podem ser aproveitados em cursos regulares da FACOP posteriormente.</p>
+                    <p>O eventual aproveitamento acadêmico depende das regras e da análise da instituição de destino.</p>
                 </div>
             </div>
         </div>
@@ -909,12 +897,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             <div class="cta-buttons">
                 <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20disciplinas%20isoladas%20da%20SiGEUEducação" 
                    target="_blank" class="btn btn-primary">
-                    <i class="fab fa-whatsapp"></i> Falar no WhatsApp
+                    <i class="fab fa-whatsapp"></i> CONTRATE AQUI
                 </a>
                 
-                <a href="tel:+5521990020262" class="btn btn-secondary">
-                    <i class="fas fa-phone"></i> Ligar Agora
-                </a>
+                <a href="https://wa.me/5521990020262" target="_blank" rel="noopener" class="btn btn-secondary"><i class="fab fa-whatsapp"></i> FALAR NO WHATSAPP</a>
             </div>
             
             <div style="margin-top: 40px; opacity: 0.8;">
@@ -922,7 +908,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <i class="fas fa-clock"></i> Atendimento: Segunda a Sábado, 8h às 22h
                 </p>
                 <p style="margin-top: 10px;">
-                    <i class="fas fa-envelope"></i> E-mail: contato@sigeu.edu.br
+                    <i class="fas fa-envelope"></i> E-mail: contato@sigeueducacional.com.br
                 </p>
             </div>
         </div>

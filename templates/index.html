@@ -1191,11 +1191,17 @@ a.whatsapp-course-btn:hover {
 .disc-note{margin-top:16px;color:#737b80;font-size:.78rem;line-height:1.5}
 @media(max-width:720px){.disc-search-section{padding:32px 0}.disc-search-shell{margin:0 12px}.disc-search-head,.disc-search-body{padding:20px}.disc-row,.disc-grid2{grid-template-columns:1fr}.disc-btn{width:100%}.disc-search-title{font-size:1.6rem}}
 </style>
+<style id="sigeu-public-logo-palette">
+:root{--logo-pink:#ef5777;--logo-wine:#9f285d;--logo-violet:#5c3b8c;--logo-blue:#3157b7;--logo-teal:#0ba6b5;--logo-orange:#ef7627;--academic-gray:#343a40}
+.top-header{background:#343a40!important}.main-header{background:#fff!important}.disc-search-shell,.document-card,.feature-card,.course-card{border-radius:16px 4px 16px 4px!important}.disc-search-shell{border-top:5px solid var(--logo-teal)!important}.disc-search-head{position:relative}.disc-search-head:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--logo-pink),var(--logo-wine),var(--logo-violet),var(--logo-blue),var(--logo-teal),var(--logo-orange))}.disc-btn,.btn-primary{background:#343a40!important;border-color:#343a40!important;border-radius:10px 3px 10px 3px!important}.disc-btn:hover,.btn-primary:hover{background:#24292d!important}.documents-section{background:#343a40!important;position:relative}.documents-section:before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:linear-gradient(90deg,var(--logo-pink),var(--logo-wine),var(--logo-violet),var(--logo-blue),var(--logo-teal),var(--logo-orange))}.documents-section .section-title,.documents-section .section-subtitle{color:#fff!important;text-shadow:none!important}.document-card{background:#fff!important;color:#24292d!important}.document-card p,.document-card h4,.document-card i{color:#24292d!important}.disc-status.ok{border-left-color:var(--logo-teal)!important}.disc-confirm{border-radius:9px 2px 9px 2px!important}.hero-badge,.badge{border-radius:10px 2px 10px 2px!important}
+@media(max-width:760px){.section-title{overflow-wrap:anywhere}.documents-section .section-header{padding-left:8px;padding-right:8px}.documents-grid{grid-template-columns:1fr!important}.disc-row{grid-template-columns:1fr!important}.disc-btn{width:100%}}
+</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/public_rebuild.css') }}?v=20260911b">
 </head>
 
 <body>
     <!-- WhatsApp Fixo -->
-    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20os%20cursos%20da%20FACOP"
+    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20mais%20informações%20sobre%20os%20serviços%20do%20SIGEU%20Educacional"
         target="_blank" class="whatsapp-fixed">
         <i class="fab fa-whatsapp"></i>
     </a>
@@ -1204,31 +1210,15 @@ a.whatsapp-course-btn:hover {
     <div class="top-header">
         <div class="container top-header-container">
             <div class="top-header-left">
-                <a href="tel:+551133020501" class="header-contact">
-                    <i class="fas fa-phone-alt"></i> (21) 99002-0262
-                    <a href="mailto:contato@centroeducacionalunificado.com.br" class="header-contact">
-                        <i class="fas fa-envelope"></i> Matriz: Av. Paulista, 1000 - São Paulo/SP <i
-                            class="fas fa-minus"></i>
-                        Polos em todas as regiões brasileiras
-                    </a>
-                    <div class="header-contact">
-                        <i class="fas fa-clock"></i> Seg-Sab: 8h às 22h &nbsp;&nbsp;
-                        <i class="fas fa-phone-alt"></i> (11) 3302-0501
-                    </div>
-                </a>
+                <a href="https://wa.me/5521990020262" target="_blank" rel="noopener" class="header-contact"><i class="fas fa-comments"></i> CONTRATE AQUI</a>
+                <span class="header-address"><i class="fas fa-map-marker-alt"></i> Praia de Botafogo, 300 • Botafogo • Rio de Janeiro - RJ • CEP 22250-040</span>
+                <span class="header-hours"><i class="fas fa-clock"></i> Seg-Sáb: 8h às 22h</span>
             </div>
             <div class="top-header-right">
-                <a href="/validar-documento" class="auth-badge">
-                    <i class="fas fa-file-certificate"></i> Validar Documento
-                </a>
-
+                <a href="/validar-documento" class="auth-badge"><i class="fas fa-file-certificate"></i> Validar Documento</a>
                 <div class="header-social">
-                    <a href="https://wa.me/5521990020262" target="_blank" class="social-icon">
-                        <i class="fab fa-whatsapp"></i>
-                    </a>
-                    <a href="https://wa.me/5521990020262" class="social-icon"><i class="fab fa-linkedin-in"></i></a>
-                    <a href="https://www.instagram.com/centraldoalunouniversitario/" class="social-icon"><i
-                            class="fab fa-instagram"></i></a>
+                    <a href="https://wa.me/5521990020262" target="_blank" rel="noopener" class="social-icon" aria-label="Contrate pelo WhatsApp"><i class="fab fa-whatsapp"></i></a>
+                    <a href="https://www.instagram.com/centraldoalunouniversitario/" target="_blank" rel="noopener" class="social-icon" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
                 </div>
             </div>
         </div>
@@ -1238,10 +1228,10 @@ a.whatsapp-course-btn:hover {
     <header class="main-header">
         <div class="container header-content">
             <div class="logo-container">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="FACOP Logo" class="logo">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="SIGEU Educacional" class="logo">
                 <div class="logo-text">
-                    <div class="logo-main">SIGEU EDUC</div>
-                    <div class="logo-subtitle">em parceria</div>
+                    <div class="logo-main">SIGEU EDUCACIONAL</div>
+                    <div class="logo-subtitle">Grupo Educacional Unificado</div>
                     <div class="partnership-badge">
                         <i class="fas fa-handshake"></i> FACOP CERTIFICADORA
                     </div>
@@ -1261,9 +1251,9 @@ a.whatsapp-course-btn:hover {
                 </ul>
 
                 <div class="header-actions">
-                    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20falar%20com%20a%20equipe%20comercial%20da%20FACOP"
+                    <a href="https://wa.me/5521990020262?text=Olá!%20Gostaria%20de%20falar%20com%20a%20equipe%20do%20SIGEU%20Educacional"
                         target="_blank" class="btn-whatsapp-header">
-                        <i class="fab fa-whatsapp"></i> Matrícula
+                        <i class="fab fa-whatsapp"></i> CONTRATE AQUI
                     </a>
                     <a href="{{ url_for('login') }}" class="btn btn-primary">
                         <i class="fas fa-sign-in-alt"></i> Aluno
@@ -1284,9 +1274,7 @@ a.whatsapp-course-btn:hover {
             <div class="hero-content">
                 <h1 class="hero-title">Transformando Vidas Através da Educação de Qualidade</h1>
                 <p class="hero-subtitle">
-                    Instituição Certificadora na Portaria 887 de 25/07/2017, em parceria estratégica com o Sistema de
-                    Gestão Educacional Unificada - SiGEU,
-                    oferecendo excelência acadêmica com Certificação FACOP/MEC + Certificação SiGEU.
+                    O <strong>SIGEU Educacional</strong>, integrante do Grupo Educacional Unificado, organiza e executa a operação educacional e acadêmica dos serviços oferecidos. A <strong>FACOP</strong> atua como <strong>certificadora parceira</strong> nos atos de certificação e/ou emissão documental aplicáveis, conforme a parceria institucional.
                 </p>
 
                 <div class="hero-badges">
@@ -1318,52 +1306,27 @@ a.whatsapp-course-btn:hover {
 
     <!-- Busca pública de unidade curricular -->
     <section class="disc-search-section" id="procure-disciplina">
-        <div class="container">
-            <div class="disc-search-shell">
-                <div class="disc-search-head">
-                    <div class="disc-search-kicker">Consulta acadêmica</div>
-                    <h2 class="disc-search-title">Procure sua disciplina</h2>
-                    <p class="disc-search-sub">Digite como você conhece a disciplina. O SIGEU ajusta a nomenclatura acadêmica, confirma a área de referência e prepara uma prévia do plano de ensino antes da contratação.</p>
-                </div>
-                <div class="disc-search-body">
-                    <form id="discSearchForm">
-                        <div class="disc-field">
-                            <label for="disciplinaPublicaInput">Qual disciplina você procura?</label>
-                            <div class="disc-row">
-                                <input class="disc-input" id="disciplinaPublicaInput" name="disciplina" maxlength="180" autocomplete="off" placeholder="Ex.: calculo integral 2, redes 2, filosofia da ciência..." required>
-                                <button class="disc-btn" id="discSuggestBtn" type="submit">Conferir nome</button>
-                            </div>
-                        </div>
-                    </form>
-                    <div class="disc-step2" id="discStep2">
-                        <div class="disc-confirm" id="discConfirmation"></div>
-                        <div class="disc-grid2">
-                            <div class="disc-field">
-                                <label for="discCursoArea">De qual curso ou área ela faz parte?</label>
-                                <input class="disc-input" id="discCursoArea" maxlength="180" placeholder="Ex.: Engenharia de Software, Matemática, Ciências Humanas...">
-                            </div>
-                            <div class="disc-field">
-                                <label for="discCargaHoraria">Carga horária</label>
-                                <select class="disc-select" id="discCargaHoraria">
-                                    <option value="60">60 horas</option>
-                                    <option value="80" selected>80 horas</option>
-                                    <option value="120">120 horas</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="disc-confirm" id="discPlanMessage" style="margin-top:14px; display:none"></div>
-                        <div class="disc-field" style="margin-top:14px">
-                            <label for="discConteudosEsperados">Conteúdos esperados ou específicos <span style="font-weight:400;color:var(--medium-gray)">(opcional)</span></label>
-                            <textarea class="disc-input" id="discConteudosEsperados" rows="4" maxlength="3500" style="width:100%;resize:vertical" placeholder="Se quiser uma ementa diferente da disponível, informe apenas os conteúdos que espera encontrar. Ex.: auditoria governamental, NBC TSP, prestação de contas..."></textarea>
-                            <small style="display:block;margin-top:6px;color:var(--medium-gray)">Se a disciplina já existir na base e este campo ficar vazio, o SIGEU reutiliza o plano institucional disponível. Se você informar conteúdos, uma nova versão será preparada conforme sua ementa.</small>
-                        </div>
-                        <button class="disc-btn" id="discGenerateBtn" type="button" style="margin-top:16px">Consultar disponibilidade e plano</button>
-                    </div>
-                    <div class="disc-status" id="discPublicStatus" aria-live="polite"></div>
-                    <p class="disc-note">A prévia é informativa e não possui validade acadêmica. A matrícula somente é liberada após contratação, confirmação do pagamento e conferência documental pelo SIGEU.</p>
-                </div>
-            </div>
+      <div class="container">
+        <div class="disc-search-shell">
+          <div class="disc-search-head">
+            <div class="disc-search-kicker">Consulta acadêmica</div>
+            <h2 class="disc-search-title">Procure sua disciplina</h2>
+            <p class="disc-search-sub">Digite o nome da disciplina. O SIGEU consulta a disponibilidade acadêmica e apresenta a nomenclatura correspondente, a área de referência e um plano simplificado para sua conferência.</p>
+          </div>
+          <div class="disc-search-body">
+            <form id="discSearchForm">
+              <div class="disc-grid2" style="grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) 190px">
+                <div class="disc-field"><label for="disciplinaPublicaInput">Disciplina</label><input class="disc-input" id="disciplinaPublicaInput" maxlength="180" autocomplete="off" placeholder="Ex.: Biologia Celular, Cálculo Integral II..." required></div>
+                <div class="disc-field"><label for="discCursoArea">Curso ou área</label><input class="disc-input" id="discCursoArea" maxlength="180" placeholder="Ex.: Ciências Biológicas, Engenharia..." required></div>
+                <div class="disc-field"><label for="discCargaHoraria">Carga horária</label><select class="disc-select" id="discCargaHoraria"><option value="60">60 horas</option><option value="80" selected>80 horas</option><option value="120">120 horas</option></select></div>
+              </div>
+              <button class="disc-btn" id="discGenerateBtn" type="submit" style="margin-top:16px;width:100%">Consultar disciplina</button>
+            </form>
+            <div class="disc-status" id="discPublicStatus" aria-live="polite"></div>
+            <p class="disc-note"><strong>Consulta acadêmica:</strong> o resultado apresenta uma síntese da ementa e as unidades principais para conferência antes da contratação.</p>
+          </div>
         </div>
+      </div>
     </section>
 
     <!-- Seção de Imagens do Campus -->
@@ -1399,99 +1362,27 @@ a.whatsapp-course-btn:hover {
         </div>
     </section>
 
-    <!-- Seção de Parceria Técnica -->
+    <!-- Organização institucional -->
     <section class="partnership-section" id="partnership">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Parceria Estratégica FACOP CTF e SiGEU EDUC</h2>
-                <p class="section-subtitle" style="max-width: 800px; margin: 0 auto;">
-                    Modelo inovador de gestão acadêmica validado pelo Ministério da Educação
-                </p>
+                <h2 class="section-title">SIGEU Educacional e FACOP Certificadora</h2>
+                <p class="section-subtitle" style="max-width: 850px; margin: 0 auto;">Uma estrutura clara: o SIGEU Educacional organiza, executa e acompanha a operação educacional; a FACOP atua como certificadora parceira nos atos que lhe couberem.</p>
             </div>
-
             <div class="partnership-content">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px;">
-                    <div>
-                        <h3 style="color: var(--primary-color); margin-bottom: 20px;">
-                            <i class="fas fa-university"></i> PAPEL DA FACOP
-                        </h3>
-                        <p style="margin-bottom: 15px;">
-                            A <strong>Faculdade do Centro Oeste Paulista - FACOP</strong> (Código MEC 1135) atua como
-                            <strong>instituição certificadora</strong>, detentora do credenciamento institucional junto ao
-                            Ministério da Educação, responsável pela:
-                        </p>
-                        <ul style="list-style: none; margin-bottom: 25px;">
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
-                                Gestão administrativo-financeira institucional própria
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
-                                Certificação dos cursos/cadeiras, extensões e formações isoladas
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
-                                Acompanhamento das diretrizes e validação da legalidade da parceira
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--accent-color); position: absolute; left: 0;"></i>
-                                Garantia da qualidade acadêmica própria conforme exigências MEC
-                            </li>
-                        </ul>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px">
+                    <div style="background:#fff;border:1px solid #d8dde0;border-left:6px solid #0ba6b5;border-radius:14px 3px 14px 3px;padding:24px">
+                        <h3 style="color:#30363a;margin-bottom:14px"><i class="fas fa-graduation-cap"></i> SIGEU EDUCACIONAL</h3>
+                        <p style="margin-bottom:14px">O <strong>SIGEU Educacional</strong>, integrante do Grupo Educacional Unificado, é a referência operacional e acadêmica para a contratação, organização, execução e acompanhamento dos serviços educacionais ofertados.</p>
+                        <ul style="padding-left:20px;line-height:1.7"><li>organização e acompanhamento das unidades curriculares;</li><li>ambiente acadêmico e fluxos de atendimento;</li><li>gestão dos registros acadêmicos internos aplicáveis;</li><li>documentação institucional emitida no âmbito do SIGEU.</li></ul>
                     </div>
-
-                    <div>
-                        <h3 style="color: purple; margin-bottom: 20px;">
-                            <i class="fas fa-graduation-cap"></i> SISTEMA SiGEU EDUC
-                        </h3>
-                        <p style="margin-bottom: 15px;">
-                            O <strong>Sistema de Gestão Educacional Unificada - SiGEU</strong> atua como
-                            <strong>provedor acadêmico</strong>,
-                            responsável pela operacionalização pedagógica mediante contrato de prestação de serviços
-                            educacionais, incluindo:
-                        </p>
-                        <ul style="list-style: none; margin-bottom: 25px;">
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
-                                Desenvolvimento de matrizes curriculares e projetos pedagógicos
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
-                                Fornecimento de corpo docente qualificado (mestres e doutores)
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
-                                Plataforma tecnológica e materiais didáticos especializados
-                            </li>
-                            <li style="margin-bottom: 10px; padding-left: 25px; position: relative;">
-                                <i class="fas fa-check-circle"
-                                    style="color: var(--rock-color); position: absolute; left: 0;"></i>
-                                Documentação de Conclusão, Histórico do Aluno (Institucional - SIGEU) e Planos de Ensino
-                            </li>
-                        </ul>
+                    <div style="background:#fff;border:1px solid #d8dde0;border-left:6px solid #ef5777;border-radius:14px 3px 14px 3px;padding:24px">
+                        <h3 style="color:#30363a;margin-bottom:14px"><i class="fas fa-university"></i> FACOP CERTIFICADORA</h3>
+                        <p style="margin-bottom:14px">A <strong>FACULDADE DO CENTRO OESTE PAULISTA LTDA. — FACOP</strong> atua como <strong>certificadora parceira</strong>, no âmbito da parceria educacional e da emissão documental requerida, quando aplicável e após o cumprimento dos requisitos correspondentes.</p>
+                        <ul style="padding-left:20px;line-height:1.7"><li>certificação e/ou emissão documental que lhe couber;</li><li>atuação conforme os dados institucionais e acadêmicos aplicáveis ao respectivo ato;</li><li>identificação expressa como certificadora parceira nos documentos correspondentes.</li></ul>
                     </div>
                 </div>
-
-                <div class="legal-stamp">
-                    <h4 style="margin-bottom: 10px;">
-                        <i class="fas fa-balance-scale"></i> VALIDAÇÃO LEGAL E REGULATÓRIA
-                    </h4>
-                    <p style="font-size: 0.95rem; opacity: 0.95;">
-                        Esta parceria é regulamentada por <strong>contrato de prestação de serviços
-                            educacionais</strong>
-                        nos termos da Lei nº 9.870/1999, com validação explícita pelo MEC através dos processos
-                        de credenciamento e recredenciamento da FACOP (Portaria MEC nº 1.135/2024).
-                        O modelo atende integralmente às Diretrizes Curriculares Nacionais e às normativas
-                        da Secretaria de Regulação e Supervisão da Educação Superior (SERES/MEC). A FACOP emite os certificados
-                        que são apresentados ao educando enqunato a SIGEU EDUC emite a documentação acadêmica institucional.
-                        Recomenda-se sempre a avaliação prévia da ementa e tipologia do curso na instituição do aluno.
+                <div class="legal-stamp" style="border-radius:12px 3px 12px 3px"><h4 style="margin-bottom:8px"><i class="fas fa-file-contract"></i> TRANSPARÊNCIA DA CONTRATAÇÃO</h4><p style="font-size:.95rem;opacity:.95">No fluxo de contratação, o SIGEU Educacional é apresentado como responsável pela organização e execução acadêmica e operacional. A FACOP é identificada como certificadora parceira quando aplicável. As condições específicas constam no Termo de Adesão e no contrato acadêmico individual do respectivo fluxo.</p></div>
             </div>
         </div>
     </section>
@@ -1647,8 +1538,7 @@ a.whatsapp-course-btn:hover {
             <div class="section-header">
                 <h2 class="section-title" style="color: white;">Autenticação de Documentos</h2>
                 <p class="section-subtitle" style="color: rgba(255,255,255,0.9);">
-                    Valide a autenticidade dos documentos emitidos pela SIGEU. 
-                    Revalide o Certificado FACOP.
+                    Valide a autenticidade dos documentos emitidos no SIGEU Educacional. Quando aplicável, a certificação parceira FACOP permanece identificada no respectivo documento.
                 </p>
             </div>
 
@@ -2011,7 +1901,7 @@ a.whatsapp-course-btn:hover {
                 },
                 {
                     question: 'Quais as formas de pagamento disponíveis?',
-                    answer: 'Oferecemos diversas opções: boleto bancário, cartão de crédito (até 12x), PIX em 2X e programas de bolsas. Para informações específicas sobre valores e condições, entre em contato com nossa equipe comercial pelo WhatsApp (21) 99002-0262.'
+                    answer: 'Oferecemos diversas opções: boleto bancário, cartão de crédito (até 12x), PIX em 2X e programas de bolsas. Para informações específicas sobre valores e condições, use o botão <strong>CONTRATE AQUI</strong> para falar com nosso grupo pelo WhatsApp.'
                 },
                 {
                     question: 'Os cursos são totalmente online ou há aulas presenciais?',
@@ -2263,83 +2153,31 @@ function getAreaColor(area) {
 }
 
 
-// PROCURE SUA DISCIPLINA - fluxo público de prévia e contratação
+// PROCURE SUA DISCIPLINA - consulta pública em uma única etapa
 (() => {
     const form = document.getElementById('discSearchForm');
+    if (!form) return;
     const input = document.getElementById('disciplinaPublicaInput');
-    const suggestBtn = document.getElementById('discSuggestBtn');
-    const step2 = document.getElementById('discStep2');
-    const confirmation = document.getElementById('discConfirmation');
     const curso = document.getElementById('discCursoArea');
     const carga = document.getElementById('discCargaHoraria');
-    const generateBtn = document.getElementById('discGenerateBtn');
-    const conteudos = document.getElementById('discConteudosEsperados');
-    const planMessage = document.getElementById('discPlanMessage');
+    const btn = document.getElementById('discGenerateBtn');
     const statusBox = document.getElementById('discPublicStatus');
-    let disciplinaSugerida = '';
     const pedidoToken = new URLSearchParams(window.location.search).get('pedido') || '';
-
-    function status(msg, tipo='') {
-        statusBox.textContent = msg;
-        statusBox.className = 'disc-status' + (tipo ? ' ' + tipo : '');
-        statusBox.style.display = 'block';
-    }
-    function busy(btn, ligado, texto) {
-        if (!btn) return;
-        if (ligado) { btn.dataset.original = btn.textContent; btn.disabled = true; btn.textContent = texto; }
-        else { btn.disabled = false; btn.textContent = btn.dataset.original || btn.textContent; }
-    }
-    if (!form) return;
-    if (pedidoToken) {
-        status('Você está adicionando outra disciplina ao mesmo pedido. Ao gerar a prévia, ela será acrescentada à sua seleção.', 'ok');
-    }
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const digitado = (input.value || '').trim();
-        if (digitado.length < 2) return status('Digite o nome da disciplina.', 'error');
-        busy(suggestBtn, true, 'Consultando...');
-        status('CONSULTANDO DISCIPLINA E DISPONIBILIDADE NA BASE INSTITUCIONAL');
-        step2.style.display = 'none';
-        try {
-            const r = await fetch('/api/publico/sugerir-disciplina', {
-                method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({disciplina: digitado})
-            });
-            const d = await r.json();
-            if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível conferir a disciplina.');
-            disciplinaSugerida = d.nome_sugerido;
-            confirmation.textContent = d.pergunta_curso || `Sua disciplina é ${disciplinaSugerida}. De qual curso ou área ela faz parte?`;
-            if (planMessage) {
-                planMessage.textContent = d.mensagem_plano || '';
-                planMessage.style.display = d.mensagem_plano ? 'block' : 'none';
-            }
-            step2.style.display = 'block';
-            status(d.plano_existente ? 'DISCIPLINA LOCALIZADA NA BASE INSTITUCIONAL • PLANO DISPONÍVEL' : 'DISCIPLINA CONSULTADA • COMPLETE OS DADOS PARA VERIFICAR A DISPONIBILIDADE', 'ok');
-            setTimeout(() => curso.focus(), 50);
-        } catch (err) {
-            status(err.message || 'Não foi possível conferir a disciplina.', 'error');
-        } finally { busy(suggestBtn, false); }
-    });
-
-    generateBtn.addEventListener('click', async () => {
-        const cursoArea = (curso.value || '').trim();
-        if (!disciplinaSugerida) return status('Primeiro confira o nome da disciplina.', 'error');
-        if (cursoArea.length < 2) return status('Informe o curso ou a área da disciplina.', 'error');
-        busy(generateBtn, true, 'Consultando...');
-        status('CONSULTANDO DISCIPLINA E DISPONIBILIDADE NA BASE INSTITUCIONAL');
-        try {
-            const r = await fetch('/api/publico/gerar-previa-plano', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({disciplina: disciplinaSugerida, curso_area: cursoArea, carga_horaria: Number(carga.value), pedido_token: pedidoToken, conteudos_esperados: (conteudos?.value || '').trim()})
-            });
-            const d = await r.json();
-            if (!r.ok || !d.success) throw new Error(d.message || 'Não foi possível gerar a prévia.');
-            status(d.plano_reutilizado ? 'PLANO INSTITUCIONAL LOCALIZADO. ABRINDO A PRÉVIA...' : 'PLANO PREPARADO CONFORME A EMENTA. ABRINDO A PRÉVIA...', 'ok');
-            window.location.href = d.url;
-        } catch (err) {
-            status(err.message || 'Não foi possível gerar a prévia.', 'error');
-            busy(generateBtn, false);
-        }
+    function status(msg, tipo=''){statusBox.textContent=msg;statusBox.className='disc-status'+(tipo?' '+tipo:'');statusBox.style.display='block'}
+    function busy(on){btn.disabled=on;btn.textContent=on?'Consultando...':'Consultar disciplina'}
+    if(pedidoToken) status('Você está consultando outra disciplina para acrescentar à mesma seleção.','ok');
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const disciplina=(input.value||'').trim(), cursoArea=(curso.value||'').trim();
+      if(disciplina.length<2) return status('Digite o nome da disciplina.','error');
+      if(cursoArea.length<2) return status('Informe o curso ou a área.','error');
+      busy(true); status('ESTAMOS CONSULTANDO DISCIPLINAS...');
+      try{
+        const r=await fetch('/api/publico/gerar-previa-plano',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({disciplina,curso_area:cursoArea,carga_horaria:Number(carga.value),pedido_token:pedidoToken})});
+        const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Não foi possível concluir a consulta.');
+        status('DISCIPLINA LOCALIZADA. ABRINDO A SÍNTESE PARA CONFERÊNCIA...','ok');
+        window.location.href=d.url;
+      }catch(err){status(err.message||'Não foi possível concluir a consulta.','error');busy(false)}
     });
 })();
 

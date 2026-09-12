@@ -37,6 +37,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
 from api_planos import planos_bp
 app.register_blueprint(planos_bp, url_prefix='/api')
 
+from seo_public_pages import seo_pages_bp, SEO_PAGES
+app.register_blueprint(seo_pages_bp)
+
 import os
 import tempfile
 import threading
@@ -12651,7 +12654,7 @@ def _resumo_pedido_publico(token):
 def _termo_contratacao_publica():
     return """Ao prosseguir, declaro que li e concordo com as condições da contratação das unidades curriculares selecionadas neste pedido. Estou ciente de que a matrícula administrativa, a organização, a execução e o acompanhamento acadêmico e operacional dos serviços contratados são realizados pelo GRUPO EDUCACIONAL UNIFICADO, por meio do SIGEU Educacional. A FACULDADE DO CENTRO OESTE PAULISTA LTDA. (FACOP) atua como FACOP CERTIFICADORA nos termos da parceria aplicável, realizando certificação e/ou emissão dos documentos acadêmicos que lhe couberem, quando aplicável e após o cumprimento dos requisitos acadêmicos, documentais e legais.
 
-A contratação somente produz liberação acadêmica após a confirmação do pagamento e a conferência da documentação enviada. O prazo informado para conferência documental é de até 3 horas após o envio completo, e o início das unidades curriculares será disponibilizado em até 24 horas após a aprovação e liberação acadêmica.
+Os dados informados antes do pagamento registram a intenção de contratação e os elementos necessários ao checkout. A matrícula acadêmica, a vinculação definitiva das unidades curriculares, a situação financeira acadêmica e a documentação institucional correspondente somente são efetivadas após a confirmação do pagamento. Após essa confirmação, o fluxo segue para conferência da documentação enviada. O prazo informado para conferência documental é de até 3 horas após o envio completo, e o início das unidades curriculares será disponibilizado em até 24 horas após a aprovação e liberação acadêmica.
 
 Declaro que os dados pessoais e documentos apresentados são verdadeiros. Ao marcar a caixa de aceite e prosseguir para o pagamento, manifesto minha concordância livre, expressa e inequívoca com estas condições. O contrato acadêmico individual e seus registros eletrônicos serão disponibilizados no fluxo do SIGEU conforme a liberação da matrícula."""
 
@@ -12695,12 +12698,13 @@ def _normalizar_disciplina_publica_ia(disciplina, curso_area=None):
     if curso_area:
         pedido = f'''Padronize academicamente o nome de uma unidade curricular brasileira sem alterar o seu campo de conhecimento.
 Entrada do interessado: "{disciplina}". Curso/área informado: "{curso_area}".
-Retorne SOMENTE JSON válido com: nome_sugerido, curso_area, departamento_sugerido, ementa_base.
+Retorne SOMENTE JSON válido com: nome_sugerido, curso_area, departamento_sugerido, ementa_base, unidades_simplificadas.
 - nome_sugerido: nomenclatura acadêmica curta e convencional em português.
 - curso_area: preserve o curso/área informado, apenas corrigindo grafia quando necessário.
 - departamento_sugerido: rótulo amplo e técnico, por exemplo "Departamento de Ciências e Engenharias".
-- ementa_base: 4 a 6 frases objetivas cobrindo o núcleo da disciplina, suficiente para gerar um plano de ensino.
-Não cite instituição, MEC, reconhecimento, autorização ou certificação. Não invente fatos administrativos.'''
+- ementa_base: 4 a 6 frases objetivas cobrindo o núcleo acadêmico da disciplina.
+- unidades_simplificadas: lista JSON com 6 a 8 nomes curtos de unidades temáticas, sem subtópicos, coerentes com a ementa_base.
+Não cite instituição, MEC, reconhecimento, autorização, certificação, geração automática ou inteligência artificial. Não invente fatos administrativos.'''
     else:
         pedido = f'''Padronize academicamente o título da disciplina brasileira escrita como "{disciplina}".
 Retorne SOMENTE JSON válido com as chaves nome_sugerido e pergunta_curso.
@@ -12730,6 +12734,10 @@ Não acrescente instituição, grau, modalidade ou carga horária.'''
         dados["departamento_sugerido"] = _limpar_texto_publico(dados.get("departamento_sugerido"), 180)
     if dados.get("ementa_base") is not None:
         dados["ementa_base"] = _limpar_texto_publico(dados.get("ementa_base"), 4000)
+    unidades = dados.get("unidades_simplificadas")
+    if not isinstance(unidades, list):
+        unidades = []
+    dados["unidades_simplificadas"] = [_limpar_texto_publico(x, 180) for x in unidades if _limpar_texto_publico(x, 180)][:8]
     return dados
 
 
@@ -12768,6 +12776,71 @@ def _plano_catalogo_atual(disciplina_id):
         conn.close()
 
 
+
+def _ensure_planos_simplificados_table():
+    """Tabela isolada do fluxo público; não cria disciplina nem documento acadêmico."""
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS planos_simplificados (
+                id SERIAL PRIMARY KEY,
+                solicitacao_id INTEGER UNIQUE,
+                token TEXT UNIQUE NOT NULL,
+                pedido_token TEXT,
+                disciplina_nome TEXT NOT NULL,
+                curso_area TEXT,
+                carga_horaria INTEGER,
+                ementa_base TEXT,
+                unidades_json TEXT NOT NULL DEFAULT '[]',
+                conteudos_consulta TEXT,
+                data_criacao TEXT,
+                data_contratacao TEXT
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_planos_simplificados_pedido ON planos_simplificados(pedido_token)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _plano_simplificado_por_solicitacao(solicitacao_id):
+    _ensure_planos_simplificados_table()
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("SELECT * FROM planos_simplificados WHERE solicitacao_id=%s LIMIT 1", (int(solicitacao_id),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            unidades = json.loads(d.get("unidades_json") or "[]")
+        except Exception:
+            unidades = []
+        d["unidades"] = [str(x).strip() for x in unidades if str(x).strip()]
+        return d
+    finally:
+        conn.close()
+
+
+def _salvar_plano_simplificado(solicitacao_id, token, pedido_token, nome, curso_area, carga, ementa, unidades, conteudos_consulta=""):
+    _ensure_planos_simplificados_table()
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO planos_simplificados
+            (solicitacao_id,token,pedido_token,disciplina_nome,curso_area,carga_horaria,ementa_base,unidades_json,conteudos_consulta,data_criacao)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (solicitacao_id) DO UPDATE SET
+                token=EXCLUDED.token,pedido_token=EXCLUDED.pedido_token,disciplina_nome=EXCLUDED.disciplina_nome,
+                curso_area=EXCLUDED.curso_area,carga_horaria=EXCLUDED.carga_horaria,ementa_base=EXCLUDED.ementa_base,
+                unidades_json=EXCLUDED.unidades_json,conteudos_consulta=EXCLUDED.conteudos_consulta
+        """, (int(solicitacao_id),token,pedido_token,nome,curso_area,int(carga),ementa,json.dumps(unidades,ensure_ascii=False),conteudos_consulta,agora))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 @app.route("/api/publico/sugerir-disciplina", methods=["POST"])
 def api_publico_sugerir_disciplina():
     if not _consumir_limite_ia_publica():
@@ -12776,14 +12849,14 @@ def api_publico_sugerir_disciplina():
         dados = request.get_json(silent=True) or {}
         resultado = _normalizar_disciplina_publica_ia(dados.get("disciplina"))
         match = _buscar_disciplina_catalogo(resultado["nome_sugerido"])
-        plano = _plano_catalogo_atual(match.get("id") if match else None)
+        plano = None  # consulta pública não carrega nem valida plano integral nesta etapa
         return jsonify({
             "success": True,
             "nome_sugerido": resultado["nome_sugerido"],
             "pergunta_curso": resultado.get("pergunta_curso") or f"Sua disciplina é {resultado['nome_sugerido']}. De qual curso ou área ela faz parte?",
             "catalogo": dict(match) if match else None,
             "plano_existente": bool(plano),
-            "mensagem_plano": ("Esta disciplina já possui plano de ensino institucional. Se a ementa disponível atender ao que você procura, usaremos esse plano. Se desejar outra abordagem, informe abaixo os conteúdos esperados ou específicos." if plano else "A disciplina será consultada na base institucional e, quando necessário, terá o plano preparado conforme a ementa informada."),
+            "mensagem_plano": "Disciplina localizada para consulta. Informe o curso/área e a carga horária para conferir a síntese acadêmica e a disponibilidade.",
         })
     except Exception as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
@@ -12792,7 +12865,7 @@ def api_publico_sugerir_disciplina():
 @app.route("/api/publico/gerar-previa-plano", methods=["POST"])
 def api_publico_gerar_previa_plano():
     if not _consumir_limite_ia_publica():
-        return jsonify({"success": False, "message": "Muitas gerações em pouco tempo. Aguarde alguns minutos e tente novamente."}), 429
+        return jsonify({"success": False, "message": "Muitas consultas em pouco tempo. Aguarde alguns minutos e tente novamente."}), 429
     try:
         dados = request.get_json(silent=True) or {}
         disciplina_informada = (dados.get("disciplina") or "").strip()
@@ -12805,19 +12878,26 @@ def api_publico_gerar_previa_plano():
         if not disciplina_informada or not curso_area:
             return jsonify({"success": False, "message": "Informe a disciplina e o curso/área."}), 400
 
+        # A consulta pública produz somente uma síntese acadêmica leve. Nenhuma disciplina,
+        # matrícula ou plano de ensino oficial é criado antes do pagamento aprovado.
         normalizado = _normalizar_disciplina_publica_ia(disciplina_informada, curso_area)
         nome = normalizado["nome_sugerido"]
         ementa = str(normalizado.get("ementa_base") or "").strip()
         departamento = str(normalizado.get("departamento_sugerido") or curso_area).strip()
+        unidades = normalizado.get("unidades_simplificadas") or []
+        if len(unidades) < 4:
+            unidades = [
+                "Fundamentos e conceitos centrais", "Bases teóricas da disciplina", "Métodos e procedimentos",
+                "Aplicações e análise de situações", "Integração dos conteúdos", "Síntese e estudos aplicados"
+            ]
+        unidades = unidades[:8]
         if not ementa:
-            raise ValueError("Não foi possível preparar a ementa-base da disciplina.")
+            raise ValueError("Não foi possível concluir a consulta acadêmica da disciplina.")
 
         catalogo = _buscar_disciplina_catalogo(nome)
         if catalogo and int(catalogo.get("carga_horaria") or 80) != carga:
             catalogo = None
-        plano_existente = _plano_catalogo_atual(catalogo.get("id") if catalogo else None)
 
-        # Pedido/carrinho: várias disciplinas podem ser reunidas antes do checkout.
         conn = get_db_connection(); cur = conn.cursor()
         try:
             if pedido_recebido:
@@ -12839,68 +12919,39 @@ def api_publico_gerar_previa_plano():
             else:
                 pedido_token = "PED-" + secrets.token_urlsafe(18)
                 item_ordem = 1
+            # Docente pode ser reservado para o fluxo, mas não é apresentado como vínculo acadêmico efetivo antes do pagamento.
             docente_id, docente_nome = _selecionar_docente_publico(cur, pedido_token, nome, carga)
         finally:
             conn.close()
 
         token = secrets.token_urlsafe(24)
-        plano_dados_salvos = {}
-        if plano_existente and not conteudos_esperados:
-            # Reaproveita o plano institucional já existente. A cópia abaixo é apenas a prévia pública.
-            html_plano = str(plano_existente.get("conteudo_html") or "")
-            if not html_plano:
-                plano_existente = None
-
-        if not plano_existente or conteudos_esperados:
-            from api_planos import consultar_openai_para_plano
-            ementa_para_ia = ementa
-            if conteudos_esperados:
-                ementa_para_ia += "\n\nCONFORME SUA EMENTA, priorize e distribua os seguintes conteúdos esperados ou específicos: " + conteudos_esperados
-            conteudo_ia = consultar_openai_para_plano({
-                "disciplina": nome,
-                "ementa": ementa_para_ia,
-                "carga_horaria": f"{carga} horas",
-            })
-            dados_html = _sanitizar_conteudo_plano_publico(conteudo_ia)
-            plano_dados_salvos = dict(dados_html)
-            modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
-            plano_dados_salvos["modalidade"] = modalidade
-            numero_unidades = max(6, min(8, int(plano_dados_salvos.get("numero_unidades") or 6)))
-            plano_dados_salvos["numero_unidades"] = numero_unidades
-            dados_html.pop("numero_unidades", None)
-            codigo = f"PREVIA-{secrets.token_hex(5).upper()}"
-            hash_doc = hashlib.sha256(f"{token}|{nome}|{carga}|{conteudos_esperados}".encode("utf-8")).hexdigest()
-            base_url = request.host_url.rstrip("/")
-            qr = gerar_qrcode_base64(f"{base_url}/matricula/{token}")
-            html_plano = gerar_html_plano_ensino(
-                disciplina=nome.upper(), codigo=codigo, hash_completa=hash_doc,
-                carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
-                data_formatada=datetime.now().strftime("%d/%m/%Y"), qr_code_base64=qr,
-                numero_unidades=numero_unidades, **dados_html,
-            )
-
-        aviso = "<style>.sigeu-previa-aviso{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:99999;background:#fff;border:1px solid #111;color:#111;padding:6px 12px;font:700 10px Arial;letter-spacing:.6px}@media print{.sigeu-previa-aviso{display:block}}</style>"
-        html_plano = html_plano.replace("</head>", aviso + "<meta name='robots' content='noindex,nofollow'></head>", 1)
-        html_plano = html_plano.replace("<body>", "<body><div class='sigeu-previa-aviso'>PRÉVIA DE PLANO DE ENSINO • SEM VALIDADE ACADÊMICA</div>", 1)
-
+        resumo_dados = {
+            "tipo": "plano_simplificado",
+            "ementa_base": ementa,
+            "unidades_simplificadas": unidades,
+            "conteudos_consulta": conteudos_esperados,
+        }
         agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute(
             """INSERT INTO solicitacoes_matricula_publica
             (token,pedido_token,item_ordem,status,disciplina_digitada,disciplina_confirmada,curso_area,departamento,carga_horaria,ementa_sugerida,plano_html,plano_dados_json,valor_total,docente_id,docente_nome,disciplina_id,plano_documento_id,data_criacao,data_plano)
-            VALUES(%s,%s,%s,'previa',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            VALUES(%s,%s,%s,'previa',%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s,%s,%s,NULL,%s,%s) RETURNING id""",
             (token,pedido_token,item_ordem,disciplina_informada,nome,normalizado.get("curso_area") or curso_area,departamento,carga,
-             (ementa + (("\n\nConteúdos esperados/específicos: " + conteudos_esperados) if conteudos_esperados else "")),
-             html_plano,json.dumps(plano_dados_salvos,ensure_ascii=False),_preco_disciplina_publica(carga),docente_id,docente_nome,
-             catalogo.get("id") if catalogo else None,(plano_existente.get("id") if (plano_existente and not conteudos_esperados) else None),agora,agora),
+             ementa,json.dumps(resumo_dados,ensure_ascii=False),_preco_disciplina_publica(carga),docente_id,docente_nome,
+             catalogo.get("id") if catalogo else None,agora,agora),
         )
         solicitacao_id = cur.fetchone()["id"]
         conn.commit(); conn.close()
+        _salvar_plano_simplificado(
+            solicitacao_id, token, pedido_token, nome, normalizado.get("curso_area") or curso_area,
+            carga, ementa, unidades, conteudos_esperados
+        )
         return jsonify({
             "success": True, "id": solicitacao_id, "token": token, "pedido_token": pedido_token,
             "nome_confirmado": nome, "curso_area": normalizado.get("curso_area") or curso_area,
-            "departamento": departamento, "carga_horaria": carga, "docente": docente_nome,
-            "plano_reutilizado": bool(plano_existente and not conteudos_esperados),
+            "departamento": departamento, "carga_horaria": carga,
+            "status_consulta": "localizada",
             "url": url_for("matricula_publica_resumo", token=token),
         })
     except Exception as exc:
@@ -12921,10 +12972,15 @@ def matricula_publica_resumo(token):
         d["preco"] = preco
         d["preco_txt"] = _moeda_br(preco)
         itens_view.append(d)
+    planos_simplificados = {}
+    for item in itens_view:
+        ps = _plano_simplificado_por_solicitacao(item.get("id"))
+        if ps:
+            planos_simplificados[int(item["id"])] = ps
     return render_template(
         "matricula_publica_resumo.html",
         sol=sol, itens=itens_view, total=total, total_txt=_moeda_br(total), faltantes=faltantes,
-        pedido_token=_pedido_token_publico(sol),
+        pedido_token=_pedido_token_publico(sol), planos_simplificados=planos_simplificados,
     )
 
 
@@ -12955,15 +13011,18 @@ def matricula_publica_finalizar(token):
 @app.route("/matricula/<token>/plano")
 def matricula_publica_plano(token):
     sol = _get_solicitacao_publica(token=token)
-    if not sol or not sol.get("plano_html"):
-        return "Prévia não encontrada.", 404
-    resp = app.make_response(sol["plano_html"])
-    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    if not sol:
+        return "Consulta não encontrada.", 404
+    plano = _plano_simplificado_por_solicitacao(sol["id"])
+    if not plano:
+        return "Síntese acadêmica não encontrada.", 404
+    resp = app.make_response(render_template("plano_simplificado_publico.html", sol=sol, plano=plano))
     resp.headers["X-Robots-Tag"] = "noindex, nofollow"
     return resp
 
 
-def _criar_aluno_pendente_publico(sol, form):
+def _registrar_dados_contratacao_publica(sol, form):
+    """Guarda somente dados da intenção de contratação; o cadastro acadêmico nasce após pagamento aprovado."""
     nome = (form.get("nome") or "").strip()
     email = (form.get("email") or "").strip().lower()
     cpf = re.sub(r"\D", "", form.get("cpf") or "")
@@ -12975,67 +13034,116 @@ def _criar_aluno_pendente_publico(sol, form):
     if not nome or "@" not in email or len(cpf) != 11 or not telefone or not endereco or not cidade or len(estado) != 2 or not cep:
         raise ValueError("Preencha corretamente nome, CPF, e-mail, telefone e endereço.")
     if form.get("aceite_termos") != "1":
-        raise ValueError("É necessário ler e aceitar os termos da contratação.")
-
+        raise ValueError("É necessário ler e aceitar o termo da contratação.")
     itens = _itens_pedido_publico(sol=sol)
     total, faltantes = _preco_total_pedido_publico(itens)
     if not total or total <= 0:
         if faltantes:
             raise ValueError("Há carga horária sem preço configurado no Render: " + ", ".join(f"{x}h" for x in faltantes) + ".")
         raise ValueError("O valor do pedido ainda não está configurado.")
-    pedido = _pedido_token_publico(sol)
-
+    # Impede duplicidade com matrícula já efetivada, sem criar novo aluno antes do pagamento.
     conn = get_db_connection(); cur = conn.cursor()
     try:
-        # O carrinho reúne várias disciplinas em uma única matrícula nova.
-        # Matrículas já existentes continuam pelo atendimento/ambiente autenticado, evitando duplicidade de CPF.
-        cur.execute(
-            """SELECT a.id FROM dados_pessoais dp JOIN alunos a ON a.id=dp.aluno_id
-               WHERE regexp_replace(COALESCE(dp.cpf,''),'[^0-9]','','g')=%s LIMIT 1""",
-            (cpf,),
-        )
+        cur.execute("""SELECT a.id FROM dados_pessoais dp JOIN alunos a ON a.id=dp.aluno_id
+                       WHERE regexp_replace(COALESCE(dp.cpf,''),'[^0-9]','','g')=%s LIMIT 1""", (cpf,))
         if cur.fetchone():
             raise ValueError("Já existe cadastro com este CPF. Para uma nova contratação em matrícula existente, utilize o atendimento do SIGEU ou seu ambiente acadêmico.")
-        while True:
-            ra = gerar_ra()
-            cur.execute("SELECT id FROM alunos WHERE ra=%s", (ra,))
-            if not cur.fetchone():
-                break
-        cur.execute("INSERT INTO alunos(nome,email,ra,senha) VALUES(%s,%s,%s,%s) RETURNING id", (nome, email, ra, generate_password_hash(cpf)))
-        aluno_id = cur.fetchone()["id"]
-        cur.execute(
-            "INSERT INTO dados_pessoais(aluno_id,cpf,telefone,endereco,cidade,estado,cep,curso_referencia) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
-            (aluno_id, cpf, telefone, endereco, cidade, estado, cep, sol.get("curso_area") or sol.get("departamento") or ""),
-        )
-
-        cur.execute(
-            "INSERT INTO situacao_financeira(aluno_id,forma_pagamento,status,parcelas_total,parcelas_pagas,valor_total) VALUES(%s,'mercadopago','pendente',1,0,%s)",
-            (aluno_id, total),
-        )
         agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        cur.execute(
-            """UPDATE solicitacoes_matricula_publica
-               SET status='aguardando_pagamento',nome=%s,email=%s,cpf=%s,telefone=%s,endereco=%s,cidade=%s,estado=%s,cep=%s,
-                   aluno_id=%s,aceite_termos=TRUE,data_aceite=%s
-               WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
-            (nome, email, cpf, telefone, endereco, cidade, estado, cep, aluno_id, agora, pedido),
-        )
+        pedido = _pedido_token_publico(sol)
+        cur.execute("""UPDATE solicitacoes_matricula_publica
+                       SET status='aguardando_pagamento',nome=%s,email=%s,cpf=%s,telefone=%s,endereco=%s,cidade=%s,estado=%s,cep=%s,
+                           aceite_termos=TRUE,data_aceite=%s
+                       WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s""",
+                    (nome,email,cpf,telefone,endereco,cidade,estado,cep,agora,pedido))
         conn.commit()
-        extra = next((i.get("solicitacao_extra") for i in itens if i.get("solicitacao_extra")), "")
-        if extra:
-            try:
-                destino = (os.getenv("SIGEU_ADMIN_NOTIFICATION_EMAIL") or "claroevandro95@gmail.com").strip()
-                lista = "<br>".join(f"• {escape(i.get('disciplina_confirmada') or '')} — {int(i.get('carga_horaria') or 0)}h" for i in itens)
-                html = f"<html><body style='font-family:Arial;color:#202428'><h2>Solicitação adicional antes do pagamento</h2><p><b>Interessado:</b> {escape(nome)}<br><b>E-mail:</b> {escape(email)}<br><b>Telefone:</b> {escape(telefone)}</p><p><b>Disciplinas selecionadas:</b><br>{lista}</p><p><b>Pedido adicional:</b><br>{escape(extra)}</p><p>O interessado seguirá agora para o Mercado Pago.</p></body></html>"
-                _smtp_enviar(destino, f"SIGEU | Solicitação adicional - {nome}", html)
-            except Exception as exc:
-                print(f"Aviso e-mail solicitação adicional: {exc}")
-        return aluno_id, nome, email, total
     except Exception:
-        conn.rollback()
-        raise
+        conn.rollback(); raise
     finally:
         conn.close()
+    return nome, email, total
+
+
+def _efetivar_aluno_publico_apos_pagamento(sol):
+    """Efetiva aluno e financeiro uma única vez, somente após pagamento confirmado."""
+    pedido = _pedido_token_publico(sol)
+    itens = _itens_pedido_publico(sol=sol)
+    aluno_id_existente = next((i.get("aluno_id") for i in itens if i.get("aluno_id")), None)
+    if aluno_id_existente:
+        return int(aluno_id_existente)
+    cpf = re.sub(r"\D", "", sol.get("cpf") or "")
+    nome = (sol.get("nome") or "").strip(); email = (sol.get("email") or "").strip().lower()
+    if len(cpf) != 11 or not nome or "@" not in email:
+        raise ValueError("Dados da contratação incompletos para efetivar a matrícula.")
+    total, faltantes = _preco_total_pedido_publico(itens)
+    if not total or faltantes:
+        raise ValueError("Valor da contratação não disponível para efetivação.")
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        cur.execute("""SELECT a.id FROM dados_pessoais dp JOIN alunos a ON a.id=dp.aluno_id
+                       WHERE regexp_replace(COALESCE(dp.cpf,''),'[^0-9]','','g')=%s LIMIT 1""", (cpf,))
+        ja = cur.fetchone()
+        if ja:
+            aluno_id = int(ja["id"])
+        else:
+            while True:
+                ra = gerar_ra(); cur.execute("SELECT id FROM alunos WHERE ra=%s", (ra,))
+                if not cur.fetchone(): break
+            cur.execute("INSERT INTO alunos(nome,email,ra,senha) VALUES(%s,%s,%s,%s) RETURNING id", (nome,email,ra,generate_password_hash(cpf)))
+            aluno_id = int(cur.fetchone()["id"])
+            cur.execute("INSERT INTO dados_pessoais(aluno_id,cpf,telefone,endereco,cidade,estado,cep,curso_referencia) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (aluno_id,cpf,sol.get("telefone") or "",sol.get("endereco") or "",sol.get("cidade") or "",sol.get("estado") or "",sol.get("cep") or "",sol.get("curso_area") or sol.get("departamento") or ""))
+            cur.execute("INSERT INTO situacao_financeira(aluno_id,forma_pagamento,status,parcelas_total,parcelas_pagas,valor_total) VALUES(%s,'mercadopago','pago',1,1,%s)", (aluno_id,total))
+        cur.execute("UPDATE solicitacoes_matricula_publica SET aluno_id=%s WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s", (aluno_id,pedido))
+        cobranca_id = next((i.get("cobranca_id") for i in itens if i.get("cobranca_id")), None)
+        if cobranca_id:
+            cur.execute("UPDATE pagamentos_mercadopago SET aluno_id=%s WHERE id=%s", (aluno_id,cobranca_id))
+        conn.commit(); return aluno_id
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        conn.close()
+
+
+
+def _criar_preferencia_mercadopago_publica(nome, email, valor_total, pedido_token, solicitacao_id, item_title):
+    """Cobrança do funil público sem criar aluno antes da aprovação."""
+    valor = round(float(valor_total), 2)
+    external_reference = f"SIGEU-PED-{pedido_token}-{int(time.time())}-{secrets.token_hex(3)}"
+    base_url = "https://sigeueducacional.com.br"
+    preference_data = {
+        "items": [{"id": f"pedido-{pedido_token}", "title": item_title, "quantity": 1, "currency_id": "BRL", "unit_price": valor}],
+        "payer": {"name": nome, "email": email},
+        "external_reference": external_reference,
+        "back_urls": {
+            "success": f"{base_url}/pagamento/mercadopago/sucesso",
+            "pending": f"{base_url}/pagamento/mercadopago/pendente",
+            "failure": f"{base_url}/pagamento/mercadopago/falha",
+        },
+        "auto_return": "approved",
+        "notification_url": f"{base_url}/webhook/mercadopago",
+        "metadata": {"solicitacao_matricula_id": str(solicitacao_id), "pedido_token": pedido_token, "tipo": "matricula_publica"},
+    }
+    sdk = get_mercadopago_sdk(); resultado = sdk.preference().create(preference_data)
+    resposta = resultado.get("response", {}) if isinstance(resultado, dict) else {}
+    preference_id = resposta.get("id"); init_point = resposta.get("init_point"); sandbox_init_point = resposta.get("sandbox_init_point")
+    if not preference_id or not (init_point or sandbox_init_point):
+        raise RuntimeError(f"Mercado Pago não retornou um checkout válido: {resposta}")
+    agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    conn = get_db_connection(); cur = conn.cursor()
+    try:
+        # A coluna aceita NULL apenas no funil público; cobranças internas continuam inalteradas.
+        cur.execute("ALTER TABLE pagamentos_mercadopago ALTER COLUMN aluno_id DROP NOT NULL")
+        cur.execute("""INSERT INTO pagamentos_mercadopago
+            (aluno_id,contrato_id,external_reference,preference_id,valor_total,checkout_url,sandbox_checkout_url,status,status_mp,data_criacao,data_atualizacao)
+            VALUES(NULL,NULL,%s,%s,%s,%s,%s,'nao_pago','pending',%s,%s) RETURNING id""",
+            (external_reference,preference_id,valor,init_point,sandbox_init_point,agora,agora))
+        cid=cur.fetchone()["id"]; conn.commit()
+    except Exception:
+        conn.rollback(); raise
+    finally:
+        conn.close()
+    checkout = sandbox_init_point if str(os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")).startswith("TEST-") and sandbox_init_point else (init_point or sandbox_init_point)
+    return {"id":cid,"preference_id":preference_id,"checkout_url":checkout,"external_reference":external_reference}
 
 
 @app.route("/matricula/<token>/contratar", methods=["GET", "POST"])
@@ -13067,30 +13175,11 @@ def matricula_publica_contratar(token):
                 if checkout:
                     return redirect(checkout)
 
-        aluno_id_existente = next((i.get("aluno_id") for i in itens if i.get("aluno_id")), None)
-        if aluno_id_existente:
-            conn = get_db_connection(); cur = conn.cursor()
-            cur.execute("SELECT id,nome,email FROM alunos WHERE id=%s", (aluno_id_existente,))
-            aluno_existente = cur.fetchone(); conn.close()
-            if not aluno_existente:
-                raise ValueError("Cadastro pendente não encontrado. Procure o atendimento do SIGEU.")
-            aluno_id = aluno_existente["id"]; nome = aluno_existente["nome"]; email = aluno_existente["email"]
-            total, faltantes = _preco_total_pedido_publico(itens)
-            if not total:
-                raise ValueError("Há carga horária sem preço configurado no Render.")
-        else:
-            aluno_id, nome, email, total = _criar_aluno_pendente_publico(sol, request.form)
-
+        nome, email, total = _registrar_dados_contratacao_publica(sol, request.form)
         titulo = (f"{len(itens)} unidades curriculares SIGEU" if len(itens) > 1 else f"Unidade Curricular: {itens[0]['disciplina_confirmada']} - {int(itens[0]['carga_horaria'])}h")
-        cobranca = criar_preferencia_mercadopago(
-            aluno_id=aluno_id,
-            nome=nome,
-            email=email,
-            valor_total=total,
-            contrato_id=None,
-            base_url=request.host_url.rstrip("/"),
-            item_title=titulo,
-            metadata_extra={"solicitacao_matricula_id": sol["id"], "pedido_token": pedido, "tipo": "matricula_publica"},
+        cobranca = _criar_preferencia_mercadopago_publica(
+            nome=nome, email=email, valor_total=total, pedido_token=pedido,
+            solicitacao_id=sol["id"], item_title=titulo
         )
         conn = get_db_connection(); cur = conn.cursor()
         cur.execute(
@@ -13122,139 +13211,83 @@ def _token_solicitacao_publica_retorno_mp():
 
 
 def _assegurar_disciplina_e_plano_publico(solicitacao_id):
-    """Cria/vincula a disciplina e garante um único plano institucional corrente por disciplina."""
+    """Após pagamento: efetiva disciplina e garante o plano de ensino oficial completo."""
     sol = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
     if not sol:
         return None, None
-
+    if not sol.get("data_pagamento"):
+        raise ValueError("O plano de ensino oficial só pode ser efetivado após pagamento aprovado.")
     nome = (sol.get("disciplina_confirmada") or sol.get("disciplina_digitada") or "").strip()
     carga = int(sol.get("carga_horaria") or 80)
+    simples = _plano_simplificado_por_solicitacao(solicitacao_id) or {}
+    conteudos_consulta = str(simples.get("conteudos_consulta") or "").strip()
+    ementa_base = str(simples.get("ementa_base") or sol.get("ementa_sugerida") or "").strip()
     if not nome:
         raise ValueError("Solicitação sem nome de disciplina confirmado.")
 
-    try:
-        dados_plano = json.loads(sol.get("plano_dados_json") or "{}")
-        if not isinstance(dados_plano, dict):
-            dados_plano = {}
-    except Exception:
-        dados_plano = {}
-
     conn = get_db_connection(); cur = conn.cursor()
-    disciplina_id = sol.get("disciplina_id")
-    plano_documento_id = sol.get("plano_documento_id")
+    disciplina_id = sol.get("disciplina_id"); plano_documento_id = sol.get("plano_documento_id")
     try:
         if disciplina_id:
             cur.execute("SELECT id FROM disciplinas WHERE id=%s", (disciplina_id,))
-            if not cur.fetchone():
-                disciplina_id = None
-
+            if not cur.fetchone(): disciplina_id = None
         if not disciplina_id:
-            cur.execute(
-                "SELECT id FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND COALESCE(carga_horaria,80)=%s ORDER BY id LIMIT 1",
-                (nome, carga),
-            )
-            disc = cur.fetchone()
-            if disc:
-                disciplina_id = disc["id"]
+            cur.execute("SELECT id FROM disciplinas WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND COALESCE(carga_horaria,80)=%s ORDER BY id LIMIT 1", (nome,carga))
+            disc=cur.fetchone()
+            if disc: disciplina_id=disc["id"]
             else:
-                cur.execute("INSERT INTO disciplinas (nome,carga_horaria) VALUES(%s,%s) RETURNING id", (nome, carga))
-                disciplina_id = cur.fetchone()["id"]
-                for i in range(1, 5):
-                    cur.execute(
-                        "INSERT INTO capitulos (disciplina_id,titulo,video_url,pdf_url) VALUES(%s,%s,'','') RETURNING id",
-                        (disciplina_id, f"Capítulo {i}"),
-                    )
-                    capitulo_id = cur.fetchone()["id"]
-                    cur.execute("INSERT INTO provas (capitulo_id,questoes_json) VALUES(%s,'[]')", (capitulo_id,))
-            cur.execute("UPDATE solicitacoes_matricula_publica SET disciplina_id=%s WHERE id=%s", (disciplina_id, solicitacao_id))
+                cur.execute("INSERT INTO disciplinas (nome,carga_horaria) VALUES(%s,%s) RETURNING id", (nome,carga)); disciplina_id=cur.fetchone()["id"]
+                for i in range(1,5):
+                    cur.execute("INSERT INTO capitulos (disciplina_id,titulo,video_url,pdf_url) VALUES(%s,%s,'','') RETURNING id", (disciplina_id,f"Capítulo {i}"))
+                    capitulo_id=cur.fetchone()["id"]; cur.execute("INSERT INTO provas (capitulo_id,questoes_json) VALUES(%s,'[]')", (capitulo_id,))
 
-        # Sempre usa um docente real já vinculado; se faltar, sorteia um docente ativo do MEW e grava o vínculo.
         docente_nome = _docente_documental_disciplina(cur, disciplina_id, nome)
-        cur.execute("""
-            SELECT dd.docente_id FROM disciplina_docente dd
-            JOIN docentes d ON d.id=dd.docente_id
-            WHERE dd.disciplina_id=%s AND COALESCE(d.ativo,1)=1
-            ORDER BY dd.id DESC LIMIT 1
-        """, (disciplina_id,))
-        drow = cur.fetchone()
-        docente_id = drow.get("docente_id") if drow else None
-        cur.execute(
-            "UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
-            (disciplina_id, docente_id, docente_nome, solicitacao_id),
-        )
+        cur.execute("""SELECT dd.docente_id FROM disciplina_docente dd JOIN docentes d ON d.id=dd.docente_id
+                       WHERE dd.disciplina_id=%s AND COALESCE(d.ativo,1)=1 ORDER BY dd.id DESC LIMIT 1""", (disciplina_id,))
+        drow=cur.fetchone(); docente_id=drow.get("docente_id") if drow else None
 
-        # Plano alternativo solicitado: substitui o plano corrente da disciplina, nunca cria duplicata lógica.
-        if dados_plano:
-            modalidade = _limpar_texto_publico(dados_plano.pop("modalidade", None) or "EaD", 40)
-            try:
-                numero_unidades = max(6, min(8, int(dados_plano.pop("numero_unidades", 6) or 6)))
-            except Exception:
-                numero_unidades = 6
-            codigo = gerar_codigo_simples()
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            hash_documento = gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}", "PUBLICO", timestamp)
-            data_formatada = datetime.now().strftime("%d/%m/%Y")
-            data_emissao = datetime.now().strftime("%d/%m/%Y %H:%M")
-            data_validade = (datetime.now() + timedelta(days=365 * 5)).strftime("%d/%m/%Y")
-            base_url = (os.getenv("SIGEU_LOGIN_URL") or "").strip().rstrip("/") or request.host_url.rstrip("/")
-            qr_code_base64 = gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
-            metadados = criar_metadados_documento(None, "plano_ensino", codigo, hash_documento)
-            html_oficial = gerar_html_plano_ensino(
-                disciplina=nome.upper(), codigo=codigo, hash_completa=hash_documento,
-                carga_horaria=f"{carga} horas", modalidade=modalidade, docente=docente_nome,
-                data_formatada=data_formatada, qr_code_base64=qr_code_base64,
-                numero_unidades=numero_unidades, **dados_plano,
-            )
-            cur.execute("""
-                SELECT id FROM documentos_autenticados
-                WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
-                ORDER BY id DESC LIMIT 1
-            """, (disciplina_id,))
-            atual = cur.fetchone()
-            if atual:
-                plano_documento_id = atual["id"]
-                cur.execute("""
-                    UPDATE documentos_autenticados
-                    SET codigo=%s,codigo_autenticacao=%s,conteudo_html=%s,data_geracao=%s,qr_code=%s,
-                        hash_documento=%s,data_emissao=%s,data_validade=%s,metadados=%s,
-                        tipo='plano_ensino',tipo_documento='plano_ensino',disciplina_id=%s
-                    WHERE id=%s
-                """, (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,
-                      data_emissao,data_validade,metadados,disciplina_id,plano_documento_id))
-            else:
-                cur.execute("""
-                    INSERT INTO documentos_autenticados
-                    (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,
-                     qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
-                    VALUES(%s,%s,NULL,'PLANO INSTITUCIONAL','GERAL','plano_ensino','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id
-                """, (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,
-                      data_emissao,data_validade,metadados,disciplina_id))
-                plano_documento_id = cur.fetchone()["id"]
-        else:
-            # Sem pedido de nova ementa: reutiliza o plano institucional existente, se houver.
+        # Reutiliza somente plano institucional que já atende ao padrão visual atual.
+        # Plano legado/curto continua proibido de contornar o gerador oficial.
+        cur.execute("""SELECT id,conteudo_html FROM documentos_autenticados WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino' ORDER BY id DESC LIMIT 1""", (disciplina_id,))
+        atual=cur.fetchone()
+        plano_documento_id=(atual.get("id") if (atual and _plano_html_atende_padrao_visual_atual(atual.get("conteudo_html"))) else None)
+        if not plano_documento_id or conteudos_consulta:
+            from api_planos import consultar_openai_para_plano
+            ementa_para_ia = ementa_base or f"Disciplina {nome}, carga horária de {carga} horas."
+            if conteudos_consulta:
+                ementa_para_ia += "\n\nConsidere também estes conteúdos solicitados na consulta: " + conteudos_consulta
+            conteudo_ia = consultar_openai_para_plano({"disciplina":nome,"ementa":ementa_para_ia,"carga_horaria":f"{carga} horas"})
+            dados_html = _sanitizar_conteudo_plano_publico(conteudo_ia)
+            modalidade = _limpar_texto_publico(dados_html.pop("modalidade", None) or "EaD", 40)
+            try: numero_unidades=max(6,min(8,int(dados_html.pop("numero_unidades",6) or 6)))
+            except Exception: numero_unidades=6
+            codigo=gerar_codigo_simples(); timestamp=datetime.now().strftime("%Y%m%d%H%M%S")
+            hash_documento=gerar_hash_documento(f"plano_publico_{solicitacao_id}_{disciplina_id}_{timestamp}","PUBLICO",timestamp)
+            data_formatada=datetime.now().strftime("%d/%m/%Y"); data_emissao=datetime.now().strftime("%d/%m/%Y %H:%M")
+            data_validade=(datetime.now()+timedelta(days=365*5)).strftime("%d/%m/%Y")
+            base_url=(os.getenv("SIGEU_LOGIN_URL") or "").strip().rstrip("/") or "https://sigeueducacional.com.br"
+            qr_code_base64=gerar_qrcode_base64(f"{base_url}/validar-documento/{codigo}")
+            metadados=criar_metadados_documento(None,"plano_ensino",codigo,hash_documento)
+            html_oficial=gerar_html_plano_ensino(disciplina=nome.upper(),codigo=codigo,hash_completa=hash_documento,
+                carga_horaria=f"{carga} horas",modalidade=modalidade,docente=docente_nome,data_formatada=data_formatada,
+                qr_code_base64=qr_code_base64,numero_unidades=numero_unidades,**dados_html)
             if plano_documento_id:
-                cur.execute("SELECT id FROM documentos_autenticados WHERE id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'", (plano_documento_id,))
-                if not cur.fetchone():
-                    plano_documento_id = None
-            if not plano_documento_id:
-                cur.execute("""
-                    SELECT id FROM documentos_autenticados
-                    WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
-                    ORDER BY id DESC LIMIT 1
-                """, (disciplina_id,))
-                atual = cur.fetchone()
-                plano_documento_id = atual.get("id") if atual else None
+                cur.execute("""UPDATE documentos_autenticados SET codigo=%s,codigo_autenticacao=%s,conteudo_html=%s,data_geracao=%s,qr_code=%s,
+                    hash_documento=%s,data_emissao=%s,data_validade=%s,metadados=%s,tipo='plano_ensino',tipo_documento='plano_ensino',disciplina_id=%s WHERE id=%s""",
+                    (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,data_emissao,data_validade,metadados,disciplina_id,plano_documento_id))
+            else:
+                cur.execute("""INSERT INTO documentos_autenticados
+                    (codigo,codigo_autenticacao,aluno_id,aluno_nome,aluno_ra,tipo,tipo_documento,conteudo_html,data_geracao,qr_code,hash_documento,data_emissao,data_validade,metadados,disciplina_id)
+                    VALUES(%s,%s,NULL,'PLANO INSTITUCIONAL','GERAL','plano_ensino','plano_ensino',%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    (codigo,codigo,html_oficial,data_emissao,qr_code_base64,hash_documento,data_emissao,data_validade,metadados,disciplina_id))
+                plano_documento_id=cur.fetchone()["id"]
 
-        cur.execute(
-            "UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,plano_documento_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
-            (disciplina_id, plano_documento_id, docente_id, docente_nome, solicitacao_id),
-        )
-        conn.commit()
-        return disciplina_id, plano_documento_id
+        cur.execute("UPDATE solicitacoes_matricula_publica SET disciplina_id=%s,plano_documento_id=%s,docente_id=%s,docente_nome=%s WHERE id=%s",
+                    (disciplina_id,plano_documento_id,docente_id,docente_nome,solicitacao_id))
+        cur.execute("UPDATE planos_simplificados SET data_contratacao=%s WHERE solicitacao_id=%s", (datetime.now().strftime("%d/%m/%Y %H:%M:%S"),solicitacao_id))
+        conn.commit(); return disciplina_id,plano_documento_id
     except Exception:
-        conn.rollback()
-        raise
+        conn.rollback(); raise
     finally:
         conn.close()
 
@@ -13282,6 +13315,8 @@ def _marcar_solicitacao_publica_pago(solicitacao_id, payment_id=None):
         (agora, pedido),
     )
     conn.commit(); conn.close()
+    sol_atual = _get_solicitacao_publica(solicitacao_id=solicitacao_id)
+    aluno_id = _efetivar_aluno_publico_apos_pagamento(sol_atual)
     for row in rows:
         _assegurar_disciplina_e_plano_publico(row["id"])
     return novo_pagamento
@@ -13309,10 +13344,6 @@ def _sincronizar_pagamento_publico(token, payment_id):
         (str(payment_id), agora, agora, sol["cobranca_id"]),
     )
     cur.execute(
-        "UPDATE situacao_financeira SET status='pago',parcelas_pagas=parcelas_total WHERE id=(SELECT id FROM situacao_financeira WHERE aluno_id=%s ORDER BY id DESC LIMIT 1)",
-        (sol["aluno_id"],),
-    )
-    cur.execute(
         "SELECT id,data_pagamento FROM solicitacoes_matricula_publica WHERE COALESCE(NULLIF(TRIM(pedido_token),''),token)=%s",
         (pedido,),
     )
@@ -13324,6 +13355,8 @@ def _sincronizar_pagamento_publico(token, payment_id):
         (agora, pedido),
     )
     conn.commit(); conn.close()
+    sol_atual = _get_solicitacao_publica(solicitacao_id=sol["id"])
+    _efetivar_aluno_publico_apos_pagamento(sol_atual)
     for row in rows:
         _assegurar_disciplina_e_plano_publico(row["id"])
     if novo_pagamento:
@@ -14331,8 +14364,9 @@ def sitemap_xml():
         "/software-app-preco-social", "/estagio-supervisionado", "/formacao-continuada",
         "/projeto-arquitetura-completo"
     ]
+    paths.extend(f"/{slug}" for slug in SEO_PAGES if f"/{slug}" not in paths)
     urls = "".join(
-        f"<url><loc>{_BASE_PUBLICA}{path}</loc><lastmod>2026-09-10</lastmod><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
+        f"<url><loc>{_BASE_PUBLICA}{path}</loc><lastmod>2026-09-11</lastmod><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
         for path in paths
     )
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'

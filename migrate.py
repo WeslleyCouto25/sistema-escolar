@@ -163,6 +163,19 @@ def ensure_extra_schema():
             )
         """)
 
+
+        # Plano simplificado da consulta pública: não é documento acadêmico e não cria disciplina.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS planos_simplificados (
+                id SERIAL PRIMARY KEY, solicitacao_id INTEGER UNIQUE, token TEXT UNIQUE NOT NULL, pedido_token TEXT,
+                disciplina_nome TEXT NOT NULL, curso_area TEXT, carga_horaria INTEGER, ementa_base TEXT,
+                unidades_json TEXT NOT NULL DEFAULT '[]', conteudos_consulta TEXT, data_criacao TEXT, data_contratacao TEXT
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_planos_simplificados_pedido ON planos_simplificados(pedido_token)")
+        if table_exists(cur, "pagamentos_mercadopago"):
+            cur.execute("ALTER TABLE pagamentos_mercadopago ALTER COLUMN aluno_id DROP NOT NULL")
+
         # Cloudflare R2: banco guarda apenas chave/metadados. Campos antigos ficam para leitura legada.
         for sql in [
             "ALTER TABLE contratos_alunos ADD COLUMN IF NOT EXISTS assinatura_r2_key TEXT",

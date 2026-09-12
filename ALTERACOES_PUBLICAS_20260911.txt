@@ -1,0 +1,48 @@
+SIGEU EDUCACIONAL — AJUSTES PUBLICOS 11/09/2026
+
+ESCOPO ALTERADO
+- Somente fluxo publico de consulta/contratacao, paginas SEO, aparencia publica e migracao necessaria.
+- Redirecionamento 301 campusvirtualfacop.com.br -> sigeueducacional.com.br preservado.
+
+PAGINAS SEO
+- 24 paginas publicas integradas via blueprint seo_public_pages.py.
+- Sitemap principal inclui as 24 URLs.
+- Dados estruturados, canonical, Open Graph, FAQ, breadcrumbs e CTAs CONTRATE AQUI.
+- WhatsApp de destino: 5521990020262, sem exposicao visual do numero nas paginas publicas revisadas.
+
+CONSULTA PUBLICA DE DISCIPLINA
+- Antes do pagamento nao e criado plano de ensino oficial completo.
+- A consulta publica gera somente uma sintese/plano simplificado com disciplina, ementa e nomes das unidades.
+- O aluno ve linguagem de consulta/localizacao de disciplina, sem informacao sobre IA ou geracao interna.
+- Planos simplificados ficam armazenados em planos_simplificados.
+- Disciplina/plano oficial completo sao efetivados somente apos pagamento aprovado.
+- Plano institucional legado so e reutilizado se passar pelo validador visual atual; caso contrario o plano oficial e regenerado apos pagamento.
+
+CONTRATACAO
+- Dados pre-pagamento sao mantidos como intencao de contratacao.
+- Cadastro academico efetivo e situacao financeira paga sao criados apos confirmacao do pagamento.
+- Termo de adesao reforcado com SIGEU como responsavel operacional/academico e FACOP como certificadora parceira, quando aplicavel.
+
+APARENCIA PUBLICA
+- Cinza academico mantido como base.
+- Cores do logotipo aplicadas como acentos: rosa, vinho/roxo, azul, turquesa e laranja.
+- Ajustes responsivos para desktop, tablet e celular.
+- Pagina de validacao de documentos reorganizada para evitar sobreposicao/quebra de cabecalho, conteudo e rodape.
+- CTAs publicos exibem CONTRATE AQUI.
+
+ARQUIVOS NUCLEARES PRESERVADOS SEM ALTERACAO
+- api_planos.py
+- documentos_institucionais.py
+- plano_ensino.py
+- db_pool.py
+
+VALIDACOES
+- app.py, migrate.py e seo_public_pages.py compilados com sucesso.
+- 96 templates Jinja analisados sem erro.
+- 24 paginas SEO presentes.
+- Sem colisao estatica entre as rotas SEO e as rotas exatas existentes do app.
+- Pasta de imagens preservada em static/img.
+
+MIGRACAO
+- migrate.py cria planos_simplificados e permite aluno_id nulo na cobranca publica pre-pagamento.
+- O Procfile executa python migrate.py antes do gunicorn, portanto a migracao roda no deploy normal do Render.
