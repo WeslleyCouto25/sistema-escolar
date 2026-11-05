@@ -28,6 +28,10 @@ import json
 import plano_ensino
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+from sigeu_solucoes_digitais import solucoes_digitais_bp
+app.register_blueprint(solucoes_digitais_bp)
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -14377,9 +14381,6 @@ def sitemap_xml():
 def robots_txt():
     txt = f"User-agent: *\nAllow: /\nDisallow: /mew/\nDisallow: /api/\nSitemap: {_BASE_PUBLICA}/sitemap.xml\n"
     return app.response_class(txt, mimetype="text/plain")
-
-from sigeu_solucoes_digitais import solucoes_digitais_bp
-app.register_blueprint(solucoes_digitais_bp)
 
 if __name__ == "__main__":
     # Em desenvolvimento local, faz a mesma migração usada pelo Procfile do Render.
