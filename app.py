@@ -1,87 +1,182 @@
+
+# ============================================================
+# IMPORTACOES
+# ============================================================
+
 from pydoc import html
+import os
 import re
-from werkzeug.utils import secure_filename
 import json
 import time
 import random
-from flask import flash
 import string
-from datetime import datetime
-import hashlib
-import random
-from datetime import datetime
-from flask import Flask, render_template, render_template_string, request, redirect, session, url_for, jsonify, flash, send_file
-import os
-import secrets
-import mercadopago
-from werkzeug.security import generate_password_hash, check_password_hash
 import hashlib
 import secrets
-import qrcode
-import qrcode.image.svg
 import base64
-from io import BytesIO
-from markupsafe import escape
-from pathlib import Path
-import hashlib
-import json
-import plano_ensino
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
-from sigeu_solucoes_digitais import solucoes_digitais_bp
-app.register_blueprint(solucoes_digitais_bp)
-
-from dotenv import load_dotenv
-load_dotenv()
-
-app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
-
-from api_planos import planos_bp
-app.register_blueprint(planos_bp, url_prefix='/api')
-
-from seo_public_pages import seo_pages_bp, SEO_PAGES
-app.register_blueprint(seo_pages_bp)
-
-import os
 import tempfile
 import threading
+
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from io import BytesIO
+from pathlib import Path
+
+import mercadopago
 import psycopg2
+import qrcode
+import qrcode.image.svg
+
+from flask import (
+    Flask,
+    render_template,
+    render_template_string,
+    request,
+    redirect,
+    session,
+    url_for,
+    jsonify,
+    flash,
+    send_file,
+)
+
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from markupsafe import escape
+from dotenv import load_dotenv
 from openpyxl import Workbook, load_workbook
+
+import plano_ensino
 
 from db_pool import get_db_connection, pool_stats
 from perf_monitor import install_perf_monitor, current_rss_mb
-from pdf_tools import render_html_to_pdf_file, render_html_to_pdf_bytes, merge_pdf_files
+from pdf_tools import (
+    render_html_to_pdf_file,
+    render_html_to_pdf_bytes,
+    merge_pdf_files,
+)
 from r2_storage import (
-    R2NotConfigured, decode_data_url, delete_object, extension_for_mime,
-    guess_content_type, is_configured as r2_is_configured, make_key,
-    presigned_url as r2_presigned_url, upload_bytes as r2_upload_bytes,
-    upload_fileobj as r2_upload_fileobj, upload_path as r2_upload_path,
+    R2NotConfigured,
+    decode_data_url,
+    delete_object,
+    extension_for_mime,
+    guess_content_type,
+    is_configured as r2_is_configured,
+    make_key,
+    presigned_url as r2_presigned_url,
+    upload_bytes as r2_upload_bytes,
+    upload_fileobj as r2_upload_fileobj,
+    upload_path as r2_upload_path,
 )
 
-# Evita uploads ilimitados. O arquivo é transmitido para o R2 sem ser transformado em base64.
-app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+
+# ============================================================
+# VARIAVEIS DE AMBIENTE
+# ============================================================
+
+load_dotenv()
+
+
+# ============================================================
+# INICIALIZACAO DO FLASK
+# ============================================================
+
+app = Flask(__name__)
+
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY",
+    secrets.token_hex(32)
+)
+
+
+# ============================================================
+# REGISTRO DOS BLUEPRINTS
+# ============================================================
+
+# API de planos
+from api_planos import planos_bp
+
+app.register_blueprint(
+    planos_bp,
+    url_prefix="/api"
+)
+
+
+# Paginas publicas de SEO existentes
+from seo_public_pages import seo_pages_bp, SEO_PAGES
+
+app.register_blueprint(seo_pages_bp)
+
+
+# Novas paginas comerciais de Solucoes Digitais
+from sigeu_solucoes_digitais import solucoes_digitais_bp
+
+app.register_blueprint(solucoes_digitais_bp)
+
+
+# ============================================================
+# CONFIGURACOES GERAIS
+# ============================================================
+
+# Evita uploads ilimitados.
+# O arquivo e transmitido para o R2 sem ser transformado
+# em base64.
+
+app.config["MAX_CONTENT_LENGTH"] = (
+    int(os.getenv("MAX_UPLOAD_MB", "50")) * 1024 * 1024
+)
+
 install_perf_monitor(app)
 
-# Migração permanente de domínio: preserva a rota e a query string.
-# Somente o domínio antigo é redirecionado; sigeueducacional.com.br continua sendo servido normalmente.
+
+# ============================================================
+# REDIRECIONAMENTO DO DOMINIO ANTIGO
+# ============================================================
+
+# Migracao permanente de dominio:
+# preserva a rota e a query string.
+# Somente o dominio antigo e redirecionado;
+# sigeueducacional.com.br continua sendo servido normalmente.
+
 @app.before_request
 def redirecionar_campus_virtual_para_sigeu():
-    host = (request.host or "").split(":", 1)[0].lower().rstrip(".")
-    if host in {"campusvirtualfacop.com.br", "www.campusvirtualfacop.com.br"}:
-        destino = "https://sigeueducacional.com.br" + (request.full_path or "/")
+
+    host = (
+        (request.host or "")
+        .split(":", 1)[0]
+        .lower()
+        .rstrip(".")
+    )
+
+    if host in {
+        "campusvirtualfacop.com.br",
+        "www.campusvirtualfacop.com.br",
+    }:
+
+        destino = (
+            "https://sigeueducacional.com.br"
+            + (request.full_path or "/")
+        )
+
         if destino.endswith("?"):
             destino = destino[:-1]
+
         return redirect(destino, code=301)
 
 
-# Bloqueio barato de scanners conhecidos antes de abrir conexão com o banco.
+# ============================================================
+# PROTECAO CONTRA SCANNERS
+# ============================================================
+
+# Bloqueio barato de scanners conhecidos
+# antes de abrir conexao com o banco.
+
 _SCANNER_PATH_RE = re.compile(
     r"(?:^|/)(?:\.env(?:\.|$)|\.git(?:/|$)|phpinfo(?:\.php)?$|wp-config(?:\.php)?|"
     r"service-account\.json$|credentials\.json$|gcp-(?:key|credentials)\.json$|firebase-(?:key|adminsdk)\.json$|"
-    r"_profiler(?:/|$)|_ignition(?:/|$)|server-status(?:\.php)?$)", re.I
+    r"_profiler(?:/|$)|_ignition(?:/|$)|server-status(?:\.php)?$)",
+    re.I
 )
+
 
 @app.before_request
 def bloquear_scanners_comuns():
