@@ -1,0 +1,14 @@
+.sigeu-catalogo-250{background:#f1f7fa;color:#142238;font-family:system-ui,Arial,sans-serif;padding:76px 20px;border-block:1px solid #d5e2ed}
+.sigeu-catalogo-250 *{box-sizing:border-box}.sigeu-catalogo-250 .sigeu-max{width:min(1160px,100%);margin:auto}
+.sigeu-catalogo-250 .sigeu-supra{font-size:.77rem;color:#006f88;font-weight:850;letter-spacing:.14em;text-transform:uppercase}
+.sigeu-catalogo-250 h2{font-family:inherit;font-weight:830;color:#152c47;font-size:clamp(2rem,4.3vw,3.25rem);letter-spacing:-.04em;line-height:1.16;margin:12px 0 20px}
+.sigeu-catalogo-250 .sigeu-desc{font-size:1rem;line-height:1.85;max-width:840px;color:#395269}
+.sigeu-catalogo-250 .sigeu-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:30px 0}
+.sigeu-catalogo-250 .sigeu-card{display:block;text-decoration:none;color:#1b3550;padding:23px;background:#fff;border:1px solid #dce6ee;border-radius:18px;box-shadow:0 14px 30px #12253a0a}
+.sigeu-catalogo-250 .sigeu-card:hover{border-color:#01839a;transform:translateY(-2px)}
+.sigeu-catalogo-250 .sigeu-card span{display:block;color:#007d88;letter-spacing:.12em;font-size:.68rem;font-weight:840}
+.sigeu-catalogo-250 .sigeu-card strong{display:block;margin:12px 0;font-size:1.15rem;line-height:1.3}
+.sigeu-catalogo-250 .sigeu-card p{color:#52657a;font-size:.85rem;line-height:1.75;margin:0}
+.sigeu-catalogo-250 .sigeu-note{color:#4b5f72;font-size:.82rem;line-height:1.65}
+@media(max-width:850px){.sigeu-catalogo-250 .sigeu-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:590px){.sigeu-catalogo-250{padding:55px 16px}.sigeu-catalogo-250 .sigeu-cards{grid-template-columns:1fr}}
