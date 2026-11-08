@@ -73,5 +73,62 @@ class TestPicPayMew(unittest.TestCase):
                 pp._criar_link_picpay("Aluno", 1, 5000, "SE1234", "https://exemplo.org/")
 
 
+    def test_template_do_dashboard_jinja_valido(self):
+        from jinja2 import Environment
+        source = Path("templates/mew/alunos.html").read_text(encoding="utf-8")
+        Environment().parse(source)
+
+    def test_webhook_payed_atualiza_financeiro(self):
+        from decimal import Decimal
+
+        class FakeCursor:
+            def __init__(self, rows):
+                self.rows = list(rows)
+                self.queries = []
+            def execute(self, sql, params=None):
+                self.queries.append(sql)
+            def fetchone(self):
+                return self.rows.pop(0)
+
+        class FakeConn:
+            def __init__(self, rows):
+                self.cur = FakeCursor(rows)
+                self.commits = 0
+            def cursor(self):
+                return self.cur
+            def commit(self):
+                self.commits += 1
+            def rollback(self):
+                pass
+            def close(self):
+                pass
+
+        first = FakeConn([{"id": 1, "aluno_id": 7, "link_id": "link1", "valor_centavos": 50692}])
+        second = FakeConn([{"id": 1, "status": "pendente"},
+                           {"id": 9, "status": "pendente", "valor_total": Decimal("506.92")}])
+        app = Flask(__name__)
+        app.register_blueprint(pp.picpay_bp)
+        event = {"data": {
+            "transaction": {"id": "tr123", "status": "PAYED", "amount": 50692},
+            "charge": {"paymentLinkId": "link1"}
+        }, "type": "PAYMENT"}
+        with (
+            patch.dict(os.environ, {"PICPAY_WEBHOOK_API_KEY": "webhook-pass"}),
+            patch.object(pp, "get_db_connection", side_effect=[first, second]),
+            patch.object(pp, "_confirmar_transacao", return_value=True),
+            patch.object(pp, "_api", return_value={}) as api,
+            patch.object(pp, "_paid_callback") as email,
+        ):
+            response = app.test_client().post(
+                "/webhook/picpay", json=event,
+                headers={"Authorization": "webhook-pass"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json["ok"])
+        self.assertEqual(second.commits, 1)
+        self.assertTrue(any("UPDATE situacao_financeira" in q for q in second.cur.queries))
+        self.assertEqual(api.call_args.args[1], "/paymentlink/link1/inactive")
+        email.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()
