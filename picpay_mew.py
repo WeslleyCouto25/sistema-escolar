@@ -169,7 +169,6 @@ def _criar_link_picpay(nome, aluno_id, valor_centavos, pedido, retorno):
 
 def criar_cobranca_picpay(aluno_id, nome, email, valor_total, contrato_id=None):
     """Cria ou reaproveita a cobrança pendente de um aluno, pelo valor financeiro salvo."""
-    init_picpay_db()
     cents = _centavos(valor_total)
     conn = get_db_connection()
     try:
@@ -212,7 +211,6 @@ def criar_cobranca_picpay(aluno_id, nome, email, valor_total, contrato_id=None):
 
 
 def ultima_cobranca_picpay(aluno_id):
-    init_picpay_db()
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -229,7 +227,6 @@ def ultima_cobranca_picpay(aluno_id):
 def pagina_pagamento_picpay(token):
     if not re.fullmatch(r"[A-Za-z0-9_\-]{20,80}", token):
         abort(404)
-    init_picpay_db()
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -316,7 +313,6 @@ def webhook_picpay():
     if status not in ("PAYED", "REFUNDED", "PARTREFUNDED"):
         return jsonify(ok=True), 200
 
-    init_picpay_db()
     conn = get_db_connection()
     try:
         cur = conn.cursor()
