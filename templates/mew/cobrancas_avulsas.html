@@ -63,7 +63,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
   <strong>✓ Página gerada. Envie este endereço ao cliente:</strong><br>
   {% set nova_url = base_url ~ '/cobranca/' ~ criada %}
   <a href="{{ nova_url }}" target="_blank" rel="noopener">{{ nova_url }}</a>
-  <div class="rowlinks"><button type="button" onclick="copiar('{{ nova_url }}')">Copiar link</button>
+  <div class="rowlinks"><button type="button" data-copy="{{ nova_url }}" onclick="copiar(this.dataset.copy)">Copiar link</button>
     <a href="{{ nova_url }}" target="_blank" rel="noopener">Pré-visualizar a jornada</a></div>
 </div>
 {% endif %}
@@ -136,7 +136,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
       <div class="kv">{{ 'PicPay' if item.forma_cobranca == 'link' else 'QR Code' }} · {{ item.criado_em.strftime('%d/%m/%Y') }}</div>
       {% set url_compartilhar = base_url ~ '/cobranca/' ~ item.token %}
       <div class="rowlinks">
-        <button type="button" onclick="copiar('{{ url_compartilhar }}')">Copiar página</button>
+        <button type="button" data-copy="{{ url_compartilhar }}" onclick="copiar(this.dataset.copy)">Copiar página</button>
         <a href="{{ url_compartilhar }}" target="_blank" rel="noopener">Abrir jornada</a>
         <a href="/mew/cobrancas-avulsas/{{ item.id }}/contrato" target="_blank" rel="noopener">Contrato</a>
         {% if item.assinado_em %}
