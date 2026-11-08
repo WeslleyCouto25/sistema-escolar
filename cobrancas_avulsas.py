@@ -252,7 +252,7 @@ def _get(token):
         item = cur.fetchone()
     finally:
         conn.close()
-    if not item:
+    if not item or item.get("status") == "rascunho":
         abort(404)
     return item
 
@@ -401,6 +401,145 @@ def administrar_cobrancas():
     )
 
 
+
+@cobrancas_avulsas_bp.route("/mew/cobrancas-avulsas/<int:id_>/editar", methods=["GET", "POST"])
+def editar_rascunho(id_):
+    """Completa o rascunho no MEW sem colocar dados pessoais no código-fonte."""
+    if not _admin():
+        abort(403)
+    item = _get_admin(id_)
+    if item["status"] != "rascunho":
+        abort(409, "Cobranças publicadas não podem ser editadas; emita outro contrato.")
+    erro = None
+    if request.method == "POST":
+        _check_csrf()
+        acao = request.form.get("acao")
+        if acao not in ("salvar", "publicar"):
+            abort(400)
+        nome = (request.form.get("nome") or "").strip()
+        cpf = re.sub(r"\D", "", request.form.get("cpf") or "")
+        email = (request.form.get("email") or "").strip().lower()
+        matricula = re.sub(r"\D", "", request.form.get("matricula") or "")
+        if request.form.get("email_matricula") == "1":
+            # Só gera endereço acadêmico quando o RA foi informado, sem inventá-lo.
+            if not 5 <= len(matricula) <= 12:
+                erro = "Informe a matrícula/RA válido para gerar o e-mail institucional."
+            else:
+                email = matricula + "@sigeu.com"
+        telefone = (request.form.get("telefone") or "").strip()
+        endereco = (request.form.get("endereco") or "").strip()
+        servico = (request.form.get("servico") or "").strip()
+        descricao = (request.form.get("descricao") or "").strip()
+        forma = request.form.get("forma_cobranca") or item["forma_cobranca"]
+        juros = request.form.get("juros") or item["juros"]
+        link = (request.form.get("link_pagamento") or "").strip()
+        try:
+            cents = _parse_value(request.form.get("valor"))
+            parcelas = int(request.form.get("parcelas") or 1)
+            if not 1 <= parcelas <= 12 or juros not in ("sem_juros", "conforme_checkout"):
+                raise ValueError("Parcelamento inválido.")
+            if forma not in ("link", "qr"):
+                raise ValueError("Meio de pagamento inválido.")
+            if len(nome) > 160 or len(email) > 180 or len(telefone) > 40 or len(endereco) > 300:
+                raise ValueError("Dados cadastrais acima do tamanho permitido.")
+            if len(servico) > 150 or len(descricao) > 1800:
+                raise ValueError("Descrição excessivamente longa.")
+            if not erro and acao == "publicar":
+                if len(nome) < 5 or not _cpf_valido(cpf):
+                    raise ValueError("Nome completo e CPF válido são necessários para publicar.")
+                if "@" not in email or len(email.split("@", 1)[0]) < 2:
+                    raise ValueError("Informe e-mail válido ou matrícula/RA para gerar o institucional.")
+                if len(servico) < 5 or len(descricao) < 8:
+                    raise ValueError("Informe objeto e descrição contratual completa.")
+                if (cents != item["valor_centavos"] or parcelas != item["parcelas"]
+                    or juros != item["juros"]):
+                    raise ValueError("Condições financeiras do rascunho pré-aprovado não podem ser alteradas na publicação.")
+                if request.form.get("condicoes_conferidas") != "1":
+                    raise ValueError("É obrigatório conferir valor, parcelamento e favorecido no checkout ou QR.")
+                if not r2_is_configured():
+                    raise ValueError("Configure Cloudflare R2 antes de publicar contratos digitais.")
+                if forma == "link":
+                    link = _picpay_url(link)
+                else:
+                    link = None
+            elif forma == "link" and link:
+                link = _picpay_url(link)
+            elif forma == "qr":
+                link = None
+            file = request.files.get("qr_arquivo")
+            raw = file.read(_MAX_QR + 1) if file and file.filename else b""
+            qr_key = item.get("qr_r2_key")
+            uploaded = False
+            if raw:
+                if forma != "qr":
+                    raise ValueError("Escolha QR Code como forma de cobrança para anexar a imagem.")
+                if not r2_is_configured():
+                    raise ValueError("Cloudflare R2 não configurado.")
+                cleaned, mime = _verified_image(raw, {"PNG", "JPEG", "WEBP"}, _MAX_QR)
+                qr_key = make_key("cobrancas-avulsas/qrcode", "codigo.png", id_, secrets.token_hex(6))
+                r2_upload_bytes(cleaned, qr_key, mime, {"tipo": "qr_pagamento", "contrato": str(id_)})
+                uploaded = True
+            if acao == "publicar" and forma == "qr" and not qr_key:
+                raise ValueError("Anexe um QR Code válido antes de publicar.")
+            if erro:
+                raise ValueError(erro)
+            c = {
+                "nome": nome, "cpf": cpf, "email": email, "telefone": telefone,
+                "endereco": endereco, "servico": servico, "descricao": descricao,
+                "numero_contrato": item["numero_contrato"],
+                "valor_centavos": cents, "parcelas": parcelas,
+                "juros": juros, "forma_cobranca": forma,
+            }
+            html = (render_template("contrato_cobranca_avulsa.html", **_contract_data(c))
+                    if acao == "publicar" else "")
+            sha = hashlib.sha256(html.encode("utf-8")).hexdigest() if html else ""
+            conn = get_db_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE cobrancas_avulsas SET nome=%s, cpf=%s, email=%s,telefone=%s,
+                    endereco=%s,servico=%s,descricao=%s,valor_centavos=%s,
+                    parcelas=%s,juros=%s,forma_cobranca=%s,link_pagamento=%s,
+                    qr_r2_key=%s,contrato_html=%s,contrato_sha256=%s,
+                    status=%s,atualizado_em=NOW()
+                    WHERE id=%s AND status='rascunho'
+                """, (nome, cpf, email, telefone, endereco, servico, descricao, cents,
+                      parcelas, juros, forma, link, qr_key, html, sha,
+                      "aguardando_assinatura" if acao == "publicar" else "rascunho", id_))
+                if cur.rowcount != 1:
+                    raise ValueError("Este rascunho já foi publicado.")
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                if uploaded:
+                    try:
+                        delete_object(qr_key)
+                    except Exception:
+                        pass
+                raise
+            finally:
+                conn.close()
+            return redirect(url_for(".administrar_cobrancas",
+                                    criada=item["token"] if acao == "publicar" else None))
+        except (ValueError, TypeError) as exc:
+            erro = str(exc)
+        except Exception:
+            current_app.logger.exception("Falha ao salvar rascunho de cobrança avulsa %s", id_)
+            erro = "Erro ao salvar a cobrança. Confira o armazenamento e os dados."
+        # Recarrega dados do formulário; campos pessoais ficam apenas no navegador autenticado.
+        item = dict(item)
+        item.update({
+            "nome": nome, "cpf": cpf, "email": email,
+            "telefone": telefone, "endereco": endereco, "servico": servico,
+            "descricao": descricao, "valor_centavos": cents if "cents" in locals()
+            else item["valor_centavos"],
+            "parcelas": parcelas if "parcelas" in locals() else item["parcelas"],
+            "juros": juros, "forma_cobranca": forma, "link_pagamento": link,
+        })
+    return render_template("mew/editar_cobranca_avulsa.html", c=item, erro=erro,
+                           csrf_token=_csrf(), money=_money)
+
+
 @cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/confirmar-pagamento")
 def confirmar_manual(id_):
     if not _admin():
@@ -447,6 +586,8 @@ def contrato_admin(id_):
     if not _admin():
         abort(403)
     item = _get_admin(id_)
+    if item["status"] == "rascunho":
+        abort(409, "Conclua os dados do rascunho para gerar o contrato.")
     return _contrato_documento(item)
 
 
