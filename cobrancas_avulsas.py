@@ -257,6 +257,27 @@ def publicar_rascunho_individual_95984():
         conn.close()
 
 
+def gerar_matricula_interna_unica():
+    """Gera RA interno de 8 dígitos ainda não utilizado por alunos ou cobranças."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        for _ in range(50):
+            ra = str(10_000_000 + secrets.randbelow(90_000_000))
+            cur.execute("SELECT EXISTS(SELECT 1 FROM alunos WHERE ra=%s) AS existe", (ra,))
+            if cur.fetchone()["existe"]:
+                continue
+            cur.execute(
+                "SELECT EXISTS(SELECT 1 FROM cobrancas_avulsas WHERE matricula=%s) AS existe",
+                (ra,),
+            )
+            if not cur.fetchone()["existe"]:
+                return ra
+        raise RuntimeError("Não foi possível gerar RA interno único.")
+    finally:
+        conn.close()
+
+
 def _admin():
     return bool(session.get("mew_admin"))
 
@@ -528,11 +549,14 @@ def editar_rascunho(id_):
         email = (request.form.get("email") or "").strip().lower()
         matricula = re.sub(r"\D", "", request.form.get("matricula") or "")
         if request.form.get("email_matricula") == "1":
-            # Só gera endereço acadêmico quando o RA foi informado, sem inventá-lo.
             if not 5 <= len(matricula) <= 12:
                 erro = "Informe a matrícula/RA válido para gerar o e-mail institucional."
             else:
                 email = matricula + "@sigeu.com"
+        if acao == "publicar" and request.form.get("gerar_matricula") == "1":
+            matricula = gerar_matricula_interna_unica()
+            email = matricula + "@sigeu.com"
+            erro = None
         telefone = (request.form.get("telefone") or "").strip()
         endereco = (request.form.get("endereco") or "").strip()
         servico = (request.form.get("servico") or "").strip()
@@ -593,7 +617,7 @@ def editar_rascunho(id_):
             c = {
                 "nome": nome, "cpf": cpf, "email": email, "telefone": telefone,
                 "endereco": endereco, "servico": servico, "descricao": descricao,
-                "numero_contrato": item["numero_contrato"],
+                "numero_contrato": item["numero_contrato"], "matricula": matricula or item.get("matricula"),
                 "valor_centavos": cents, "parcelas": parcelas,
                 "juros": juros, "forma_cobranca": forma,
             }
@@ -608,10 +632,11 @@ def editar_rascunho(id_):
                     endereco=%s,servico=%s,descricao=%s,valor_centavos=%s,
                     parcelas=%s,juros=%s,forma_cobranca=%s,link_pagamento=%s,
                     qr_r2_key=%s,contrato_html=%s,contrato_sha256=%s,
-                    status=%s,atualizado_em=NOW()
+                    matricula=%s,status=%s,atualizado_em=NOW()
                     WHERE id=%s AND status='rascunho'
                 """, (nome, cpf, email, telefone, endereco, servico, descricao, cents,
                       parcelas, juros, forma, link, qr_key, html, sha,
+                      matricula or item.get("matricula"),
                       "aguardando_assinatura" if acao == "publicar" else "rascunho", id_))
                 if cur.rowcount != 1:
                     raise ValueError("Este rascunho já foi publicado.")
