@@ -153,32 +153,81 @@ def seed_rascunhos_cobranca_avulsa():
                 ON CONFLICT (numero_contrato) DO NOTHING
             """, (secrets.token_urlsafe(36), numero, nome, servico, descricao,
                   cents, parcelas, juros, forma, link, _VERSION))
-        # Completa a identificação do rascunho existente sem publicar PII no GitHub.
-        # O valor reside somente no ambiente privado do Render.
-        dados_json = os.getenv("SIGEU_RASCUNHO_95984_CLIENTE_JSON", "").strip()
-        if dados_json:
-            dados = json.loads(dados_json)
-            if not isinstance(dados, dict):
-                raise ValueError("Identificação do rascunho: JSON inválido.")
-            nome = str(dados.get("nome") or "").strip()
-            cpf = re.sub(r"\\D", "", str(dados.get("cpf") or ""))
-            telefone = str(dados.get("telefone") or "").strip()
-            endereco = str(dados.get("endereco") or "").strip()
-            if not 5 <= len(nome) <= 160 or not _cpf_valido(cpf):
-                raise ValueError("Identificação do rascunho: nome ou CPF inválido.")
-            if len(telefone) > 40 or len(endereco) > 300:
-                raise ValueError("Identificação do rascunho: campo excedeu o limite.")
-            cur.execute("""
-                UPDATE cobrancas_avulsas
-                SET nome=COALESCE(NULLIF(TRIM(nome), ''), %s),
-                    cpf=COALESCE(NULLIF(TRIM(cpf), ''), %s),
-                    telefone=COALESCE(NULLIF(TRIM(telefone), ''), %s),
-                    endereco=COALESCE(NULLIF(TRIM(endereco), ''), %s),
-                    atualizado_em=NOW()
-                WHERE numero_contrato='SIGEU-AV-DISC-95984'
-                  AND status='rascunho'
-            """, (nome, cpf, telefone, endereco))
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+
+def publicar_rascunho_individual_95984():
+    """Publica somente o rascunho pré-existente usando dados privados do Render.
+
+    Seguro para reexecutar: não altera contratos já publicados, assinados,
+    quitados ou cancelados. A URL individual não é escrita no GitHub.
+    """
+    raw = os.getenv("SIGEU_RASCUNHO_95984_CLIENTE_JSON", "").strip()
+    token = os.getenv("SIGEU_RASCUNHO_95984_TOKEN", "").strip()
+    if not raw:
+        return False
+    dados = json.loads(raw)
+    if not isinstance(dados, dict):
+        raise ValueError("JSON de contratação inválido.")
+    nome = str(dados.get("nome") or "").strip()
+    cpf = re.sub(r"\D", "", str(dados.get("cpf") or ""))
+    telefone = str(dados.get("telefone") or "").strip()
+    endereco = str(dados.get("endereco") or "").strip()
+    email = str(dados.get("email") or "").strip().lower()
+    if not 5 <= len(nome) <= 160 or not _cpf_valido(cpf):
+        raise ValueError("Nome ou CPF do contratante inválido.")
+    if len(telefone) > 40 or len(endereco) > 300 or len(email) > 180:
+        raise ValueError("Campo cadastral acima do limite.")
+    if email and "@" not in email:
+        raise ValueError("E-mail informado é inválido.")
+    if not re.fullmatch(r"[A-Za-z0-9_\-]{40,100}", token):
+        raise ValueError("Token individual não configurado corretamente.")
+    if not r2_is_configured():
+        raise RuntimeError("Cloudflare R2 deve estar configurado para a assinatura e a fotografia.")
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT * FROM cobrancas_avulsas "
+            "WHERE numero_contrato=%s FOR UPDATE",
+            ("SIGEU-AV-DISC-95984",),
+        )
+        atual = cur.fetchone()
+        if not atual:
+            raise RuntimeError("Rascunho SIGEU-AV-DISC-95984 não encontrado.")
+        if atual["status"] != "rascunho":
+            # Nunca troca um token nem muda documento já publicado/assinado.
+            conn.rollback()
+            return False
+        if (atual["valor_centavos"] != 95984 or atual["parcelas"] != 8
+                or atual["forma_cobranca"] != "link"):
+            raise RuntimeError("Condições comerciais divergentes: publicação bloqueada.")
+
+        item = dict(atual)
+        item.update(nome=nome, cpf=cpf, email=email, telefone=telefone,
+                    endereco=endereco, token=token)
+        item["link_pagamento"] = _picpay_url(atual["link_pagamento"])
+        html = render_template("contrato_cobranca_avulsa.html", **_contract_data(item))
+        sha = hashlib.sha256(html.encode("utf-8")).hexdigest()
+        cur.execute("""
+            UPDATE cobrancas_avulsas
+               SET nome=%s, cpf=%s, email=%s, telefone=%s, endereco=%s,
+                   token=%s, contrato_html=%s, contrato_sha256=%s,
+                   status='aguardando_assinatura', atualizado_em=NOW()
+             WHERE id=%s AND status='rascunho'
+        """, (nome, cpf, email, telefone, endereco, token,
+              html, sha, atual["id"]))
+        if cur.rowcount != 1:
+            raise RuntimeError("Rascunho alterado durante a publicação.")
+        conn.commit()
+        return True
     except Exception:
         conn.rollback()
         raise
