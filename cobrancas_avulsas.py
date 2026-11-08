@@ -93,6 +93,9 @@ def init_cobrancas_avulsas_db():
                 atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        # Matrícula interna única da jornada avulsa; não cria matrícula acadêmica.
+        cur.execute("ALTER TABLE cobrancas_avulsas ADD COLUMN IF NOT EXISTS matricula TEXT")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cob_avulsas_matricula ON cobrancas_avulsas(matricula)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_cob_avulsas_data ON cobrancas_avulsas(id DESC)")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS cobrancas_avulsas_historico (
@@ -188,6 +191,8 @@ def publicar_rascunho_individual_95984():
         raise ValueError("E-mail informado é inválido.")
     if not re.fullmatch(r"[A-Za-z0-9_\-]{40,100}", token):
         raise ValueError("Token individual não configurado corretamente.")
+    # E-mail de identificação: vinculado ao RA interno emitido no banco.
+    # A criação de uma caixa postal real é tarefa separada.
     if not r2_is_configured():
         raise RuntimeError("Cloudflare R2 deve estar configurado para a assinatura e a fotografia.")
 
@@ -210,19 +215,36 @@ def publicar_rascunho_individual_95984():
                 or atual["forma_cobranca"] != "link"):
             raise RuntimeError("Condições comerciais divergentes: publicação bloqueada.")
 
+        # Não reaproveitar RA acadêmico de outro aluno, nem de outro contrato.
+        ra = str(atual.get("matricula") or "").strip()
+        if not ra:
+            for _ in range(40):
+                candidato = str(10_000_000 + secrets.randbelow(90_000_000))
+                cur.execute("SELECT EXISTS(SELECT 1 FROM alunos WHERE ra=%s) AS existe", (candidato,))
+                existe_aluno = bool(cur.fetchone()["existe"])
+                cur.execute(
+                    "SELECT EXISTS(SELECT 1 FROM cobrancas_avulsas WHERE matricula=%s) AS existe",
+                    (candidato,),
+                )
+                if not existe_aluno and not cur.fetchone()["existe"]:
+                    ra = candidato
+                    break
+        if not ra:
+            raise RuntimeError("Não foi possível gerar matrícula interna única.")
+        email = f"{ra}@sigeu.com"
         item = dict(atual)
         item.update(nome=nome, cpf=cpf, email=email, telefone=telefone,
-                    endereco=endereco, token=token)
+                    endereco=endereco, token=token, matricula=ra)
         item["link_pagamento"] = _picpay_url(atual["link_pagamento"])
         html = render_template("contrato_cobranca_avulsa.html", **_contract_data(item))
         sha = hashlib.sha256(html.encode("utf-8")).hexdigest()
         cur.execute("""
             UPDATE cobrancas_avulsas
                SET nome=%s, cpf=%s, email=%s, telefone=%s, endereco=%s,
-                   token=%s, contrato_html=%s, contrato_sha256=%s,
+                   matricula=%s, token=%s, contrato_html=%s, contrato_sha256=%s,
                    status='aguardando_assinatura', atualizado_em=NOW()
              WHERE id=%s AND status='rascunho'
-        """, (nome, cpf, email, telefone, endereco, token,
+        """, (nome, cpf, email, telefone, endereco, ra, token,
               html, sha, atual["id"]))
         if cur.rowcount != 1:
             raise RuntimeError("Rascunho alterado durante a publicação.")
