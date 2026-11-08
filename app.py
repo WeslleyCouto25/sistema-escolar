@@ -2615,7 +2615,6 @@ def mew_alunos():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
     disciplinas = cursor.fetchall()
-    init_picpay_db()
 
     if request.method == "POST":
         nome = request.form.get("nome")
@@ -2881,10 +2880,10 @@ def mew_gerar_cobranca_aluno(aluno_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.id, a.nome, a.email, sf.valor_total
+        SELECT a.id, a.nome, a.email, sf.valor_total, sf.status AS status_financeiro
         FROM alunos a
         LEFT JOIN LATERAL (
-            SELECT valor_total FROM situacao_financeira
+            SELECT valor_total, status FROM situacao_financeira
             WHERE aluno_id = a.id ORDER BY id DESC LIMIT 1
         ) sf ON TRUE
         WHERE a.id = %s
@@ -2896,6 +2895,8 @@ def mew_gerar_cobranca_aluno(aluno_id):
 
     if not aluno or not aluno["valor_total"]:
         return redirect("/mew/alunos?erro_mp=Aluno+sem+valor+financeiro+cadastrado")
+    if aluno.get("status_financeiro") == "pago":
+        return redirect("/mew/alunos?erro_mp=Aluno+ja+possui+pagamento+confirmado")
 
     try:
         cobranca = criar_cobranca_picpay(
@@ -9587,7 +9588,6 @@ def controlar_acesso_aluno_pagamento_contrato():
 
 @app.route("/aguardando-pagamento")
 def aguardando_pagamento():
-    init_picpay_db()
     aluno_id = session.get("aluno_id")
     if not aluno_id:
         return redirect(url_for("login"))
