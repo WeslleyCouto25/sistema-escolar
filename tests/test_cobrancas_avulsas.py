@@ -254,5 +254,60 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         res = app_for_tests().test_client().get("/mew/cobrancas-avulsas/4/editar")
         self.assertEqual(res.status_code, 403)
 
+
+    def test_publicacao_gerando_contrato_institucional_por_matricula(self):
+        c = example_item(status="rascunho")
+        c.update({"nome": "", "cpf": "", "email": "", "contrato_html": "",
+                  "telefone": "", "endereco": "", "qr_r2_key": None})
+        select = FakeConnection(c)
+        update = FakeConnection(c)
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+            sess["cobranca_avulsa_csrf"] = "nonce"
+        with patch.object(av, "get_db_connection", side_effect=[select, update]):
+            response = client.post("/mew/cobrancas-avulsas/4/editar", data={
+                "csrf_token": "nonce", "acao": "publicar",
+                "nome": "Cliente Contrato Teste",
+                "cpf": "52998224725", "matricula": "99887766",
+                "email_matricula": "1",
+                "email": "", "telefone": "",
+                "servico": c["servico"],
+                "descricao": c["descricao"],
+                "valor": "959,84", "parcelas": "8", "juros": "sem_juros",
+                "forma_cobranca": "link", "link_pagamento": c["link_pagamento"],
+                "condicoes_conferidas": "1",
+            })
+        self.assertEqual(response.status_code, 302)
+        sql, values = update.executed[-1]
+        self.assertIn("status=%s", sql)
+        self.assertIn("99887766@sigeu.com", values)
+        self.assertEqual(values[-2], "aguardando_assinatura")
+        self.assertIn("Fundamentos", values[13] if len(values) > 13 else str(values))
+        self.assertEqual(update.commits, 1)
+
+    def test_qrcode_obrigatorio_para_publicar_rascunho(self):
+        c = example_item(status="rascunho")
+        c.update({"forma_cobranca": "qr", "qr_r2_key": None,
+                  "nome": "", "cpf": "", "email": "", "telefone": "", "endereco": ""})
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+            sess["cobranca_avulsa_csrf"] = "nonce"
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(c)):
+            response = client.post("/mew/cobrancas-avulsas/4/editar", data={
+                "csrf_token": "nonce", "acao": "publicar",
+                "nome": "Cliente Contrato Teste", "cpf": "52998224725",
+                "email": "teste@example.com",
+                "servico": c["servico"], "descricao": c["descricao"],
+                "valor": "959,84", "parcelas": "8", "juros": "sem_juros",
+                "forma_cobranca": "qr", "condicoes_conferidas": "1",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Anexe um QR Code", response.get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()
