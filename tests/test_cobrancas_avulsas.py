@@ -284,7 +284,7 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         self.assertIn("status=%s", sql)
         self.assertIn("99887766@sigeu.com", values)
         self.assertEqual(values[-2], "aguardando_assinatura")
-        self.assertIn("Fundamentos", values[13] if len(values) > 13 else str(values))
+        self.assertIn("Disciplina isolada", values[13])
         self.assertEqual(update.commits, 1)
 
     def test_qrcode_obrigatorio_para_publicar_rascunho(self):
