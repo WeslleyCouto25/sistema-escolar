@@ -153,6 +153,31 @@ def seed_rascunhos_cobranca_avulsa():
                 ON CONFLICT (numero_contrato) DO NOTHING
             """, (secrets.token_urlsafe(36), numero, nome, servico, descricao,
                   cents, parcelas, juros, forma, link, _VERSION))
+        # Completa a identificação do rascunho existente sem publicar PII no GitHub.
+        # O valor reside somente no ambiente privado do Render.
+        dados_json = os.getenv("SIGEU_RASCUNHO_95984_CLIENTE_JSON", "").strip()
+        if dados_json:
+            dados = json.loads(dados_json)
+            if not isinstance(dados, dict):
+                raise ValueError("Identificação do rascunho: JSON inválido.")
+            nome = str(dados.get("nome") or "").strip()
+            cpf = re.sub(r"\\D", "", str(dados.get("cpf") or ""))
+            telefone = str(dados.get("telefone") or "").strip()
+            endereco = str(dados.get("endereco") or "").strip()
+            if not 5 <= len(nome) <= 160 or not _cpf_valido(cpf):
+                raise ValueError("Identificação do rascunho: nome ou CPF inválido.")
+            if len(telefone) > 40 or len(endereco) > 300:
+                raise ValueError("Identificação do rascunho: campo excedeu o limite.")
+            cur.execute("""
+                UPDATE cobrancas_avulsas
+                SET nome=COALESCE(NULLIF(TRIM(nome), ''), %s),
+                    cpf=COALESCE(NULLIF(TRIM(cpf), ''), %s),
+                    telefone=COALESCE(NULLIF(TRIM(telefone), ''), %s),
+                    endereco=COALESCE(NULLIF(TRIM(endereco), ''), %s),
+                    atualizado_em=NOW()
+                WHERE numero_contrato='SIGEU-AV-DISC-95984'
+                  AND status='rascunho'
+            """, (nome, cpf, telefone, endereco))
         conn.commit()
     except Exception:
         conn.rollback()
