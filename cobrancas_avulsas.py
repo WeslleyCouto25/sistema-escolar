@@ -102,6 +102,54 @@ def init_cobrancas_avulsas_db():
         conn.close()
 
 
+def seed_rascunhos_cobranca_avulsa():
+    """Cria dois rascunhos pedidos no MEW sem expor informações pessoais no GitHub.
+
+    A execução é idempotente. Nenhum link do cliente é publicado até preencher
+    a identificação, validar a condição financeira e assinar o contrato.
+    """
+    entries = (
+        (
+            "SIGEU-AV-DISC-95984", "",
+            "Fundamentos da Psicologia Positiva + Psicologia e Cognição no Trânsito",
+            "Contratação de duas disciplinas isoladas, 80 horas cada, ofertadas no "
+            "formato híbrido com matrícula e validação documental sujeitas aos "
+            "requisitos acadêmicos. Condição comercial: desconto de 20% sobre "
+            "R$ 1.199,80; valor final de R$ 959,84 em até 8 parcelas sem juros "
+            "de R$ 119,98, desde que a condição seja confirmada no checkout.",
+            95984, 8, "sem_juros", "link",
+            "https://link.picpay.com/p/8ad7f361-96ee-45b9-85ce-c5e9b1598bce",
+        ),
+        (
+            "SIGEU-AV-QR-50900", "", "Serviço a confirmar",
+            "Rascunho de cobrança por QR Code. Informar o serviço e conferir "
+            "a descrição contratual antes de disponibilizá-lo ao cliente.",
+            50900, 1, "conforme_checkout", "qr", None,
+        ),
+    )
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        for (numero, nome, servico, descricao, cents, parcelas, juros, forma, link) in entries:
+            cur.execute("""
+                INSERT INTO cobrancas_avulsas (
+                    token,numero_contrato,nome,cpf,email,telefone,endereco,servico,
+                    descricao,valor_centavos,parcelas,juros,forma_cobranca,
+                    link_pagamento,qr_r2_key,status,contrato_html,contrato_sha256,versao
+                )
+                VALUES (%s,%s,%s,'','','','',%s,%s,%s,%s,%s,%s,%s,NULL,
+                        'rascunho','','',%s)
+                ON CONFLICT (numero_contrato) DO NOTHING
+            """, (secrets.token_urlsafe(36), numero, nome, servico, descricao,
+                  cents, parcelas, juros, forma, link, _VERSION))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _admin():
     return bool(session.get("mew_admin"))
 
