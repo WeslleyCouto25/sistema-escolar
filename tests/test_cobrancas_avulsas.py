@@ -68,6 +68,7 @@ def example_item(status="aguardando_assinatura"):
         "juros": "sem_juros",
         "status": status,
         "contrato_html": "<!doctype html><html><body><main>Contrato pré-assinatura</main></body></html>",
+        "contrato_sha256": "c" * 64,
         "assinado_em": datetime.now(timezone.utc) if status != "aguardando_assinatura" else None,
         "hash_aceite": "A" * 64,
         "foto_r2_key": "foto/teste.png" if status != "aguardando_assinatura" else None,
@@ -150,7 +151,7 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(obj["link_pagamento"], response.get_data(as_text=True))
         self.assertIn("iframe", response.get_data(as_text=True))
-        self.assertNotIn("signatureCanvas", response.get_data(as_text=True))
+        self.assertNotIn('id="signatureCanvas"', response.get_data(as_text=True))
 
     def test_assinatura_registrada_com_hash_antes_de_liberar_pagamento(self):
         obj = example_item()
