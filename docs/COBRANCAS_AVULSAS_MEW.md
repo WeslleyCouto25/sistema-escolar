@@ -66,3 +66,41 @@ CI: \`.github/workflows/picpay-mew-tests.yml\`; testa também a integração MEW
   acessíveis por URLs temporárias **somente ao administrador autenticado**.
 - A política institucional deverá prever retenção, eliminação, acesso e resposta a titulares
   de dados em conformidade com a LGPD.
+
+
+## Dois rascunhos pré-preparados para o deploy de novembro/2026
+Na execução de \`python migrate.py\`, \`seed_rascunhos_cobranca_avulsa()\` cria
+somente se não existirem (chave única \`numero_contrato\`):
+- \`SIGEU-AV-DISC-95984\`: duas disciplinas (Fundamentos da Psicologia Positiva;
+  Psicologia e Cognição no Trânsito), 80h cada, preço R$ 959,84, 8x de R$119,98,
+  link PicPay informado pelo contratante. Condição sem juros deve ser conferida
+  no checkout PicPay antes da publicação.
+- \`SIGEU-AV-QR-50900\`: valor R$509,00, 1 parcela provisória, QR pendente,
+  serviço e dados do cliente a confirmar.
+
+**Privacidade:** os scripts de migração não inserem nomes, CPFs, endereços, imagens de
+documentos ou e-mails pessoais no repositório GitHub. O operador completa os
+dados somente no painel MEW, sob sessão administrativa. Não se deve preencher
+identidade real a partir de fotografias sem conferência documental e autorização.
+
+### Publicação dos rascunhos
+1. Faça login no MEW e abra **Cobranças Avulsas**.
+2. Clique **Completar e publicar** no rascunho desejado.
+3. Preencha identificação e serviço. Para e-mail \`RA@sigeu.com\`, informe o
+   número real da matrícula/RA e marque a opção correspondente.
+4. Para QR, anexe a foto do código quando disponível.
+5. Confira que o pagamento real tem mesmo valor, número de parcelas e juros
+   do contrato. Marque a conferência e clique **Publicar**.
+6. Copie o link individual gerado. O cliente lerá o contrato e poderá baixar PDF,
+   autorizar registro fotográfico, capturar foto e assinar; só então verá o pagamento.
+
+Não compartilhar o link do rascunho (ele responde HTTP 404 e não exibe o checkout).
+A primeira tela não deve prometer certificação automática. A emissão de documentos
+acadêmicos continua condicionada aos procedimentos institucionais reais.
+
+### PDF
+O contrato é gerado em HTML fixado com SHA-256 na publicação e pode ser exportado
+para PDF via WeasyPrint, tanto pelo administrador quanto pelo cliente detentor do
+link individual. Após a assinatura, a visualização administrativa contém foto,
+assinatura, carimbo de data/hora e hashes de evidência. O PDF pré-assinatura
+continua identificado como pendente, e não representa documento assinado.
