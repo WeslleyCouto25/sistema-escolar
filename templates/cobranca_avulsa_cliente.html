@@ -121,6 +121,7 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
       <div class="summary">
         <div><span class="label">Contratante</span><br><strong>{{ c.nome }}</strong></div>
         <div><span class="label">Número do contrato</span><br><strong>{{ c.numero_contrato }}</strong></div>
+        {% if c.matricula %}<div><span class="label">Matrícula interna (RA)</span><br><strong>{{ c.matricula }}</strong></div>{% endif %}
         <div><span class="label">Serviço</span><br><strong>{{ c.servico }}</strong></div>
         <div><span class="label">Parcelamento contratado</span><br><strong>Até {{ c.parcelas }}x</strong></div>
       </div>
