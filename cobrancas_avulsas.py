@@ -7,6 +7,7 @@ O fluxo não cria matrícula nem altera os pagamentos dos alunos existentes.
 import hashlib
 import io
 import json
+import os
 import re
 import secrets
 from datetime import datetime
@@ -341,10 +342,13 @@ def administrar_cobrancas():
         rows = cur.fetchall()
     finally:
         conn.close()
-    base = (request.url_root or "https://sigeueducacional.com.br/").rstrip("/")
+    base = (os.getenv("PUBLIC_BASE_URL") or "https://sigeueducacional.com.br").rstrip("/")
+    criada = request.args.get("criada")
+    if not any(row["token"] == criada for row in rows):
+        criada = None
     return render_template(
         "mew/cobrancas_avulsas.html", itens=rows, erro=erro,
-        csrf_token=_csrf(), criada=request.args.get("criada"),
+        csrf_token=_csrf(), criada=criada,
         base_url=base, money=_money,
     )
 
