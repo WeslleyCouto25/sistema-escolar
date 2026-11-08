@@ -18,7 +18,8 @@ from flask import (
     Blueprint, abort, current_app, redirect, render_template, request,
     session, url_for,
 )
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageOps, UnidentifiedImageError
+from markupsafe import escape
 
 from db_pool import get_db_connection
 from r2_storage import (
@@ -124,6 +125,28 @@ def _money(cents):
     return f"{cents / 100:,.2f}".replace(",", "#").replace(".", ",").replace("#", ".")
 
 
+def _cpf_valido(cpf):
+    if len(cpf) != 11 or len(set(cpf)) == 1:
+        return False
+    for size in (9, 10):
+        total = sum(int(d) * ((size + 1) - i) for i, d in enumerate(cpf[:size]))
+        digit = (total * 10) % 11
+        if digit == 10:
+            digit = 0
+        if digit != int(cpf[size]):
+            return False
+    return True
+
+
+def _assinatura_visivel(data):
+    img = Image.open(io.BytesIO(data)).convert("RGBA")
+    white = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    white.alpha_composite(img)
+    diff = ImageChops.difference(white.convert("RGB"), Image.new("RGB", img.size, "white"))
+    bbox = diff.getbbox()
+    return bool(bbox and bbox[2] - bbox[0] >= 8 and bbox[3] - bbox[1] >= 3)
+
+
 def _parse_value(raw):
     raw = (raw or "").strip().replace("R$", "").replace(" ", "")
     if "," in raw:
@@ -226,7 +249,7 @@ def _create_admin():
         numero = "SIGEU-AV-" + secrets.token_hex(5).upper()
     if not re.fullmatch(r"[A-Z0-9-]{5,48}", numero):
         raise ValueError("Número contratual inválido (use letras, números e hífen).")
-    if len(nome) < 5 or len(nome) > 160 or len(cpf) != 11 or "@" not in email or len(email) > 180:
+    if len(nome) < 5 or len(nome) > 160 or not _cpf_valido(cpf) or "@" not in email or len(email) > 180:
         raise ValueError("Informe nome completo, CPF de 11 dígitos e e-mail válido.")
     if not 5 <= len(servico) <= 150 or not 8 <= len(descricao) <= 1800:
         raise ValueError("Informe o serviço e descreva o objeto contratado.")
@@ -391,12 +414,22 @@ def _contrato_documento(item):
             "<section style='border:1px solid #9ca3af;padding:16px;margin:22px auto;max-width:900px'>"
             "<strong>ACEITE ELETRÔNICO REGISTRADO</strong><br>"
             "Data/hora: " + stamp + "<br>Hash do aceite: " + (item["hash_aceite"] or "") +
-            "<br>As evidências fotográfica e de assinatura estão preservadas em armazenamento privado.</section>"
+            "<br>O original do contrato foi mantido com hash SHA-256 de sua versão apresentada."
         )
-    response = current_app.response_class(
-        item["contrato_html"] + extra,
-        mimetype="text/html; charset=utf-8",
-    )
+        if _admin() and item.get("foto_r2_key") and item.get("assinatura_r2_key"):
+            foto = escape(r2_presigned_url(item["foto_r2_key"], inline=True))
+            ass = escape(r2_presigned_url(item["assinatura_r2_key"], inline=True))
+            extra += (
+                "<div style='display:flex;gap:20px;flex-wrap:wrap;margin-top:20px'>"
+                "<div><b>Fotografia de confirmação</b><br><img style='max-width:240px;max-height:200px' src='" + foto + "'></div>"
+                "<div><b>Assinatura grafada</b><br><img style='max-width:300px;max-height:160px' src='" + ass + "'></div>"
+                "</div>"
+                "<p>IP registrado: " + str(escape(item.get("ip_assinatura") or "")) +
+                "<br>Resumo da assinatura: " + (item.get("assinatura_sha256") or "") + "</p>"
+            )
+        extra += "</section>"
+    html = item["contrato_html"].replace("</main>", extra + "</main>", 1)
+    response = current_app.response_class(html, mimetype="text/html; charset=utf-8")
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     return response
 
@@ -429,6 +462,8 @@ def pagina_cliente(token):
                 photo_clean, photo_mime = _verified_image(
                     photo, {"PNG", "JPEG", "WEBP"}, _MAX_PHOTO, "JPEG"
                 )
+                if not _assinatura_visivel(sig_clean):
+                    raise ValueError("O traço da assinatura não foi identificado.")
                 _sign(item, sig_clean, sig_mime, photo_clean, photo_mime)
                 return redirect(url_for(".pagina_cliente", token=token))
             except (ValueError, OSError):
