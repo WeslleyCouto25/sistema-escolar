@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Completar cobrança | MEW SIGEU</title>
+<style>
+*{box-sizing:border-box}
+body{font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f1f5f8;color:#233748}
+header{padding:20px max(16px,calc((100vw - 940px)/2));background:#263b4d;color:white}
+header a{color:#fff}
+main{max-width:940px;margin:27px auto;padding:0 16px}
+.panel{background:#fff;border:1px solid #d4e1eb;padding:28px;border-radius:12px;box-shadow:0 4px 18px #12263710;margin-bottom:20px}
+h1{font-size:25px;margin:0 0 4px}h2{font-size:17px;margin:22px 0 12px}
+p.small,small{font-size:12px;color:#5f7484}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}
+input,textarea,select{display:block;width:100%;border:1px solid #adbdca;border-radius:6px;padding:11px 12px;font:inherit;background:white}
+textarea{min-height:120px;resize:vertical}
+.field{margin-bottom:17px}
+.tag{display:inline-block;background:#fff2d4;color:#744d10;border:1px solid #ebcb86;border-radius:40px;padding:4px 11px;font-size:12px}
+.warn{background:#fff6e6;border-left:4px solid #da9c42;padding:13px;margin:16px 0}
+.error{background:#fff0ec;border:1px solid #e0aea5;color:#932d20;padding:13px;margin:16px 0}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+button{border:0;border-radius:7px;padding:13px 17px;font:700 14px system-ui;cursor:pointer;background:#2e4d63;color:white}
+button.secondary{background:#e7eef4;color:#1b374e}
+.check{display:flex;gap:12px;align-items:flex-start;background:#edf5fa;padding:15px;border-radius:9px;margin:18px 0}
+.check input{width:20px;height:20px;flex:0 0 auto;margin-top:3px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.panel{padding:20px}}
+</style></head>
+<body>
+<header><strong>SIGEU Educacional · MEW</strong><div><a href="/mew/cobrancas-avulsas">← Voltar às cobranças</a></div></header>
+<main>
+<div class="panel">
+  <div class="tag">Rascunho seguro · Não enviado</div>
+  <h1>Completar contrato e cobrança</h1>
+  <p class="small">Contrato {{ c.numero_contrato }}. A página do cliente não fica disponível até publicar e conferir os dados.</p>
+  {% if erro %}<div class="error" role="alert">{{ erro }}</div>{% endif %}
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <h2>Contratante</h2>
+    <div class="grid">
+      <div class="field"><label>Nome completo</label><input name="nome" value="{{ c.nome or '' }}" maxlength="160" autocomplete="name" placeholder="Preencher com o nome do documento"></div>
+      <div class="field"><label>CPF</label><input name="cpf" value="{{ c.cpf or '' }}" maxlength="14" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00"></div>
+      <div class="field"><label>E-mail</label><input name="email" type="email" value="{{ c.email or '' }}" maxlength="180" autocomplete="off" placeholder="contato@exemplo.com"></div>
+      <div class="field"><label>Matrícula/RA (opcional para gerar e-mail)</label><input name="matricula" inputmode="numeric" maxlength="12" placeholder="Número real da matrícula"></div>
+    </div>
+    <label class="check">
+      <input type="checkbox" name="email_matricula" value="1">
+      <span>Gerar o e-mail institucional usando o número informado no campo Matrícula/RA seguido de <b>@sigeu.com</b>, substituindo o e-mail preenchido. Só marque se a matrícula existir.</span>
+    </label>
+    <div class="grid">
+      <div class="field"><label>Telefone/WhatsApp</label><input name="telefone" value="{{ c.telefone or '' }}" maxlength="40"></div>
+      <div class="field"><label>Endereço</label><input name="endereco" value="{{ c.endereco or '' }}" maxlength="300"></div>
+    </div>
+    <h2>Serviço e condições contratuais</h2>
+    <div class="field"><label>Disciplinas/serviço</label><input name="servico" value="{{ c.servico or '' }}" maxlength="150"></div>
+    <div class="field"><label>Descrição (carga horária, modalidade, prazo e entregas)</label>
+      <textarea name="descricao" maxlength="1800">{{ c.descricao or '' }}</textarea></div>
+    <div class="grid">
+      <div class="field"><label>Valor total (R$)</label><input name="valor" required value="{{ money(c.valor_centavos) }}" inputmode="decimal"></div>
+      <div class="field"><label>Parcelamento</label><select name="parcelas">
+        {% for n in range(1,13) %}<option value="{{ n }}" {% if n == c.parcelas %}selected{% endif %}>{{ n }}x</option>{% endfor %}
+      </select></div>
+      <div class="field"><label>Juros ao cliente</label><select name="juros">
+          <option value="sem_juros" {% if c.juros == 'sem_juros' %}selected{% endif %}>Sem juros</option>
+          <option value="conforme_checkout" {% if c.juros == 'conforme_checkout' %}selected{% endif %}>Conforme o meio de pagamento</option>
+      </select></div>
+      <div class="field"><label>Pagamento</label><select name="forma_cobranca" id="forma" onchange="alternar()">
+        <option value="link" {% if c.forma_cobranca == 'link' %}selected{% endif %}>Link PicPay</option>
+        <option value="qr" {% if c.forma_cobranca == 'qr' %}selected{% endif %}>QR Code anexado</option>
+      </select></div>
+    </div>
+    <div id="via-link" class="field"><label>Link PicPay existente</label><input type="url" name="link_pagamento" value="{{ c.link_pagamento or '' }}" maxlength="300" placeholder="https://link.picpay.com/p/..."></div>
+    <div id="via-qr" class="field" hidden><label>Imagem do QR Code</label>
+      <input name="qr_arquivo" type="file" accept="image/jpeg,image/png,image/webp">
+      {% if c.qr_r2_key %}<p class="small">Imagem anexada. Enviar outra substitui a imagem atual.</p>{% else %}<p class="small">Ainda não há QR Code. Salve o rascunho mesmo assim e anexe depois.</p>{% endif %}
+    </div>
+    <div class="warn"><strong>Confira antes de publicar:</strong> confirme que o link ou QR pertence ao recebedor correto, se refere ao valor combinado e, quando houver parcelamento sem juros, que o checkout realmente permite essa condição. O contrato será fixado no momento da publicação.</div>
+    <label class="check">
+      <input type="checkbox" name="condicoes_conferidas" value="1">
+      <span>Conferi o recebedor, o valor total, o número de parcelas e os juros informados no checkout/QR Code. Confirmo que coincidem com o contrato que será apresentado ao cliente.</span>
+    </label>
+    <div class="actions">
+      <button type="submit" class="secondary" name="acao" value="salvar">Salvar sem publicar</button>
+      <button type="submit" name="acao" value="publicar" onclick="return confirm('Confirma que os dados, o destinatário do pagamento e todas as condições estão corretos? O contrato ficará disponível para assinatura.')">Publicar contrato e liberar assinatura</button>
+    </div>
+  </form>
+</div>
+</main>
+<script>
+function alternar(){
+ const qr=document.getElementById('forma').value==='qr';
+ document.getElementById('via-link').hidden=qr;
+ document.getElementById('via-qr').hidden=!qr;
+}
+alternar();
+</script></body></html>
