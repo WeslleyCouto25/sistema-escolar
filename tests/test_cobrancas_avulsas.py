@@ -221,5 +221,38 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         sign.assert_not_called()
         self.assertNotIn(obj["link_pagamento"], result.get_data(as_text=True))
 
+
+    def test_rascunho_nao_gera_contrato_publico(self):
+        c = example_item(status="rascunho")
+        c["contrato_html"] = ""
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(c)):
+            response = app_for_tests().test_client().get("/cobranca/" + c["token"])
+        self.assertEqual(response.status_code, 404)
+
+    def test_rascunho_nao_divulga_link_antes_da_publicacao(self):
+        c = example_item(status="rascunho")
+        c["contrato_html"] = ""
+        c["nome"] = ""
+        c["cpf"] = ""
+        c["email"] = ""
+        db = FakeConnection(c)
+        with patch.object(av, "get_db_connection", return_value=db):
+            response = app_for_tests().test_client().get("/cobranca/" + c["token"] + "/contrato")
+        self.assertEqual(response.status_code, 404)
+
+    def test_modelo_financeiro_das_duas_cobrancas(self):
+        # Evita incorreções no total e garante que a migração preserva o link fornecido.
+        import inspect
+        source = inspect.getsource(av.seed_rascunhos_cobranca_avulsa)
+        self.assertIn("95984, 8, \"sem_juros\"", source)
+        self.assertIn("50900, 1", source)
+        self.assertIn("8ad7f361-96ee-45b9-85ce-c5e9b1598bce", source)
+        self.assertEqual(av._money(95984 // 8), "119,98")
+        self.assertIn("ON CONFLICT (numero_contrato) DO NOTHING", source)
+
+    def test_editar_rascunho_sem_sessao_admin(self):
+        res = app_for_tests().test_client().get("/mew/cobrancas-avulsas/4/editar")
+        self.assertEqual(res.status_code, 403)
+
 if __name__ == "__main__":
     unittest.main()
