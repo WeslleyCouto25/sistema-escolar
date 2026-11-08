@@ -347,6 +347,16 @@ def webhook_picpay():
             conn.rollback()
             return jsonify(ok=True), 200
         if row["status"] != "pago":
+            # O valor cadastrado NÃO pode ter sido alterado após gerar o link.
+            # Trava o registro antes da baixa para impedir quitação indevida.
+            cur.execute("""
+                SELECT id, valor_total, status FROM situacao_financeira
+                WHERE aluno_id=%s ORDER BY id DESC LIMIT 1 FOR UPDATE
+            """, (aluno_id,))
+            financeiro = cur.fetchone()
+            if not financeiro or _centavos(financeiro["valor_total"]) != cob["valor_centavos"]:
+                conn.rollback()
+                return jsonify(ok=False, erro="valor_financeiro_divergente"), 409
             cur.execute("""
                 UPDATE pagamentos_picpay SET status='pago', transaction_id=%s,
                     pago_em=NOW(), atualizado_em=NOW() WHERE id=%s
