@@ -150,9 +150,25 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         with patch.object(av, "get_db_connection", return_value=connection):
             response = app_for_tests().test_client().get("/cobranca/" + obj["token"])
         self.assertEqual(response.status_code, 200)
-        self.assertIn(obj["link_pagamento"], response.get_data(as_text=True))
-        self.assertIn("iframe", response.get_data(as_text=True))
-        self.assertNotIn('id="signatureCanvas"', response.get_data(as_text=True))
+        body = response.get_data(as_text=True)
+        self.assertIn(obj["link_pagamento"], body)
+        self.assertIn('id="picpayCheckout"', body)
+        self.assertIn('id="picpayPopup"', body)
+        self.assertIn('Pagar no PicPay (mesma aba)', body)
+        self.assertIn("window.open('about:blank'", body)
+        self.assertNotIn('title="Checkout oficial PicPay"', body)
+        self.assertNotIn('class="checkout"', body)
+        self.assertNotIn('id="signatureCanvas"', body)
+
+    def test_checkout_nao_aparece_apos_pagamento_confirmado(self):
+        obj = example_item(status="pago")
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(obj)):
+            response = app_for_tests().test_client().get("/cobranca/" + obj["token"])
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertNotIn('id="picpayCheckout"', body)
+        self.assertNotIn('id="picpayPopup"', body)
+        self.assertNotIn(obj["link_pagamento"], body)
 
     def test_assinatura_registrada_com_hash_antes_de_liberar_pagamento(self):
         obj = example_item()

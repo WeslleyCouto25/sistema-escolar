@@ -46,10 +46,10 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
 .file input{max-width:100%}
 .actions{display:flex;flex-wrap:wrap;gap:9px}
 .hidden{display:none!important}
-.checkout{width:100%;min-height:680px;border:1px solid #c9d5df;border-radius:8px;background:#fff}
+.payment-actions{margin:18px 0 12px}.payment-actions .btn{flex:1;min-width:200px}
 .qr{width:min(100%,340px);max-height:350px;object-fit:contain;display:block;margin:24px auto;background:white;border:1px solid var(--line);padding:14px;border-radius:9px}
 .legal{font-size:12px;color:var(--muted);margin-top:22px}
-@media(max-width:900px){.split{grid-template-columns:1fr}.checkout{height:560px;min-height:560px}}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
 @media(max-width:580px){.shell{padding:0 10px;margin-top:17px}.top{padding:13px}.card{padding:17px}.steps{flex-direction:column}.summary{grid-template-columns:1fr}h1{font-size:23px}.doc{height:56vh}.safe{display:none}}
 </style>
 </head>
@@ -161,12 +161,13 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
         <p class="muted">Se estiver no celular, salve a imagem ou abra-a em outro dispositivo para escanear.</p>
         <a class="btn secondary" href="/cobranca/{{ c.token }}/qrcode" target="_blank" rel="noopener">Abrir QR Code</a>
       {% else %}
-        <p>Escolha a forma de pagamento na tela oficial do PicPay. Caso ela não seja exibida no quadro incorporado, utilize o botão abaixo.</p>
-        <a class="btn" href="{{ c.link_pagamento }}" target="_blank" rel="noopener noreferrer">Abrir checkout seguro no PicPay</a>
-        <p class="muted" style="font-size:12px">Visualização incorporada, quando autorizada pelo PicPay:</p>
-        <iframe class="checkout" title="Checkout oficial PicPay" src="{{ c.link_pagamento }}"
-           loading="lazy" referrerpolicy="no-referrer" allow="payment"></iframe>
-        <p class="legal">Alguns navegadores ou o próprio PicPay podem bloquear a incorporação. Nesse caso, abra o checkout pelo botão acima. Os dados de cartão não passam pela SIGEU.</p>
+        <p>O pagamento será realizado diretamente no ambiente oficial do PicPay, sem incorporação e sem necessidade de integração por API.</p>
+        <div class="actions payment-actions">
+          <a id="picpayCheckout" class="btn" href="{{ c.link_pagamento }}" referrerpolicy="no-referrer">Pagar no PicPay (mesma aba)</a>
+          <button id="picpayPopup" class="btn secondary" type="button">Abrir em janela separada</button>
+        </div>
+        <p class="muted" id="picpayPopupHelp" role="status">Se a janela separada for bloqueada pelo navegador, o checkout será aberto na mesma aba. Você também pode usar o botão principal.</p>
+        <p class="legal">Confira o favorecido, o valor total e o parcelamento antes de confirmar. O retorno à SIGEU não confirma o recebimento: a instituição realizará a conferência financeira. Os dados do cartão não passam pela SIGEU.</p>
       {% endif %}
     </div>
   </aside>
@@ -262,6 +263,40 @@ document.getElementById('signForm').addEventListener('submit',async e=>{
  botao.disabled=false;
 });
 window.addEventListener('pagehide',()=>{if(streamCamera)streamCamera.getTracks().forEach(t=>t.stop());});
+</script>
+{% endif %}
+{% if c.status != 'pago' and c.forma_cobranca == 'link' %}
+<script>
+(() => {
+  const popupButton = document.getElementById('picpayPopup');
+  const checkoutLink = document.getElementById('picpayCheckout');
+  if (!popupButton || !checkoutLink) return;
+
+  popupButton.addEventListener('click', () => {
+    const paymentUrl = checkoutLink.href;
+    let popup = null;
+    // Abertura direta em resposta ao clique, sem chamadas assíncronas.
+    try {
+      popup = window.open('about:blank', 'sigeu_picpay_checkout',
+        'popup=yes,width=560,height=760,resizable=yes,scrollbars=yes');
+    } catch (error) {
+      // O navegador pode proibir a criação da janela.
+    }
+    if (!popup || popup.closed) {
+      window.location.assign(paymentUrl);
+      return;
+    }
+    try {
+      // Rompe a referência à página original antes de acessar o PicPay.
+      popup.opener = null;
+      popup.location.replace(paymentUrl);
+      popup.focus();
+    } catch (error) {
+      try { popup.close(); } catch (_) {}
+      window.location.assign(paymentUrl);
+    }
+  });
+})();
 </script>
 {% endif %}
 </body></html>
