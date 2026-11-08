@@ -19,7 +19,8 @@ a forma de pagamento. Nenhuma matrícula/certificação é efetivada por esta fu
    captura/seleciona fotografia e desenha assinatura no canvas.
 5. O servidor valida CSRF, aceita imagens reais com limites de tamanho, rejeita assinatura
    vazia, remove metadados EXIF, calcula hashes e armazena foto e assinatura no R2.
-6. Após o aceite gravado, a mesma URL passa a exibir QR Code ou o checkout PicPay oficial.
+6. Após o aceite gravado, a mesma URL passa a exibir QR Code ou botões para
+   abrir o link oficial do checkout PicPay na mesma aba ou em janela separada.
 7. O administrador consulta contratos, evidências e, **após comprovar recebimento**, registra
    baixa manual com valor conferido e identificação da transação.
 
@@ -35,10 +36,12 @@ a forma de pagamento. Nenhuma matrícula/certificação é efetivada por esta fu
   em celular, checkout externo e baixa administrativa.
 
 ## Limitações importantes
-- O iframe do \`link.picpay.com\` **pode ser bloqueado pelo PicPay ou navegador** por
-  políticas de anti-clickjacking. Sempre há botão externo do checkout oficial.
-  Não se implementa proxy, clonagem nem remoção das proteções de terceiros.
-- **Não é possível alterar via iframe o nome legal do recebedor** do PicPay.
+- O checkout do link.picpay.com é aberto diretamente no PicPay, por padrão
+  na mesma aba. O cliente também pode escolher uma janela separada; se a criação
+  da janela for bloqueada, há redirecionamento automático para a mesma aba.
+  O sistema não usa iframe, proxy, clonagem nem remoção de proteções de terceiros.
+  A abertura depende de um clique do cliente e dispensa credenciais da API do PicPay.
+- **Não é possível alterar pelo site o nome legal do recebedor** do PicPay.
   A identificação SIGEU aparece apenas na página do sistema, que não esconde o beneficiário real.
   A personalização do *nome do link* deve ser feita no painel PicPay.
 - Campos de parcelamento/juros descrevem o acordo: **não alteram um link PicPay previamente
