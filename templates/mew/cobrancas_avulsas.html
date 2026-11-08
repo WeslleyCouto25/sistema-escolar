@@ -149,6 +149,17 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
         <a href="/mew/cobrancas-avulsas/{{ item.id }}/evidencia/assinatura" target="_blank" rel="noopener">Assinatura</a>
         {% endif %}
       </div>
+      <div class="rowlinks"><a href="/mew/cobrancas-avulsas/{{ item.id }}/historico">Histórico de alterações</a></div>
+      {% if item.status == 'cancelado' %}
+      <details class="confirm">
+        <summary>Restaurar cobrança cancelada como rascunho</summary>
+        <form action="/mew/cobrancas-avulsas/{{ item.id }}/restaurar" method="post" onsubmit="return confirm('Reabrir como rascunho? Será obrigatório gerar novo contrato e novo link.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field"><label>Justificativa</label><input name="motivo" required minlength="10" maxlength="500" placeholder="Motivo para restaurar"></div>
+          <button class="button" type="submit">Restaurar para edição</button>
+        </form>
+      </details>
+      {% endif %}
       {% if item.status not in ('pago', 'cancelado') %}
       <details class="confirm">
         <summary>Alterar dados, substituir link/QR ou solicitar nova assinatura</summary>
