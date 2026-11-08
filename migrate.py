@@ -1,7 +1,7 @@
 """Migrações idempotentes executadas antes do Gunicorn, nunca dentro de uma requisição HTTP."""
 import os
 
-from app import init_db, init_contratos_db, init_pagamentos_db, init_documentos_integrados_db, get_db_connection
+from app import init_db, init_contratos_db, init_pagamentos_db, init_picpay_db, init_documentos_integrados_db, get_db_connection
 
 
 def table_exists(cursor, name):
@@ -266,6 +266,7 @@ def main():
     init_db()
     init_contratos_db()
     init_pagamentos_db()
+    init_picpay_db()
     init_documentos_integrados_db()
     ensure_extra_schema()
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.")
