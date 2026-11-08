@@ -94,6 +94,17 @@ def init_cobrancas_avulsas_db():
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_cob_avulsas_data ON cobrancas_avulsas(id DESC)")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS cobrancas_avulsas_historico (
+                id BIGSERIAL PRIMARY KEY,
+                cobranca_id BIGINT NOT NULL REFERENCES cobrancas_avulsas(id),
+                evento TEXT NOT NULL,
+                motivo TEXT NOT NULL,
+                dados_anteriores JSONB NOT NULL,
+                criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_cob_historico_cobranca ON cobrancas_avulsas_historico(cobranca_id, id DESC)")
         conn.commit()
     except Exception:
         conn.rollback()
@@ -252,7 +263,7 @@ def _get(token):
         item = cur.fetchone()
     finally:
         conn.close()
-    if not item or item.get("status") == "rascunho":
+    if not item or item.get("status") in ("rascunho", "cancelado"):
         abort(404)
     return item
 
@@ -540,6 +551,114 @@ def editar_rascunho(id_):
                            csrf_token=_csrf(), money=_money)
 
 
+
+# Revisões nunca reescrevem a assinatura antiga. O histórico preserva as
+# chaves R2 e hashes originais, enquanto o link anterior deixa de funcionar.
+_HISTORICO_CAMPOS = (
+    "token", "numero_contrato", "nome", "cpf", "email", "telefone", "endereco",
+    "servico", "descricao", "valor_centavos", "parcelas", "juros",
+    "forma_cobranca", "link_pagamento", "qr_r2_key", "status",
+    "contrato_html", "contrato_sha256", "versao",
+    "assinatura_r2_key", "foto_r2_key", "assinatura_sha256", "foto_sha256",
+    "hash_aceite", "ip_assinatura", "user_agent_assinatura",
+    "aceitou_contrato", "aceitou_foto", "assinado_em", "pago_em",
+    "referencia_pagamento", "observacao_pagamento",
+)
+
+
+def _registrar_historico(cur, item, evento, motivo):
+    data = {field: item.get(field) for field in _HISTORICO_CAMPOS}
+    cur.execute("""
+        INSERT INTO cobrancas_avulsas_historico
+          (cobranca_id, evento, motivo, dados_anteriores)
+        VALUES (%s,%s,%s,%s::jsonb)
+    """, (item["id"], evento, motivo, json.dumps(data, ensure_ascii=False, default=str)))
+
+
+@cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/revisar")
+def revisar_contrato(id_):
+    """Revoga o link anterior e retorna ao formulário editável com trilha de auditoria.
+
+    Inclusive quando já assinado: os comprovantes anteriores permanecem no R2
+    e no histórico; o cliente deve assinar a nova versão.
+    """
+    if not _admin():
+        abort(403)
+    _check_csrf()
+    motivo = (request.form.get("motivo") or "").strip()
+    if not 10 <= len(motivo) <= 500:
+        abort(400, "Descreva o motivo da revisão (10 a 500 caracteres).")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM cobrancas_avulsas WHERE id=%s FOR UPDATE", (id_,))
+        item = cur.fetchone()
+        if not item:
+            abort(404)
+        if item["status"] in ("pago", "cancelado"):
+            abort(409, "Pagamento quitado ou contrato cancelado: use novo contrato e conciliação.")
+        if item["status"] != "rascunho":
+            _registrar_historico(cur, item, "revisao", motivo)
+            cur.execute("""
+                UPDATE cobrancas_avulsas SET
+                    token=%s, status='rascunho',
+                    contrato_html='', contrato_sha256='',
+                    assinatura_r2_key=NULL, foto_r2_key=NULL,
+                    assinatura_sha256=NULL, foto_sha256=NULL,
+                    hash_aceite=NULL, ip_assinatura=NULL,
+                    user_agent_assinatura=NULL,
+                    aceitou_contrato=FALSE, aceitou_foto=FALSE,
+                    assinado_em=NULL, atualizado_em=NOW()
+                WHERE id=%s AND status IN ('aguardando_assinatura','aguardando_pagamento')
+            """, (secrets.token_urlsafe(36), id_))
+            if cur.rowcount != 1:
+                abort(409, "O estado mudou durante a revisão.")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return redirect(url_for(".editar_rascunho", id_=id_))
+
+
+@cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/cancelar")
+def cancelar_contrato(id_):
+    """Cancela a jornada não quitada sem apagar evidências ou registros financeiros."""
+    if not _admin():
+        abort(403)
+    _check_csrf()
+    motivo = (request.form.get("motivo") or "").strip()
+    if not 10 <= len(motivo) <= 500:
+        abort(400, "Informe o motivo do cancelamento (10 a 500 caracteres).")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM cobrancas_avulsas WHERE id=%s FOR UPDATE", (id_,))
+        item = cur.fetchone()
+        if not item:
+            abort(404)
+        if item["status"] == "pago":
+            abort(409, "Cobrança quitada: realize procedimento de estorno/conciliação.")
+        if item["status"] == "cancelado":
+            abort(409, "Esta cobrança já foi cancelada.")
+        _registrar_historico(cur, item, "cancelamento", motivo)
+        cur.execute("""
+            UPDATE cobrancas_avulsas
+               SET status='cancelado',token=%s,atualizado_em=NOW()
+             WHERE id=%s AND status<>'pago'
+        """, (secrets.token_urlsafe(36), id_))
+        if cur.rowcount != 1:
+            abort(409, "O estado mudou durante o cancelamento.")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return redirect(url_for(".administrar_cobrancas"))
+
+
 @cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/confirmar-pagamento")
 def confirmar_manual(id_):
     if not _admin():
@@ -586,8 +705,8 @@ def contrato_admin(id_):
     if not _admin():
         abort(403)
     item = _get_admin(id_)
-    if item["status"] == "rascunho":
-        abort(409, "Conclua os dados do rascunho para gerar o contrato.")
+    if item["status"] in ("rascunho", "cancelado"):
+        abort(409, "Contrato não publicado ou cancelado.")
     return _contrato_documento(item)
 
 
@@ -601,8 +720,8 @@ def pdf_contrato_admin(id_):
     if not _admin():
         abort(403)
     item = _get_admin(id_)
-    if item["status"] == "rascunho":
-        abort(409, "Complete o contrato antes de emitir PDF.")
+    if item["status"] in ("rascunho", "cancelado"):
+        abort(409, "Contrato não publicado ou cancelado.")
     return _pdf_contrato(item)
 
 
@@ -724,8 +843,9 @@ def _sign(c, signature, signature_mime, photo, photo_mime):
         "aceite_foto": TERMO_FOTO, "versao": _VERSION,
     }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     hash_aceite = hashlib.sha256(metadata.encode("utf-8")).hexdigest().upper()
-    key_sig = make_key("cobrancas-avulsas/assinaturas", "assinatura.png", c["id"])
-    key_foto = make_key("cobrancas-avulsas/fotos", "foto.jpg", c["id"])
+    # Chaves exclusivas por assinatura; revisões não sobrescrevem provas anteriores.
+    key_sig = make_key("cobrancas-avulsas/assinaturas", "assinatura.png", c["id"], secrets.token_hex(10))
+    key_foto = make_key("cobrancas-avulsas/fotos", "foto.jpg", c["id"], secrets.token_hex(10))
     uploaded = []
     try:
         r2_upload_bytes(signature, key_sig, signature_mime,
