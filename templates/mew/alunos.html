@@ -291,6 +291,10 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <i class="fas fa-users"></i>
                     <span class="text">Alunos</span>
                 </a>
+                <a href="/mew/cobrancas-avulsas" class="menu-item">
+                    <i class="fas fa-credit-card"></i>
+                    <span class="text">Cobranças Avulsas</span>
+                </a>
                 <a href="/mew/solicitacoes-matricula" class="menu-item">
                     <i class="fas fa-user-check"></i>
                     <span class="text">Novas matrículas</span>
@@ -305,6 +309,16 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         <main class="content-area">
             <h1 class="page-title">👤 Gerenciar Alunos</h1>
 
+            {% if picpay_cobranca %}
+            <div class="mp-banner ok">
+                <strong>✅ Cobrança PicPay gerada.</strong><br>
+                O valor foi obtido do cadastro financeiro do aluno. A baixa ocorre apenas após
+                a confirmação automática do PicPay.<br>
+                <a class="mp-checkout-btn"
+                   href="/pagamento/picpay/{{ picpay_cobranca.checkout_token }}"
+                   target="_blank" rel="noopener">Abrir página de pagamento PicPay</a>
+            </div>
+            {% endif %}
             {% if cobranca_criada %}
             <div class="mp-banner ok">
                 <strong>✅ Aluno criado e cobrança gerada.</strong><br>
@@ -313,7 +327,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 {% if link_checkout %}<br><a class="mp-checkout-btn" href="{{ link_checkout }}" target="_blank">💳 Abrir Checkout do Mercado Pago</a>{% endif %}
             </div>
             {% endif %}
-            {% if erro_mp %}<div class="mp-banner erro"><strong>⚠️ Mercado Pago:</strong> {{ erro_mp }}</div>{% endif %}
+            {% if erro_mp %}<div class="mp-banner erro"><strong>⚠️ Cobrança:</strong> {{ erro_mp }}</div>{% endif %}
             {% if sucesso %}<div class="mp-banner ok"><strong>✅ {{ sucesso }}</strong></div>{% endif %}
 
             <!-- ========= BOTÃO EXPANSÍVEL NOVO ALUNO ========= -->
@@ -460,7 +474,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 <option value="avista">À vista</option>
                                 <option value="cartao">Cartão</option>
                                 <option value="boleto_pix">Boleto / PIX</option>
-                                <option value="mercadopago">Mercado Pago (PIX / Cartão)</option>
+                                <option value="picpay">PicPay (Pix / Cartão)</option>
+                                <option value="mercadopago">Mercado Pago (legado)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -480,12 +495,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <div class="mp-option" style="margin-top:16px;">
                             <input type="checkbox" id="gerarCobranca" name="gerar_cobranca" value="1" onchange="toggleCobrancaInfo()">
                             <div>
-                                <strong>Gerar checkout do Mercado Pago</strong><br>
+                                <strong>Gerar pagamento PicPay automaticamente</strong><br>
                                 <small>O aluno será criado como <strong>NÃO PAGO</strong>. Após a aprovação real do pagamento, ele será direcionado para assinatura do contrato e, depois, terá acesso às disciplinas.</small>
                             </div>
                         </div>
                         <div id="cobrancaInfo" class="mp-hidden" style="background:#eff6ff;padding:12px;border-radius:7px;color:#1e3a8a;">
-                            O Checkout Pro mostrará os meios de pagamento disponíveis na conta, como PIX e cartão. Você não precisa receber dados de cartão dentro do seu site.
+                            O aluno receberá uma página individual com nome, matrícula e valor. O pagamento por Pix, carteira ou cartão será concluído no ambiente protegido do PicPay. O parcelamento depende das condições habilitadas na conta.
                         </div>
                     </div>
 
@@ -584,7 +599,14 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 {% if aluno.forma_pagamento %}
                                     <strong>{{ aluno.forma_pagamento }}</strong><br>
                                     <small>R$ {{ "%.2f"|format(aluno.valor_total) if aluno.valor_total else '0.00' }}</small><br>
-                                    {% if aluno.pagamento_mp %}
+                                    {% if aluno.pagamento_picpay %}
+                                        {% if aluno.pagamento_picpay.status == 'pago' %}
+                                            <span class="mp-status mp-pago">PAGO (PicPay)</span>
+                                        {% else %}
+                                            <span class="mp-status mp-nao-pago">NÃO PAGO (PicPay)</span>
+                                            <br><a href="{{ aluno.pagamento_picpay.pagina }}" target="_blank" rel="noopener" style="font-size:12px;">Abrir pagamento PicPay</a>
+                                        {% endif %}
+                                    {% elif aluno.pagamento_mp %}
                                         {% if aluno.pagamento_mp.status == 'pago' %}
                                             <span class="mp-status mp-pago">PAGO</span>
                                         {% else %}
@@ -623,9 +645,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                     <i class="fas fa-file-signature"></i>
                                 </a>
                                 {% endif %}
-                                {% if aluno.valor_total and (not aluno.pagamento_mp or aluno.pagamento_mp.status != 'pago') %}
-                                <form method="post" action="/mew/gerar-cobranca/{{ aluno.id }}" style="display:inline; margin:0;" onsubmit="return confirm('Gerar uma nova cobrança do Mercado Pago para este aluno?');">
-                                    <button type="submit" class="btn btn-sm btn-success" title="Gerar nova cobrança Mercado Pago"><i class="fas fa-credit-card"></i></button>
+                                {% if aluno.valor_total and aluno.status_financeiro != 'pago' %}
+                                <form method="post" action="/mew/gerar-cobranca/{{ aluno.id }}" style="display:inline; margin:0;" onsubmit="return confirm('Gerar ou recuperar a cobrança PicPay deste aluno pelo valor financeiro cadastrado?');">
+                                    <button type="submit" class="btn btn-sm btn-success" title="Gerar cobrança PicPay"><i class="fas fa-credit-card"></i></button>
                                 </form>
                                 {% endif %}
                                 <a href="/mew/deletar-aluno/{{ aluno.id }}" class="btn btn-sm btn-danger"
@@ -663,7 +685,7 @@ function toggleCobrancaInfo() {
     const box = document.getElementById('cobrancaInfo');
     const forma = document.querySelector('select[name="forma_pagamento"]');
     if (cb && box) box.style.display = cb.checked ? 'block' : 'none';
-    if (cb && cb.checked && forma) forma.value = 'mercadopago';
+    if (cb && cb.checked && forma) forma.value = 'picpay';
 }
 function confirmDelete(nome) {
     return confirm(`Deseja realmente excluir o aluno "${nome}"?\n\nEsta ação não poderá ser desfeita!`);

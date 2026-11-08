@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>{{ 'Pagamento' if c.assinado_em else 'Contrato e assinatura' }} | SIGEU Educacional</title>
+<style>
+:root{--navy:#193c55;--navy2:#28536e;--ink:#172b3e;--muted:#607386;--bg:#f1f5f8;--line:#d8e1e9;--green:#187249}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.header{background:white;border-bottom:1px solid var(--line)}
+.top{max-width:1240px;margin:auto;padding:18px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.logo{font-size:20px;font-weight:800;letter-spacing:.01em;color:var(--navy)}
+.logo small{display:block;font-size:11px;font-weight:500;color:var(--muted)}
+.safe{font-size:12px;color:#367359;display:flex;align-items:center;gap:7px}
+.shell{max-width:1240px;margin:30px auto 60px;padding:0 18px}
+.steps{display:flex;gap:6px;margin-bottom:23px}
+.step{flex:1;border:1px solid var(--line);background:white;border-radius:7px;padding:12px 15px;font-size:13px;font-weight:650;display:flex;align-items:center;gap:9px}
+.step .n{border:1px solid #b0c6d2;border-radius:50%;width:27px;height:27px;display:inline-grid;place-items:center;flex-shrink:0}
+.step.active{border-color:#467e9d;background:#edf5f9}
+.step.done{color:#14673f;background:#eff8f2;border-color:#a2d9b6}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,.82fr);gap:24px;align-items:start}
+.card{background:white;border-radius:11px;border:1px solid var(--line);padding:24px;margin-bottom:20px;box-shadow:0 5px 26px #213d5010}
+h1{font-size:28px;line-height:1.2;margin:0 0 12px}
+h2{font-size:19px;margin:0 0 12px}
+p{margin:8px 0 14px}
+small,.muted{color:var(--muted)}.label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:23px 0}
+.summary>div{padding:12px 0;border-bottom:1px solid var(--line)}
+.money{font-size:29px;font-weight:800;letter-spacing:-.02em}
+.doc{width:100%;height:480px;border:1px solid #bbc8d2;border-radius:8px;background:white}
+.check{display:flex;align-items:flex-start;gap:12px;line-height:1.45;margin:15px 0;padding:13px;border:1px solid var(--line);border-radius:7px}
+.check input{width:18px;height:18px;flex-shrink:0;margin-top:3px}
+.btn{border:0;background:var(--navy);color:white;font:700 14px system-ui;display:inline-flex;align-items:center;justify-content:center;text-align:center;padding:14px 18px;border-radius:8px;text-decoration:none;cursor:pointer}
+.btn.secondary{background:#eaf1f6;color:var(--navy);border:1px solid #c2d2df}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.stack{display:grid;gap:12px}
+.note{border-left:3px solid #5a86a0;padding:12px 14px;background:#eff5f9;font-size:13px;color:#3d586c}
+.error{border:1px solid #e8b0a0;background:#fff3ee;color:#8b2d18;padding:14px;border-radius:7px;margin:15px 0}
+.tag{color:#146c42;background:#ebf7ef;border:1px solid #abd6bb;padding:7px 12px;border-radius:20px;font-size:12px;font-weight:700;display:inline-flex}
+video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover;border-radius:9px;background:#17232e;margin:12px 0;display:block}
+#photoPreview{display:none}
+#signatureCanvas{display:block;width:100%;height:190px;background:white;border:2px solid #9bb3c4;border-radius:8px;touch-action:none}
+.field{margin:15px 0}
+.file{display:block;margin-top:12px;padding:13px;border:1px dashed #9aacb9;background:#f6f9fb;border-radius:8px}
+.file input{max-width:100%}
+.actions{display:flex;flex-wrap:wrap;gap:9px}
+.hidden{display:none!important}
+.checkout{width:100%;min-height:680px;border:1px solid #c9d5df;border-radius:8px;background:#fff}
+.qr{width:min(100%,340px);max-height:350px;object-fit:contain;display:block;margin:24px auto;background:white;border:1px solid var(--line);padding:14px;border-radius:9px}
+.legal{font-size:12px;color:var(--muted);margin-top:22px}
+@media(max-width:900px){.split{grid-template-columns:1fr}.checkout{height:560px;min-height:560px}}
+@media(max-width:580px){.shell{padding:0 10px;margin-top:17px}.top{padding:13px}.card{padding:17px}.steps{flex-direction:column}.summary{grid-template-columns:1fr}h1{font-size:23px}.doc{height:56vh}.safe{display:none}}
+</style>
+</head>
+<body>
+<header class="header"><div class="top">
+  <div class="logo">SIGEU EDUCACIONAL <small>Contratos e pagamentos · FACOP quando aplicável à certificação</small></div>
+  <span class="safe">🔒 Jornada individual de contratação</span>
+</div></header>
+<main class="shell">
+<div class="steps">
+  <div class="step {{ 'done' if c.assinado_em else 'active' }}"><span class="n">1</span> Ler e assinar contrato</div>
+  <div class="step {{ 'active' if c.assinado_em and c.status != 'pago' else ('done' if c.status == 'pago' else '') }}"><span class="n">2</span> Efetuar pagamento</div>
+  <div class="step {{ 'done' if c.status == 'pago' else '' }}"><span class="n">3</span> Confirmação financeira</div>
+</div>
+
+{% if c.status == 'aguardando_assinatura' %}
+<div class="split">
+  <section>
+    <div class="card">
+      <span class="label">Etapa 1 de 3 · Contrato {{ c.numero_contrato }}</span>
+      <h1>Confira seu contrato</h1>
+      <p>Leia integralmente o documento a seguir. A etapa de pagamento só será disponibilizada após o registro da sua assinatura e fotografia de confirmação.</p>
+      <iframe class="doc" title="Contrato individualizado para leitura" src="/cobranca/{{ c.token }}/contrato"></iframe>
+      <p class="muted" style="font-size:12px">Contrato n.º {{ c.numero_contrato }} · Documento emitido eletronicamente. Você pode rolar dentro do quadro para ler todas as cláusulas.</p>
+      <p><a class="btn secondary" href="/cobranca/{{ c.token }}/contrato.pdf">Baixar PDF para conferência</a></p>
+      {% if erro %}<div class="error" role="alert">{{ erro }}</div>{% endif %}
+      <button class="btn" type="button" id="startBtn" onclick="mostrarAssinatura()">Li o contrato e quero continuar</button>
+    </div>
+    <div class="card hidden" id="assinaturaArea">
+      <h2>Declarações e assinatura eletrônica</h2>
+      <p class="note">O registro de fotografia e assinatura serve à documentação da contratação. Não é realizada identificação biométrica automatizada.</p>
+      <form id="signForm" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="check"><input type="checkbox" name="aceite_contrato" value="1" id="aceiteContrato">
+          <span>{{ termo_contrato }}</span></label>
+        <label class="check"><input type="checkbox" name="aceite_foto" value="1" id="aceiteFoto">
+          <span>{{ termo_foto }}</span></label>
+        <div class="field">
+          <h2>1. Fotografia de confirmação</h2>
+          <p class="muted">Autorize o acesso à câmera, tire uma foto do rosto ou utilize o botão de captura do dispositivo.</p>
+          <video id="video" autoplay playsinline muted></video>
+          <img id="photoPreview" alt="Prévia da foto selecionada">
+          <div class="actions">
+            <button class="btn secondary" type="button" onclick="abrirCamera()">Abrir câmera</button>
+            <button class="btn secondary" type="button" onclick="tirarFoto()">Tirar foto</button>
+            <button class="btn secondary" type="button" onclick="refazerFoto()">Refazer foto</button>
+          </div>
+          <label class="file">Alternativa: tirar ou selecionar uma foto
+            <input type="file" accept="image/jpeg,image/png,image/webp" capture="user" id="fotoArquivo">
+          </label>
+        </div>
+        <div class="field">
+          <h2>2. Assinatura manuscrita em tela</h2>
+          <p class="muted">Assine com o dedo, caneta digital ou mouse. A assinatura será vinculada ao contrato e à fotografia.</p>
+          <canvas id="signatureCanvas" aria-label="Campo de assinatura manuscrita"></canvas>
+          <div class="actions" style="margin-top:10px">
+            <button class="btn secondary" type="button" onclick="limparAssinatura()">Limpar e assinar novamente</button>
+          </div>
+        </div>
+        <button class="btn" type="submit" id="confirmBtn">Confirmar contrato, foto e assinatura</button>
+        <p id="statusEnvio" class="muted" role="status"></p>
+      </form>
+      <p class="legal">Caso não concorde com a coleta da fotografia, não conclua esta etapa e solicite um meio alternativo de formalização à secretaria.</p>
+    </div>
+  </section>
+  <aside>
+    <div class="card">
+      <span class="label">Resumo individual</span><h2>Dados da contratação</h2>
+      <div class="summary">
+        <div><span class="label">Contratante</span><br><strong>{{ c.nome }}</strong></div>
+        <div><span class="label">Número do contrato</span><br><strong>{{ c.numero_contrato }}</strong></div>
+        <div><span class="label">Serviço</span><br><strong>{{ c.servico }}</strong></div>
+        <div><span class="label">Parcelamento contratado</span><br><strong>Até {{ c.parcelas }}x</strong></div>
+      </div>
+      <span class="label">Valor total</span><div class="money">R$ {{ money(c.valor_centavos) }}</div>
+      <p class="note">O pagamento será liberado nesta página após a assinatura. Você poderá selecionar as formas de pagamento efetivamente habilitadas pelo recebedor.</p>
+    </div>
+  </aside>
+</div>
+{% else %}
+<div class="split">
+  <section>
+    <div class="card">
+      {% if c.status == 'pago' %}<span class="tag">✓ Recebimento confirmado</span>{% else %}
+      <span class="tag">✓ Contrato assinado</span>{% endif %}
+      <h1 style="margin-top:15px">{{ 'Pagamento recebido' if c.status == 'pago' else 'Seu pagamento está liberado' }}</h1>
+      <p>{{ c.nome }}, seu contrato <strong>{{ c.numero_contrato }}</strong> foi registrado eletronicamente.</p>
+      <div class="summary">
+        <div><span class="label">Serviço</span><br><strong>{{ c.servico }}</strong></div>
+        <div><span class="label">Valor total</span><br><strong>R$ {{ money(c.valor_centavos) }}</strong></div>
+        <div><span class="label">Parcelamento</span><br><strong>Até {{ c.parcelas }}x</strong></div>
+        <div><span class="label">Estado financeiro</span><br><strong>{{ 'Pago' if c.status == 'pago' else 'Aguardando confirmação' }}</strong></div>
+      </div>
+      <a class="btn secondary" href="/cobranca/{{ c.token }}/contrato" target="_blank" rel="noopener">Abrir contrato assinado</a>
+      <a class="btn secondary" href="/cobranca/{{ c.token }}/contrato.pdf">Baixar contrato em PDF</a>
+      {% if c.status != 'pago' %}
+      <p class="note">A assinatura não significa pagamento. Após efetuar a transação, aguarde a confirmação do recebimento pela instituição. O nome do recebedor mostrado no PicPay é o da conta legalmente cadastrada e não pode ser alterado por esta página.</p>
+      {% endif %}
+    </div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>{{ 'Pagamento confirmado' if c.status == 'pago' else 'Finalizar pagamento' }}</h2>
+      {% if c.status == 'pago' %}
+        <p>O recebimento foi conferido e baixado pela instituição.</p>
+      {% elif c.forma_cobranca == 'qr' %}
+        <p>Escaneie o QR Code com o aplicativo do banco ou carteira digital. Verifique o favorecido, valor e demais informações antes de confirmar.</p>
+        <img class="qr" src="/cobranca/{{ c.token }}/qrcode" alt="QR Code de pagamento disponibilizado pela instituição">
+        <p class="muted">Se estiver no celular, salve a imagem ou abra-a em outro dispositivo para escanear.</p>
+        <a class="btn secondary" href="/cobranca/{{ c.token }}/qrcode" target="_blank" rel="noopener">Abrir QR Code</a>
+      {% else %}
+        <p>Escolha a forma de pagamento na tela oficial do PicPay. Caso ela não seja exibida no quadro incorporado, utilize o botão abaixo.</p>
+        <a class="btn" href="{{ c.link_pagamento }}" target="_blank" rel="noopener noreferrer">Abrir checkout seguro no PicPay</a>
+        <p class="muted" style="font-size:12px">Visualização incorporada, quando autorizada pelo PicPay:</p>
+        <iframe class="checkout" title="Checkout oficial PicPay" src="{{ c.link_pagamento }}"
+           loading="lazy" referrerpolicy="no-referrer" allow="payment"></iframe>
+        <p class="legal">Alguns navegadores ou o próprio PicPay podem bloquear a incorporação. Nesse caso, abra o checkout pelo botão acima. Os dados de cartão não passam pela SIGEU.</p>
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% endif %}
+<p class="legal" style="text-align:center">SIGEU Educacional · Contratação eletrônica individualizada · Nenhuma informação de cartão é solicitada nesta página.</p>
+</main>
+{% if c.status == 'aguardando_assinatura' %}
+<script>
+let streamCamera=null, fotoBlob=null, assinou=false, desenhando=false;
+const video=document.getElementById('video');
+const preview=document.getElementById('photoPreview');
+const canvas=document.getElementById('signatureCanvas');
+const ctx=canvas.getContext('2d');
+function mostrarAssinatura(){
+ document.getElementById('assinaturaArea').classList.remove('hidden');
+ document.getElementById('startBtn').disabled=true;
+ ajustarCanvas();
+ document.getElementById('assinaturaArea').scrollIntoView({behavior:'smooth'});
+}
+function ajustarCanvas(){
+ const dpr=Math.min(window.devicePixelRatio||1,2),rect=canvas.getBoundingClientRect();
+ canvas.width=Math.max(450,Math.round(rect.width*dpr));canvas.height=Math.round(190*dpr);
+ ctx.setTransform(canvas.width/rect.width,0,0,canvas.height/190,0,0);
+ ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#172b3e';
+ assinou=false;
+}
+function xy(e){
+ const r=canvas.getBoundingClientRect();
+ return {x:e.clientX-r.left,y:e.clientY-r.top};
+}
+canvas.addEventListener('pointerdown',e=>{
+ e.preventDefault();desenhando=true;canvas.setPointerCapture(e.pointerId);
+ const p=xy(e);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x+.1,p.y+.1);ctx.stroke();assinou=true;
+});
+canvas.addEventListener('pointermove',e=>{
+ if(!desenhando)return;e.preventDefault();const p=xy(e);ctx.lineTo(p.x,p.y);ctx.stroke();assinou=true;
+});
+for(const eventName of ['pointerup','pointercancel','lostpointercapture']){
+ canvas.addEventListener(eventName,()=>{desenhando=false;});
+}
+function limparAssinatura(){ctx.clearRect(0,0,canvas.width,canvas.height);assinou=false;}
+async function abrirCamera(){
+ if(!document.getElementById('aceiteFoto').checked){alert('Autorize o registro fotográfico antes de iniciar a câmera.');return;}
+ try{
+   if(streamCamera)streamCamera.getTracks().forEach(t=>t.stop());
+   streamCamera=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+   video.srcObject=streamCamera;preview.style.display='none';video.style.display='block';fotoBlob=null;
+ }catch(e){alert('Não foi possível abrir a câmera. Use a opção de tirar/selecionar foto no aparelho.');}
+}
+function tirarFoto(){
+ if(!streamCamera||!video.videoWidth){alert('Abra a câmera e aguarde a imagem.');return;}
+ const c=document.createElement('canvas');c.width=640;c.height=480;
+ c.getContext('2d').drawImage(video,0,0,c.width,c.height);
+ c.toBlob(blob=>{
+   fotoBlob=blob;
+   preview.src=URL.createObjectURL(blob);preview.style.display='block';video.style.display='none';
+   streamCamera.getTracks().forEach(t=>t.stop());streamCamera=null;
+ },'image/jpeg',0.85);
+}
+function refazerFoto(){
+ fotoBlob=null;document.getElementById('fotoArquivo').value='';
+ preview.style.display='none';video.style.display='block';
+}
+document.getElementById('fotoArquivo').addEventListener('change',e=>{
+ const f=e.target.files[0];if(!f)return;
+ if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3000000){alert('Selecione foto JPG, PNG ou WebP até 3 MB.');e.target.value='';return;}
+ fotoBlob=f;preview.src=URL.createObjectURL(f);
+ preview.style.display='block';video.style.display='none';
+ if(streamCamera){streamCamera.getTracks().forEach(t=>t.stop());streamCamera=null;}
+});
+document.getElementById('signForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const status=document.getElementById('statusEnvio'),botao=document.getElementById('confirmBtn');
+ if(!document.getElementById('aceiteContrato').checked||!document.getElementById('aceiteFoto').checked){
+   status.textContent='Marque as duas declarações para continuar.';return;
+ }
+ if(!fotoBlob){status.textContent='Tire ou selecione sua fotografia.';return;}
+ if(!assinou){status.textContent='Desenhe sua assinatura no quadro.';return;}
+ botao.disabled=true;status.textContent='Registrando assinatura e fotografia de forma segura...';
+ const signBlob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+ if(!signBlob){status.textContent='Falha ao processar assinatura.';botao.disabled=false;return;}
+ const form=new FormData();
+ form.append('csrf_token',document.querySelector('input[name="csrf_token"]').value);
+ form.append('aceite_contrato','1');form.append('aceite_foto','1');
+ form.append('assinatura',signBlob,'assinatura.png');
+ form.append('foto',fotoBlob,'foto.jpg');
+ try{
+   const response=await fetch(window.location.pathname,{method:'POST',credentials:'same-origin',body:form});
+   if(response.redirected){window.location.assign(response.url);return;}
+   status.textContent='Não foi possível registrar. Verifique os arquivos e tente novamente.';
+ }catch(err){status.textContent='Falha de conexão. Sua assinatura ainda não foi registrada.';}
+ botao.disabled=false;
+});
+window.addEventListener('pagehide',()=>{if(streamCamera)streamCamera.getTracks().forEach(t=>t.stop());});
+</script>
+{% endif %}
+</body></html>

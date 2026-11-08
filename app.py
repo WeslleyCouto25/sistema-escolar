@@ -112,6 +112,15 @@ from sigeu_solucoes_digitais import solucoes_digitais_bp
 
 app.register_blueprint(solucoes_digitais_bp)
 
+# Integração isolada: MEW utiliza PicPay; matrícula pública permanece no Mercado Pago.
+from picpay_mew import (picpay_bp, criar_cobranca_picpay, init_picpay_db,
+                        set_paid_callback)
+app.register_blueprint(picpay_bp)
+
+# Contratação avulsa com contrato, fotografia, assinatura e link/QR fornecido pelo MEW.
+from cobrancas_avulsas import cobrancas_avulsas_bp, init_cobrancas_avulsas_db
+app.register_blueprint(cobrancas_avulsas_bp)
+
 
 # ============================================================
 # CONFIGURACOES GERAIS
@@ -2708,7 +2717,7 @@ def mew_alunos():
                     status_financeiro = "pendente"
                     parcelas_total = 1
                     parcelas_pagas = 0
-                elif forma_pagamento == "mercadopago":
+                elif forma_pagamento in ("mercadopago", "picpay"):
                     status_financeiro = "pendente"
                     parcelas_total = 1
                     parcelas_pagas = 0
@@ -2757,18 +2766,14 @@ def mew_alunos():
 
         if gerar_cobranca:
             try:
-                cobranca = criar_preferencia_mercadopago(
-                    aluno_id=aluno_id,
-                    nome=nome,
-                    email=email,
-                    valor_total=valor_total,
-                    contrato_id=contrato_id,
-                    base_url=request.host_url.rstrip("/")
+                cobranca = criar_cobranca_picpay(
+                    aluno_id=aluno_id, nome=nome, email=email,
+                    valor_total=valor_total, contrato_id=contrato_id
                 )
-                return redirect(f"/mew/alunos?cobranca_id={cobranca['id']}")
-            except Exception as e:
-                print(f"Erro ao criar cobrança Mercado Pago: {e}")
-                return redirect(f"/mew/alunos?erro_mp={str(e)}")
+                return redirect(f"/mew/alunos?picpay_cobranca_id={cobranca['id']}")
+            except Exception:
+                app.logger.exception("Erro ao gerar cobrança PicPay MEW")
+                return redirect("/mew/alunos?erro_mp=Falha+ao+gerar+cobranca+PicPay")
 
         return redirect("/mew/alunos?sucesso=Aluno+cadastrado+com+sucesso")
 
@@ -2789,6 +2794,7 @@ def mew_alunos():
                COALESCE(ds.disciplinas_datas, '[]'::json) AS disciplinas_datas,
                mp.id AS mp_id, mp.status AS mp_status, mp.checkout_url AS mp_checkout_url,
                mp.sandbox_checkout_url AS mp_sandbox_checkout_url,
+               pp.id AS pp_id, pp.status AS pp_status, pp.checkout_token AS pp_token,
                c.id AS contrato_id, c.status AS contrato_status, c.data_envio AS contrato_data_envio
         FROM alunos a
         LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
@@ -2812,6 +2818,10 @@ def mew_alunos():
             FROM pagamentos_mercadopago WHERE aluno_id=a.id
             ORDER BY CASE WHEN status='pago' THEN 0 ELSE 1 END, id DESC LIMIT 1
         ) mp ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT id, status, checkout_token FROM pagamentos_picpay
+            WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
+        ) pp ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, status, data_envio FROM contratos_alunos
             WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
@@ -2839,9 +2849,19 @@ def mew_alunos():
             'nome_mae': r.get('nome_mae') or '', 'data_nascimento': r.get('data_nascimento') or '',
             'sexo': r.get('sexo') or '', 'naturalidade': r.get('naturalidade') or '',
             'nacionalidade': r.get('nacionalidade') or '', 'estado_civil': r.get('estado_civil') or '',
-            'email_alternativo': r.get('email_alternativo') or '', 'pagamento_mp': pagamento_mp, 'contrato': contrato
+            'email_alternativo': r.get('email_alternativo') or '', 'pagamento_mp': pagamento_mp,
+            'pagamento_picpay': (None if not r.get('pp_id') else {
+                'id': r.get('pp_id'), 'status': r.get('pp_status'),
+                'pagina': '/pagamento/picpay/' + r.get('pp_token')
+            }), 'contrato': contrato
         })
 
+    picpay_cobranca = None
+    picpay_id = request.args.get("picpay_cobranca_id")
+    if picpay_id and picpay_id.isdigit():
+        cursor.execute("SELECT id, status, checkout_token FROM pagamentos_picpay WHERE id=%s",
+                       (int(picpay_id),))
+        picpay_cobranca = cursor.fetchone()
     cobranca_criada = None
     cobranca_id = request.args.get("cobranca_id")
     if cobranca_id and cobranca_id.isdigit():
@@ -2851,7 +2871,8 @@ def mew_alunos():
     total_pages = max(1, (total_alunos + per_page - 1) // per_page)
     return render_template(
         "mew/alunos.html", disciplinas=disciplinas, alunos=alunos_completo,
-        cobranca_criada=cobranca_criada, erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
+        cobranca_criada=cobranca_criada, picpay_cobranca=picpay_cobranca,
+        erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
         page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages
     )
 
@@ -2863,10 +2884,10 @@ def mew_gerar_cobranca_aluno(aluno_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.id, a.nome, a.email, sf.valor_total
+        SELECT a.id, a.nome, a.email, sf.valor_total, sf.status AS status_financeiro
         FROM alunos a
         LEFT JOIN LATERAL (
-            SELECT valor_total FROM situacao_financeira
+            SELECT valor_total, status FROM situacao_financeira
             WHERE aluno_id = a.id ORDER BY id DESC LIMIT 1
         ) sf ON TRUE
         WHERE a.id = %s
@@ -2878,15 +2899,16 @@ def mew_gerar_cobranca_aluno(aluno_id):
 
     if not aluno or not aluno["valor_total"]:
         return redirect("/mew/alunos?erro_mp=Aluno+sem+valor+financeiro+cadastrado")
+    if aluno.get("status_financeiro") == "pago":
+        return redirect("/mew/alunos?erro_mp=Aluno+ja+possui+pagamento+confirmado")
+    if aluno.get("status_financeiro") == "parcial":
+        return redirect("/mew/alunos?erro_mp=Conferir+saldo+remanescente+do+aluno+antes+de+gerar+cobranca")
 
     try:
-        cobranca = criar_preferencia_mercadopago(
-            aluno_id=aluno_id,
-            nome=aluno["nome"],
-            email=aluno["email"],
+        cobranca = criar_cobranca_picpay(
+            aluno_id=aluno_id, nome=aluno["nome"], email=aluno["email"],
             valor_total=aluno["valor_total"],
-            contrato_id=contrato["id"] if contrato else None,
-            base_url=request.host_url.rstrip("/")
+            contrato_id=contrato["id"] if contrato else None
         )
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -2897,9 +2919,10 @@ def mew_gerar_cobranca_aluno(aluno_id):
         """, (aluno_id,))
         conn.commit()
         conn.close()
-        return redirect(f"/mew/alunos?cobranca_id={cobranca['id']}")
-    except Exception as e:
-        return redirect(f"/mew/alunos?erro_mp={str(e)}")
+        return redirect(f"/mew/alunos?picpay_cobranca_id={cobranca['id']}")
+    except Exception:
+        app.logger.exception("Erro ao gerar cobrança PicPay MEW")
+        return redirect("/mew/alunos?erro_mp=Falha+ao+gerar+cobranca+PicPay")
 
 
 @app.route("/webhook/mercadopago", methods=["POST"])
@@ -3327,7 +3350,11 @@ def mew_editar_aluno(aluno_id):
                 else:
                     parcelas_total = 1
                     if not status_financeiro:
-                        status_financeiro = "pago"
+                        status_financeiro = ("pendente"
+                                            if forma_pagamento in ("picpay", "mercadopago")
+                                            else "pago")
+                    if forma_pagamento in ("picpay", "mercadopago") and status_financeiro != "pago":
+                        parcelas_pagas = "0"
 
                 # Verificar se já existe situação financeira
                 cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
@@ -9524,6 +9551,12 @@ def controlar_acesso_aluno_pagamento_contrato():
         "pagamento_mercadopago_pendente",
         "pagamento_mercadopago_falha",
         "webhook_mercadopago",
+        "picpay_mew.webhook_picpay",
+        "picpay_mew.pagina_pagamento_picpay",
+        "cobrancas_avulsas.pagina_cliente",
+        "cobrancas_avulsas.contrato_publico",
+        "cobrancas_avulsas.pdf_contrato_publico",
+        "cobrancas_avulsas.qrcode_cliente",
         "contrato_pendente",
         "visualizar_contrato_registro",
         "visualizar_contrato_aluno"
@@ -9577,7 +9610,8 @@ def aguardando_pagamento():
     cursor = conn.cursor()
     cursor.execute("""
         SELECT sf.status, sf.valor_total,
-               pm.checkout_url, pm.sandbox_checkout_url, pm.status AS status_mp_local
+               pm.checkout_url, pm.sandbox_checkout_url, pm.status AS status_mp_local,
+               pp.checkout_token AS picpay_token
         FROM situacao_financeira sf
         LEFT JOIN LATERAL (
             SELECT checkout_url, sandbox_checkout_url, status
@@ -9586,6 +9620,10 @@ def aguardando_pagamento():
             ORDER BY id DESC
             LIMIT 1
         ) pm ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT checkout_token FROM pagamentos_picpay WHERE aluno_id=sf.aluno_id
+            ORDER BY id DESC LIMIT 1
+        ) pp ON TRUE
         WHERE sf.aluno_id = %s
         ORDER BY sf.id DESC
         LIMIT 1
@@ -9596,7 +9634,9 @@ def aguardando_pagamento():
     if not financeiro or financeiro.get("status") == "pago":
         return redirect(url_for("dashboard"))
 
-    checkout = financeiro.get("checkout_url") or financeiro.get("sandbox_checkout_url")
+    checkout = (("/pagamento/picpay/" + financeiro["picpay_token"])
+                if financeiro.get("picpay_token") else
+                (financeiro.get("checkout_url") or financeiro.get("sandbox_checkout_url")))
 
     return render_template_string("""
     <!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8">
@@ -12425,7 +12465,8 @@ def _dados_contrato_render(contrato_id):
         "avista": "À vista",
         "cartao": "Cartão",
         "boleto_pix": "Boleto / PIX",
-        "mercadopago": "Mercado Pago - PIX / Cartão"
+        "mercadopago": "Mercado Pago - PIX / Cartão",
+        "picpay": "PicPay - Pix / Cartão"
     }
     forma_pagamento = formas_pagamento.get(aluno["forma_pagamento"], aluno["forma_pagamento"] or "Não informado")
 
@@ -14477,11 +14518,16 @@ def robots_txt():
     txt = f"User-agent: *\nAllow: /\nDisallow: /mew/\nDisallow: /api/\nSitemap: {_BASE_PUBLICA}/sitemap.xml\n"
     return app.response_class(txt, mimetype="text/plain")
 
+# Confirmação PicPay reutiliza o envio transacional existente do sistema.
+set_paid_callback(enviar_boas_vindas_titan)
+
 if __name__ == "__main__":
     # Em desenvolvimento local, faz a mesma migração usada pelo Procfile do Render.
     init_db()
     init_contratos_db()
     init_pagamentos_db()
+    init_picpay_db()
+    init_cobrancas_avulsas_db()
     init_documentos_integrados_db()
     app.run(debug=True)
 

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Contrato {{ c.numero_contrato }} · SIGEU Educacional</title>
+<style>
+@page{size:A4;margin:20mm 23mm}
+*{box-sizing:border-box}
+body{font:13px/1.75 Georgia,"Times New Roman",serif;color:#15191d;margin:0;background:#e8edf0}
+main{width:min(890px,calc(100% - 22px));margin:24px auto;background:white;padding:46px 54px;box-shadow:0 7px 25px #20293113}
+header{text-align:center;border-bottom:2px solid #222;padding-bottom:19px;margin-bottom:22px}
+header small{display:block;letter-spacing:.17em;text-transform:uppercase;font:11px Arial,sans-serif}
+h1{font-size:18px;text-transform:uppercase;letter-spacing:.045em;margin:12px 0 5px;line-height:1.4}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.035em;margin:22px 0 7px}
+p{text-align:justify;margin:8px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0}
+td,th{border:1px solid #9da3a9;padding:8px 10px;vertical-align:top;text-align:left}
+th{width:31%;font-size:12px;background:#f2f3f5}
+.footer{border-top:1px solid #555;margin-top:32px;padding-top:17px;text-align:center}
+.footer p{text-align:center;font-size:11px}
+@media(max-width:670px){main{width:100%;margin:0;padding:25px 18px;box-shadow:none}table{font-size:12px}th{width:38%}}
+@media print{body{background:white}main{width:100%;margin:0;padding:0;box-shadow:none}h2{break-after:avoid}p{orphans:3;widows:3}}
+</style></head>
+<body><main>
+<header>
+  <small>Instrumento particular · Prestação de serviços educacionais</small>
+  <h1>Contrato de Prestação de Serviços Educacionais</h1>
+  <div>Número: <b>{{ c.numero_contrato }}</b> · Versão {{ versao }}</div>
+</header>
+<h2>Quadro-resumo da contratação</h2>
+<table>
+  <tr><th>Contratante</th><td>{{ c.nome }}</td></tr>
+  <tr><th>CPF</th><td>{{ c.cpf[:3] }}.{{ c.cpf[3:6] }}.{{ c.cpf[6:9] }}-{{ c.cpf[9:] }}</td></tr>
+  <tr><th>E-mail</th><td>{{ c.email }}</td></tr>
+  {% if c.telefone %}<tr><th>Telefone</th><td>{{ c.telefone }}</td></tr>{% endif %}
+  {% if c.endereco %}<tr><th>Endereço declarado</th><td>{{ c.endereco }}</td></tr>{% endif %}
+  <tr><th>Prestadora / executora</th><td>SIGEU Educacional, observada a identificação institucional e a documentação comercial da contratação.</td></tr>
+  <tr><th>Serviço contratado</th><td><strong>{{ c.servico }}</strong></td></tr>
+  <tr><th>Descrição individualizada</th><td style="white-space:pre-wrap">{{ c.descricao }}</td></tr>
+  <tr><th>Valor total</th><td><strong>R$ {{ valor }}</strong></td></tr>
+  <tr><th>Condição de parcelamento</th><td>Até {{ c.parcelas }} {% if c.parcelas == 1 %}parcela{% else %}parcelas{% endif %}, em valores aproximados de R$ {{ parcela }} por parcela.
+  {% if c.juros == 'sem_juros' %}Condição contratada: sem juros ao contratante, condicionada à efetiva configuração do meio de pagamento disponibilizado.{% else %}As condições de juros e eventuais encargos serão apresentadas no checkout do prestador de pagamento antes da confirmação.{% endif %}</td></tr>
+  <tr><th>Meio de pagamento</th><td>{{ 'Checkout PicPay' if c.forma_cobranca == 'link' else 'QR Code informado pela contratada' }}</td></tr>
+  <tr><th>Data de emissão</th><td>{{ timestamp }}</td></tr>
+</table>
+<h2>Cláusula 1 — Objeto</h2>
+<p>A contratação tem por objeto a execução do serviço educacional especificado no quadro-resumo, com observância das características, carga horária, atividades e prazos expressamente individualizados na descrição contratual. A contratação não implica, por si só, registro acadêmico definitivo, matrícula em curso superior, emissão de diploma ou certificação automática.</p>
+<h2>Cláusula 2 — Prestação dos serviços</h2>
+<p>A SIGEU Educacional é responsável pela organização operacional e pelo acompanhamento dos serviços efetivamente contratados. A participação de instituição certificadora, inclusive a FACOP, quando aplicável, dependerá da modalidade contratada, da documentação institucional pertinente e do cumprimento dos requisitos acadêmicos e administrativos específicos.</p>
+<h2>Cláusula 3 — Informações do contratante</h2>
+<p>O contratante declara que os dados identificadores fornecidos para este instrumento são verdadeiros e compromete-se a comunicar eventuais alterações necessárias ao adequado cumprimento do objeto. Documentos adicionais serão solicitados somente quando compatíveis com a finalidade educacional e as obrigações administrativas pertinentes.</p>
+<h2>Cláusula 4 — Valor e condições de pagamento</h2>
+<p>O preço global é o indicado no quadro-resumo. A contratada disponibilizará, após a assinatura eletrônica, o meio de pagamento escolhido. A quantidade máxima de parcelas e a condição de juros precisam coincidir com o checkout ou instrumento de cobrança efetivamente disponibilizado. Divergências devem ser corrigidas antes da conclusão do pagamento, mediante contato com a secretaria.</p>
+<h2>Cláusula 5 — Confirmação financeira</h2>
+<p>A geração do link, a visualização de QR Code, o aceite contratual e a assinatura eletrônica não constituem prova de quitação. A confirmação da obrigação pecuniária depende da efetiva identificação do recebimento pela contratada, mediante conciliação do registro da transação ou comprovação financeira idônea.</p>
+<h2>Cláusula 6 — Execução e cooperação</h2>
+<p>O serviço será executado conforme o escopo, a modalidade e os prazos individualizados. O contratante deverá fornecer as informações, documentos e participações indispensáveis à atividade contratada; eventual alteração substancial do objeto, do valor ou das condições deverá constar de ajuste escrito.</p>
+<h2>Cláusula 7 — Cancelamento e direitos legais</h2>
+<p>As solicitações de cancelamento, reembolso e desistência serão analisadas conforme a legislação consumerista aplicável, a fase de execução dos serviços e as condições específicas previamente informadas. Nenhuma disposição deste instrumento afasta direito de arrependimento, garantia ou proteção legal imperativa, quando incidente.</p>
+<h2>Cláusula 8 — Dados pessoais e evidências da celebração</h2>
+<p>Os dados cadastrais, a assinatura eletrônica, a fotografia autorizada e os metadados técnicos estritamente necessários serão tratados para formalização, conservação e demonstração da contratação, observada a legislação de proteção de dados. A fotografia de confirmação não será empregada neste procedimento para reconhecimento facial automatizado.</p>
+<h2>Cláusula 9 — Assinatura eletrônica</h2>
+<p>O contratante poderá manifestar aceite por meio de assinatura grafada em tela acompanhada de declaração expressa de leitura, autorização separada do registro fotográfico, data e horário do evento, identificador do contrato e resumo criptográfico das evidências, sem prejuízo de outros meios de prova admitidos em direito.</p>
+<h2>Cláusula 10 — Atendimento e solução de controvérsias</h2>
+<p>Solicitações e divergências serão inicialmente encaminhadas ao atendimento administrativo informado na contratação, resguardado o acesso aos meios extrajudiciais e judiciais previstos na legislação. Eventual definição de competência observará as regras legais de proteção do consumidor.</p>
+<h2>Cláusula 11 — Concordância</h2>
+<p>O contratante declara ciência de que poderá examinar integralmente este documento antes de assinar, de que a página de pagamento somente será disponibilizada após a assinatura e de que os dados bancários e de cartão são processados diretamente pelo prestador externo de pagamento, não pela SIGEU Educacional.</p>
+<div class="footer">
+  <p>Instrumento individualizado n.º <strong>{{ c.numero_contrato }}</strong> · Emissão {{ timestamp }} · Versão {{ versao }}</p>
+  <p>Registro eletrônico de assinatura e fotografia em documento de evidências associado ao contrato.</p>
+  <p>** SIGEU EDUCACIONAL — DOCUMENTO CONTRATUAL **</p>
+</div>
+</main></body></html>
