@@ -117,6 +117,10 @@ from picpay_mew import (picpay_bp, criar_cobranca_picpay, init_picpay_db,
                         set_paid_callback)
 app.register_blueprint(picpay_bp)
 
+# Contratação avulsa com contrato, fotografia, assinatura e link/QR fornecido pelo MEW.
+from cobrancas_avulsas import cobrancas_avulsas_bp, init_cobrancas_avulsas_db
+app.register_blueprint(cobrancas_avulsas_bp)
+
 
 # ============================================================
 # CONFIGURACOES GERAIS
@@ -9549,6 +9553,9 @@ def controlar_acesso_aluno_pagamento_contrato():
         "webhook_mercadopago",
         "picpay_mew.webhook_picpay",
         "picpay_mew.pagina_pagamento_picpay",
+        "cobrancas_avulsas.pagina_cliente",
+        "cobrancas_avulsas.contrato_publico",
+        "cobrancas_avulsas.qrcode_cliente",
         "contrato_pendente",
         "visualizar_contrato_registro",
         "visualizar_contrato_aluno"
@@ -14519,6 +14526,7 @@ if __name__ == "__main__":
     init_contratos_db()
     init_pagamentos_db()
     init_picpay_db()
+    init_cobrancas_avulsas_db()
     init_documentos_integrados_db()
     app.run(debug=True)
 
