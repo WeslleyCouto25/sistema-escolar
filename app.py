@@ -9555,6 +9555,7 @@ def controlar_acesso_aluno_pagamento_contrato():
         "picpay_mew.pagina_pagamento_picpay",
         "cobrancas_avulsas.pagina_cliente",
         "cobrancas_avulsas.contrato_publico",
+        "cobrancas_avulsas.pdf_contrato_publico",
         "cobrancas_avulsas.qrcode_cliente",
         "contrato_pendente",
         "visualizar_contrato_registro",
