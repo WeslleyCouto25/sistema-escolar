@@ -131,13 +131,13 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
     <article>
       <div class="entryhead">
         <div><strong>{{ item.nome or ('Rascunho ' ~ item.numero_contrato) }}</strong><small>{{ item.numero_contrato }} · R$ {{ money(item.valor_centavos) }} · {{ item.parcelas }}x</small></div>
-        <span class="pill">{% if item.status == 'rascunho' %}Rascunho{% elif item.status == 'pago' %}Pago{% elif item.status == 'aguardando_pagamento' %}Assinado{% else %}Aguardando assinatura{% endif %}</span>
+        <span class="pill">{% if item.status == 'rascunho' %}Rascunho{% elif item.status == 'cancelado' %}Cancelado{% elif item.status == 'pago' %}Pago{% elif item.status == 'aguardando_pagamento' %}Assinado{% else %}Aguardando assinatura{% endif %}</span>
       </div>
       <div class="kv">{{ 'PicPay' if item.forma_cobranca == 'link' else 'QR Code' }} · {{ item.criado_em.strftime('%d/%m/%Y') }}</div>
       <div class="rowlinks">
         {% if item.status == 'rascunho' %}
-          <a href="/mew/cobrancas-avulsas/{{ item.id }}/editar">Completar e publicar</a>
-        {% else %}
+          <a href="/mew/cobrancas-avulsas/{{ item.id }}/editar">Editar dados / pagamento / publicar</a>
+        {% elif item.status != 'cancelado' %}
           {% set url_compartilhar = base_url ~ '/cobranca/' ~ item.token %}
           <button type="button" data-copy="{{ url_compartilhar }}" onclick="copiar(this.dataset.copy)">Copiar página</button>
           <a href="{{ url_compartilhar }}" target="_blank" rel="noopener">Abrir jornada</a>
@@ -149,6 +149,37 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
         <a href="/mew/cobrancas-avulsas/{{ item.id }}/evidencia/assinatura" target="_blank" rel="noopener">Assinatura</a>
         {% endif %}
       </div>
+      <div class="rowlinks"><a href="/mew/cobrancas-avulsas/{{ item.id }}/historico">Histórico de alterações</a></div>
+      {% if item.status == 'cancelado' %}
+      <details class="confirm">
+        <summary>Restaurar cobrança cancelada como rascunho</summary>
+        <form action="/mew/cobrancas-avulsas/{{ item.id }}/restaurar" method="post" onsubmit="return confirm('Reabrir como rascunho? Será obrigatório gerar novo contrato e novo link.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field"><label>Justificativa</label><input name="motivo" required minlength="10" maxlength="500" placeholder="Motivo para restaurar"></div>
+          <button class="button" type="submit">Restaurar para edição</button>
+        </form>
+      </details>
+      {% endif %}
+      {% if item.status not in ('pago', 'cancelado') %}
+      <details class="confirm">
+        <summary>Alterar dados, substituir link/QR ou solicitar nova assinatura</summary>
+        <p class="help">A revisão invalida o link anterior e, se já houve assinatura, exige nova assinatura. As provas anteriores ficam preservadas no histórico.</p>
+        <form action="/mew/cobrancas-avulsas/{{ item.id }}/revisar" method="post" onsubmit="return confirm('Revogar o link atual e preparar nova versão do contrato?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field"><label>Motivo da revisão</label><input name="motivo" required minlength="10" maxlength="500" placeholder="Ex.: corrigir endereço ou trocar o link PicPay"></div>
+          <button class="button" type="submit">Reabrir para edição e reenviar</button>
+        </form>
+      </details>
+      <details class="confirm">
+        <summary>Cancelar esta cobrança e invalidar o link</summary>
+        <p class="help">A assinatura e o histórico anteriores não serão apagados. Um link de pagamento externo do PicPay precisa ser cancelado separadamente no PicPay.</p>
+        <form action="/mew/cobrancas-avulsas/{{ item.id }}/cancelar" method="post" onsubmit="return confirm('Cancelar esta cobrança e invalidar a página do cliente?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="field"><label>Motivo do cancelamento</label><input name="motivo" required minlength="10" maxlength="500" placeholder="Motivo do cancelamento"></div>
+          <button class="button" type="submit">Cancelar cobrança</button>
+        </form>
+      </details>
+      {% endif %}
       {% if item.status == 'aguardando_pagamento' %}
       <details class="confirm">
         <summary>Confirmar pagamento após conferir no PicPay/banco</summary>

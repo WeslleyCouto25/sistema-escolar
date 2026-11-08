@@ -90,7 +90,7 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         app = app_for_tests()
         for filename in (
             "mew/cobrancas_avulsas.html", "contrato_cobranca_avulsa.html",
-            "cobranca_avulsa_cliente.html",
+            "cobranca_avulsa_cliente.html", "mew/historico_cobranca_avulsa.html",
         ):
             with self.subTest(filename=filename):
                 app.jinja_env.get_template(filename)
@@ -308,6 +308,81 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Anexe um QR Code", response.get_data(as_text=True))
 
+
+
+    def test_revisao_recria_token_preservando_prova_anterior(self):
+        item = example_item(status="aguardando_pagamento")
+        item.update({"foto_sha256": "f" * 64, "aceitou_contrato": True,
+                     "aceitou_foto": True, "versao": "1", "telefone": "",
+                     "endereco": "", "foto_r2_key": "original/foto.jpg"})
+        conn = FakeConnection(item)
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+            sess["cobranca_avulsa_csrf"] = "nonce"
+        with patch.object(av, "get_db_connection", return_value=conn):
+            res = client.post("/mew/cobrancas-avulsas/4/revisar", data={
+                "csrf_token": "nonce", "motivo": "Corrigir dados do contrato",
+            })
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(conn.commits, 1)
+        self.assertTrue(any("INSERT INTO cobrancas_avulsas_historico" in q for q, _ in conn.executed))
+        update = next((args for q, args in conn.executed if "SET\n                    token=" in q), None)
+        self.assertIsNotNone(update)
+        self.assertNotEqual(update[0], item["token"])
+
+    def test_cancelamento_impede_baixa_indevida_e_preserva_historico(self):
+        item = example_item(status="aguardando_assinatura")
+        conn = FakeConnection(item)
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+            sess["cobranca_avulsa_csrf"] = "nonce"
+        with patch.object(av, "get_db_connection", return_value=conn):
+            res = client.post("/mew/cobrancas-avulsas/4/cancelar", data={
+                "csrf_token": "nonce", "motivo": "Cliente desistiu da contratação",
+            })
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(conn.commits, 1)
+        self.assertTrue(any("cancelamento" in str(p) for _, p in conn.executed))
+
+    def test_quitado_nao_pode_ser_cancelado_ou_revisado(self):
+        for endpoint in ("cancelar", "revisar"):
+            with self.subTest(endpoint=endpoint):
+                item = example_item(status="pago")
+                app = app_for_tests()
+                client = app.test_client()
+                with client.session_transaction() as sess:
+                    sess["mew_admin"] = True
+                    sess["cobranca_avulsa_csrf"] = "nonce"
+                with patch.object(av, "get_db_connection", return_value=FakeConnection(item)):
+                    res = client.post("/mew/cobrancas-avulsas/4/" + endpoint, data={
+                        "csrf_token": "nonce", "motivo": "Correção solicitada pelo cliente",
+                    })
+                self.assertEqual(res.status_code, 409)
+
+    def test_cancelado_nao_abre_checkout_publico(self):
+        item = example_item(status="cancelado")
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(item)):
+            res = app_for_tests().test_client().get("/cobranca/" + item["token"])
+        self.assertEqual(res.status_code, 404)
+
+    def test_restauracao_exige_nova_assinatura_e_novo_link(self):
+        item = example_item(status="cancelado")
+        conn = FakeConnection(item)
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+            sess["cobranca_avulsa_csrf"] = "nonce"
+        with patch.object(av, "get_db_connection", return_value=conn):
+            res = client.post("/mew/cobrancas-avulsas/4/restaurar", data={
+                "csrf_token": "nonce", "motivo": "Cliente solicitou nova proposta",
+            })
+        self.assertEqual(res.status_code, 302)
+        self.assertTrue(any("restauracao" in str(p) for _, p in conn.executed))
 
 if __name__ == "__main__":
     unittest.main()
