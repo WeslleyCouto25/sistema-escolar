@@ -130,7 +130,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
     {% for item in itens %}
     <article>
       <div class="entryhead">
-        <div><strong>{{ item.nome or ('Rascunho ' ~ item.numero_contrato) }}</strong><small>{{ item.numero_contrato }} · R$ {{ money(item.valor_centavos) }} · {{ item.parcelas }}x</small></div>
+        <div><strong>{{ item.nome or ('Rascunho ' ~ item.numero_contrato) }}</strong><small>{{ item.numero_contrato }}{% if item.matricula %} · RA {{ item.matricula }}{% endif %} · R$ {{ money(item.valor_centavos) }} · {{ item.parcelas }}x</small></div>
         <span class="pill">{% if item.status == 'rascunho' %}Rascunho{% elif item.status == 'cancelado' %}Cancelado{% elif item.status == 'pago' %}Pago{% elif item.status == 'aguardando_pagamento' %}Assinado{% else %}Aguardando assinatura{% endif %}</span>
       </div>
       <div class="kv">{{ 'PicPay' if item.forma_cobranca == 'link' else 'QR Code' }} · {{ item.criado_em.strftime('%d/%m/%Y') }}</div>
