@@ -169,6 +169,8 @@ def _criar_link_picpay(nome, aluno_id, valor_centavos, pedido, retorno):
 
 def criar_cobranca_picpay(aluno_id, nome, email, valor_total, contrato_id=None):
     """Cria ou reaproveita a cobrança pendente de um aluno, pelo valor financeiro salvo."""
+    if not os.getenv("PICPAY_WEBHOOK_API_KEY"):
+        raise PicPayError("Configure a chave do webhook PicPay antes de gerar cobranças.")
     cents = _centavos(valor_total)
     conn = get_db_connection()
     try:
@@ -364,11 +366,18 @@ def webhook_picpay():
     finally:
         conn.close()
 
-    if novo_pagamento and _paid_callback:
+    if novo_pagamento:
+        # Evita que o mesmo link continue aceitando novas vendas após a primeira baixa.
+        # Uma falha de inativação não desfaz um pagamento já confirmado.
         try:
-            _paid_callback(aluno_id, referencia="picpay:" + transaction_id + ":boas_vindas",
-                           pagamento_id=transaction_id)
-        except Exception:
-            # Não reverter a confirmação financeira por falha no serviço de e-mail.
+            _api("POST", "/paymentlink/" + link_id + "/inactive")
+        except PicPayError:
             pass
+        if _paid_callback:
+            try:
+                _paid_callback(aluno_id, referencia="picpay:" + transaction_id + ":boas_vindas",
+                               pagamento_id=transaction_id)
+            except Exception:
+                # Não reverter a confirmação financeira por falha no serviço de e-mail.
+                pass
     return jsonify(ok=True), 200
