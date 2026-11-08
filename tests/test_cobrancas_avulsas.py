@@ -176,5 +176,50 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+    def test_http_aceite_foto_assinatura_gatilho_servidor(self):
+        obj = example_item()
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["cobranca_avulsa_public_csrf"] = {obj["token"]: "teste-nonce"}
+        sig = Image.new("RGBA", (600, 200), (0, 0, 0, 0))
+        ImageDraw.Draw(sig).line((20, 20, 300, 100), fill=(5, 5, 5, 255), width=6)
+        sig_bytes = io.BytesIO()
+        sig.save(sig_bytes, "PNG")
+        foto = io.BytesIO()
+        Image.new("RGB", (500, 500), "white").save(foto, "JPEG")
+        with (
+            patch.object(av, "get_db_connection", return_value=FakeConnection(obj)),
+            patch.object(av, "_sign") as sign,
+        ):
+            result = client.post(
+                "/cobranca/" + obj["token"],
+                data={"csrf_token": "teste-nonce", "aceite_contrato": "1", "aceite_foto": "1",
+                      "assinatura": (io.BytesIO(sig_bytes.getvalue()), "assinatura.png"),
+                      "foto": (io.BytesIO(foto.getvalue()), "foto.jpg")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(result.status_code, 302)
+        self.assertIn("/cobranca/", result.location)
+        sign.assert_called_once()
+
+    def test_http_sem_aceites_impede_avanco(self):
+        obj = example_item()
+        app = app_for_tests()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["cobranca_avulsa_public_csrf"] = {obj["token"]: "teste-nonce"}
+        with (
+            patch.object(av, "get_db_connection", return_value=FakeConnection(obj)),
+            patch.object(av, "_sign") as sign,
+        ):
+            result = client.post(
+                "/cobranca/" + obj["token"],
+                data={"csrf_token": "teste-nonce"},
+            )
+        self.assertEqual(result.status_code, 200)
+        sign.assert_not_called()
+        self.assertNotIn(obj["link_pagamento"], result.get_data(as_text=True))
+
 if __name__ == "__main__":
     unittest.main()
