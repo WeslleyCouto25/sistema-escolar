@@ -659,6 +659,68 @@ def cancelar_contrato(id_):
     return redirect(url_for(".administrar_cobrancas"))
 
 
+
+@cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/restaurar")
+def restaurar_cancelado(id_):
+    """Restaura como rascunho, sem ressuscitar link nem aceite antigos."""
+    if not _admin():
+        abort(403)
+    _check_csrf()
+    motivo = (request.form.get("motivo") or "").strip()
+    if not 10 <= len(motivo) <= 500:
+        abort(400, "Informe a justificativa para reabrir o contrato.")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM cobrancas_avulsas WHERE id=%s FOR UPDATE", (id_,))
+        item = cur.fetchone()
+        if not item:
+            abort(404)
+        if item["status"] != "cancelado":
+            abort(409, "Somente cobranças canceladas podem ser restauradas.")
+        _registrar_historico(cur, item, "restauracao", motivo)
+        cur.execute("""
+            UPDATE cobrancas_avulsas SET
+                token=%s, status='rascunho', contrato_html='', contrato_sha256='',
+                assinatura_r2_key=NULL, foto_r2_key=NULL,
+                assinatura_sha256=NULL, foto_sha256=NULL, hash_aceite=NULL,
+                ip_assinatura=NULL, user_agent_assinatura=NULL,
+                aceitou_contrato=FALSE, aceitou_foto=FALSE,
+                assinado_em=NULL, atualizado_em=NOW()
+            WHERE id=%s AND status='cancelado'
+        """, (secrets.token_urlsafe(36), id_))
+        if cur.rowcount != 1:
+            abort(409, "A cobrança mudou de estado.")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return redirect(url_for(".editar_rascunho", id_=id_))
+
+
+@cobrancas_avulsas_bp.get("/mew/cobrancas-avulsas/<int:id_>/historico")
+def historico_cobranca(id_):
+    if not _admin():
+        abort(403)
+    item = _get_admin(id_)
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT evento,motivo,criado_em,dados_anteriores
+              FROM cobrancas_avulsas_historico
+             WHERE cobranca_id=%s ORDER BY id DESC
+        """, (id_,))
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    # Nunca expor o JSON com CPF ou URL assinada em uma página pública.
+    return render_template("mew/historico_cobranca_avulsa.html",
+                           c=item, eventos=rows)
+
+
 @cobrancas_avulsas_bp.post("/mew/cobrancas-avulsas/<int:id_>/confirmar-pagamento")
 def confirmar_manual(id_):
     if not _admin():
