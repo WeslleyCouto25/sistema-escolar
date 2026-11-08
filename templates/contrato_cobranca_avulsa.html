@@ -31,7 +31,7 @@ th{width:31%;font-size:12px;background:#f2f3f5}
 <table>
   <tr><th>Contratante</th><td>{{ c.nome }}</td></tr>
   <tr><th>CPF</th><td>{{ c.cpf[:3] }}.{{ c.cpf[3:6] }}.{{ c.cpf[6:9] }}-{{ c.cpf[9:] }}</td></tr>
-  <tr><th>E-mail</th><td>{{ c.email }}</td></tr>
+  <tr><th>E-mail institucional</th><td>{{ c.email if c.email else "A ser atribuído após a geração da matrícula/RA; não informado na presente contratação." }}</td></tr>
   {% if c.telefone %}<tr><th>Telefone</th><td>{{ c.telefone }}</td></tr>{% endif %}
   {% if c.endereco %}<tr><th>Endereço declarado</th><td>{{ c.endereco }}</td></tr>{% endif %}
   <tr><th>Prestadora / executora</th><td>SIGEU Educacional, observada a identificação institucional e a documentação comercial da contratação.</td></tr>
