@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 from flask import (
     Blueprint, abort, current_app, redirect, render_template, request,
-    session, url_for,
+    session, url_for, make_response,
 )
 from PIL import Image, ImageChops, ImageOps, UnidentifiedImageError
 from markupsafe import escape
@@ -594,6 +594,39 @@ def contrato_admin(id_):
 @cobrancas_avulsas_bp.get("/cobranca/<token>/contrato")
 def contrato_publico(token):
     return _contrato_documento(_get(token))
+
+
+@cobrancas_avulsas_bp.get("/mew/cobrancas-avulsas/<int:id_>/contrato.pdf")
+def pdf_contrato_admin(id_):
+    if not _admin():
+        abort(403)
+    item = _get_admin(id_)
+    if item["status"] == "rascunho":
+        abort(409, "Complete o contrato antes de emitir PDF.")
+    return _pdf_contrato(item)
+
+
+@cobrancas_avulsas_bp.get("/cobranca/<token>/contrato.pdf")
+def pdf_contrato_publico(token):
+    return _pdf_contrato(_get(token))
+
+
+def _pdf_contrato(item):
+    """Exporta PDF a partir da mesma versão HTML fixada no banco."""
+    from weasyprint import HTML
+    response_html = _contrato_documento(item).get_data(as_text=True)
+    try:
+        pdf = HTML(string=response_html, base_url=request.url_root).write_pdf()
+    except Exception:
+        current_app.logger.exception("Falha ao gerar contrato PDF %s", item["id"])
+        abort(503, "O PDF não está disponível neste momento. Use a versão HTML.")
+    response = make_response(pdf)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        "attachment; filename=Contrato_SIGEU_" +
+        re.sub(r"[^A-Za-z0-9_-]", "_", item["numero_contrato"]) + ".pdf"
+    )
+    return response
 
 
 def _contrato_documento(item):
