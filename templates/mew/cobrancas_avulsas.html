@@ -130,15 +130,19 @@ input:focus,select:focus,textarea:focus{outline:2px solid #91bbdc;outline-offset
     {% for item in itens %}
     <article>
       <div class="entryhead">
-        <div><strong>{{ item.nome }}</strong><small>{{ item.numero_contrato }} · R$ {{ money(item.valor_centavos) }} · {{ item.parcelas }}x</small></div>
-        <span class="pill">{% if item.status == 'pago' %}Pago{% elif item.status == 'aguardando_pagamento' %}Assinado{% else %}Aguardando assinatura{% endif %}</span>
+        <div><strong>{{ item.nome or ('Rascunho ' ~ item.numero_contrato) }}</strong><small>{{ item.numero_contrato }} · R$ {{ money(item.valor_centavos) }} · {{ item.parcelas }}x</small></div>
+        <span class="pill">{% if item.status == 'rascunho' %}Rascunho{% elif item.status == 'pago' %}Pago{% elif item.status == 'aguardando_pagamento' %}Assinado{% else %}Aguardando assinatura{% endif %}</span>
       </div>
       <div class="kv">{{ 'PicPay' if item.forma_cobranca == 'link' else 'QR Code' }} · {{ item.criado_em.strftime('%d/%m/%Y') }}</div>
-      {% set url_compartilhar = base_url ~ '/cobranca/' ~ item.token %}
       <div class="rowlinks">
-        <button type="button" data-copy="{{ url_compartilhar }}" onclick="copiar(this.dataset.copy)">Copiar página</button>
-        <a href="{{ url_compartilhar }}" target="_blank" rel="noopener">Abrir jornada</a>
-        <a href="/mew/cobrancas-avulsas/{{ item.id }}/contrato" target="_blank" rel="noopener">Contrato</a>
+        {% if item.status == 'rascunho' %}
+          <a href="/mew/cobrancas-avulsas/{{ item.id }}/editar">Completar e publicar</a>
+        {% else %}
+          {% set url_compartilhar = base_url ~ '/cobranca/' ~ item.token %}
+          <button type="button" data-copy="{{ url_compartilhar }}" onclick="copiar(this.dataset.copy)">Copiar página</button>
+          <a href="{{ url_compartilhar }}" target="_blank" rel="noopener">Abrir jornada</a>
+          <a href="/mew/cobrancas-avulsas/{{ item.id }}/contrato" target="_blank" rel="noopener">Contrato</a>
+        {% endif %}
         {% if item.assinado_em %}
         <a href="/mew/cobrancas-avulsas/{{ item.id }}/evidencia/foto" target="_blank" rel="noopener">Foto</a>
         <a href="/mew/cobrancas-avulsas/{{ item.id }}/evidencia/assinatura" target="_blank" rel="noopener">Assinatura</a>
