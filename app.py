@@ -2897,6 +2897,8 @@ def mew_gerar_cobranca_aluno(aluno_id):
         return redirect("/mew/alunos?erro_mp=Aluno+sem+valor+financeiro+cadastrado")
     if aluno.get("status_financeiro") == "pago":
         return redirect("/mew/alunos?erro_mp=Aluno+ja+possui+pagamento+confirmado")
+    if aluno.get("status_financeiro") == "parcial":
+        return redirect("/mew/alunos?erro_mp=Conferir+saldo+remanescente+do+aluno+antes+de+gerar+cobranca")
 
     try:
         cobranca = criar_cobranca_picpay(
@@ -3344,7 +3346,11 @@ def mew_editar_aluno(aluno_id):
                 else:
                     parcelas_total = 1
                     if not status_financeiro:
-                        status_financeiro = "pago"
+                        status_financeiro = ("pendente"
+                                            if forma_pagamento in ("picpay", "mercadopago")
+                                            else "pago")
+                    if forma_pagamento in ("picpay", "mercadopago") and status_financeiro != "pago":
+                        parcelas_pagas = "0"
 
                 # Verificar se já existe situação financeira
                 cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
@@ -12451,7 +12457,8 @@ def _dados_contrato_render(contrato_id):
         "avista": "À vista",
         "cartao": "Cartão",
         "boleto_pix": "Boleto / PIX",
-        "mercadopago": "Mercado Pago - PIX / Cartão"
+        "mercadopago": "Mercado Pago - PIX / Cartão",
+        "picpay": "PicPay - Pix / Cartão"
     }
     forma_pagamento = formas_pagamento.get(aluno["forma_pagamento"], aluno["forma_pagamento"] or "Não informado")
 
