@@ -490,7 +490,7 @@ def administrar_cobrancas():
     try:
         cur = conn.cursor()
         cur.execute("""
-            SELECT id,token,numero_contrato,nome,valor_centavos,parcelas,juros,
+            SELECT id,token,numero_contrato,nome,matricula,valor_centavos,parcelas,juros,
                    forma_cobranca,status,criado_em,assinado_em,pago_em,referencia_pagamento
             FROM cobrancas_avulsas ORDER BY id DESC LIMIT 60
         """)
