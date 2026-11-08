@@ -28,6 +28,7 @@ class FakeConnection:
     def __init__(self, obj):
         self.obj = obj
         self.executed = []
+        self.rowcount = 1
         self.commits = 0
     def cursor(self):
         return self
