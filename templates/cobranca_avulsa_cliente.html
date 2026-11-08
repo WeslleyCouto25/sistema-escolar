@@ -74,6 +74,7 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
       <p>Leia integralmente o documento a seguir. A etapa de pagamento só será disponibilizada após o registro da sua assinatura e fotografia de confirmação.</p>
       <iframe class="doc" title="Contrato individualizado para leitura" src="/cobranca/{{ c.token }}/contrato"></iframe>
       <p class="muted" style="font-size:12px">Contrato n.º {{ c.numero_contrato }} · Documento emitido eletronicamente. Você pode rolar dentro do quadro para ler todas as cláusulas.</p>
+      <p><a class="btn secondary" href="/cobranca/{{ c.token }}/contrato.pdf">Baixar PDF para conferência</a></p>
       {% if erro %}<div class="error" role="alert">{{ erro }}</div>{% endif %}
       <button class="btn" type="button" id="startBtn" onclick="mostrarAssinatura()">Li o contrato e quero continuar</button>
     </div>
@@ -143,6 +144,7 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
         <div><span class="label">Estado financeiro</span><br><strong>{{ 'Pago' if c.status == 'pago' else 'Aguardando confirmação' }}</strong></div>
       </div>
       <a class="btn secondary" href="/cobranca/{{ c.token }}/contrato" target="_blank" rel="noopener">Abrir contrato assinado</a>
+      <a class="btn secondary" href="/cobranca/{{ c.token }}/contrato.pdf">Baixar contrato em PDF</a>
       {% if c.status != 'pago' %}
       <p class="note">A assinatura não significa pagamento. Após efetuar a transação, aguarde a confirmação do recebimento pela instituição. O nome do recebedor mostrado no PicPay é o da conta legalmente cadastrada e não pode ser alterado por esta página.</p>
       {% endif %}
