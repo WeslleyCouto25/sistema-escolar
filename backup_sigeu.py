@@ -7,6 +7,9 @@ A restauracao deve ser ensaiada numa BASE VAZIA/ISOLADA, nunca automaticamente.
 import base64
 import hashlib
 import io
+import logging
+import threading
+import time
 import json
 import os
 import re
@@ -233,3 +236,37 @@ def recent_backups(limit=4):
     objects = sorted(result.get("Contents", []), key=lambda x: x["LastModified"], reverse=True)
     return [{"id": x["Key"], "bytes": int(x["Size"]), "time": x["LastModified"].isoformat()}
             for x in objects[:limit]]
+
+_scheduler_guard = threading.Lock()
+_scheduler_started_pid = None
+
+
+def start_periodic_backups():
+    """Backup a cada 6 h no web worker atual, sem contratar outro servico.
+
+    O processo e daemon e nao substitui um cron dedicado. A captura pre-deploy
+    permanece a garantia adicional contra mudancas de versao.
+    """
+    global _scheduler_started_pid
+    if os.getenv("SIGEU_BACKUP_PERIODIC") != "1":
+        return False
+    _aes_key()
+    hours = max(1, min(24, int(os.getenv("SIGEU_BACKUP_INTERVAL_HOURS", "6"))))
+    with _scheduler_guard:
+        if _scheduler_started_pid == os.getpid():
+            return True
+        _scheduler_started_pid = os.getpid()
+
+        def runner():
+            while True:
+                time.sleep(hours * 3600)
+                try:
+                    result = create_backup()
+                    logging.getLogger("sigeu.backups").info(
+                        "SIGEU PERIODIC BACKUP VERIFIED source=%s tables=%s rows=%s sha256=%s",
+                        result["database_id"], result["tables"], result["rows"], result["sha256"])
+                except Exception:
+                    logging.getLogger("sigeu.backups").exception("SIGEU PERIODIC BACKUP FAILED")
+
+        threading.Thread(target=runner, name="sigeu-r2-backup", daemon=True).start()
+        return True
