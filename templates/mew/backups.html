@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Proteção de dados | MEW SIGEU</title>
+<style>
+:root{--ink:#27333c;--muted:#64747d;--line:#d5dfe5;--graphite:#30363a;--orange:#c86d20}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 Arial,Helvetica,sans-serif;color:var(--ink);background:#f1f4f6}
+header{background:var(--graphite);border-bottom:4px solid var(--orange);color:white;padding:16px max(18px,calc((100vw - 1160px)/2));display:flex;justify-content:space-between;align-items:center;gap:12px}
+header strong{font-size:16px}header a{color:#fff;text-decoration:none;border:1px solid #85939b;padding:9px 12px;border-radius:3px}
+main{max-width:1160px;margin:30px auto;padding:0 18px 50px}
+h1{font-size:28px;line-height:1.2;margin:0 0 5px}h2{font-size:18px;margin:0 0 13px}
+.lead{color:var(--muted);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.panel{background:white;border:1px solid var(--line);padding:23px;margin-bottom:20px;box-shadow:0 4px 14px #162a3910}
+.kpi{font-size:27px;font-weight:800;color:var(--graphite);margin:5px 0}
+.small{color:var(--muted);font-size:12px}
+.info{background:#f5f7f9;border-left:4px solid var(--orange);padding:13px 15px;margin:16px 0}
+.success{border:1px solid #aed2b8;background:#f0f9f2;padding:14px;margin-bottom:18px}
+.error{border:1px solid #e4b9ad;background:#fff5f1;color:#8b3627;padding:14px;margin-bottom:18px}
+table{border-collapse:collapse;width:100%}th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:12px;overflow-wrap:anywhere}th{color:var(--muted);font-weight:700}
+button{background:var(--graphite);color:white;border:none;padding:13px 18px;cursor:pointer;font-weight:700;border-radius:3px}
+button:hover{background:#4a5358}
+code{overflow-wrap:anywhere;font-size:12px}
+@media(max-width:780px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}h1{font-size:23px}}
+</style>
+</head>
+<body>
+<header><div><strong>SIGEU Educacional · MEW</strong><div style="font-size:11px;color:#d0d6da">Infraestrutura e integridade dos registros</div></div><a href="/mew/cobrancas-avulsas">Voltar às cobranças</a></header>
+<main>
+<h1>Proteção dos registros</h1>
+<p class="lead">Diagnóstico do PostgreSQL conectado e cópias criptografadas no Cloudflare R2.</p>
+{% if erro %}<div class="error" role="alert">{{ erro }}</div>{% endif %}
+{% if realizado %}<div class="success" role="status"><strong>Backup conferido no R2.</strong>
+  <div class="small">{{ realizado.tables }} tabelas · {{ realizado.rows }} registros · SHA-256 {{ realizado.sha256[:16] }}…</div>
+</div>{% endif %}
+<div class="grid">
+  <section class="panel">
+    <h2>Banco conectado</h2>
+    <div class="small">Identificador técnico anonimizado da origem</div>
+    <div class="kpi" style="font-size:22px;font-family:monospace">{{ diagnostico.database_id or 'Indisponível' }}</div>
+    <p class="small">Este identificador ajuda a reconhecer uma eventual troca de banco entre implantações. Não expõe credenciais nem endereços.</p>
+    <p><strong>{{ diagnostico.tabelas or 0 }}</strong> tabelas comuns identificadas</p>
+    <table><thead><tr><th>Tabela</th><th>Registros</th></tr></thead><tbody>
+    {% for tabela, total in (diagnostico.contagens or {}).items() %}
+      <tr><td>{{ tabela }}</td><td>{{ total if total is not none else 'Não encontrada' }}</td></tr>
+    {% endfor %}
+    </tbody></table>
+  </section>
+  <section class="panel">
+    <h2>Executar cópia de segurança</h2>
+    <p>O SiGEU exporta as tabelas do PostgreSQL em uma transação de leitura consistente e criptografa o pacote antes de enviá-lo ao R2.</p>
+    <div class="info"><strong>Não altera contratos ou pagamentos.</strong> A exportação não apaga, substitui ou restaura dados. As cópias possuem nomes exclusivos, preservando versões anteriores.</div>
+    <form method="post" action="/mew/backups">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="acao" value="criar">
+      <button type="submit">Criar backup criptografado agora</button>
+    </form>
+    <p class="small">A recuperação de dados exige uma restauração controlada em um banco separado, com conferência das integridades.</p>
+  </section>
+</div>
+<section class="panel">
+  <h2>Cópias mais recentes no Cloudflare R2</h2>
+  {% if backups %}
+  <table><thead><tr><th>Data/hora (UTC)</th><th>Tamanho</th><th>Identificador</th></tr></thead><tbody>
+    {% for item in backups %}
+    <tr><td>{{ item.time }}</td><td>{{ (item.bytes / 1048576)|round(2) }} MB</td><td><code>{{ item.id }}</code></td></tr>
+    {% endfor %}
+  </tbody></table>
+  {% else %}<p class="small">Ainda não foi possível confirmar uma cópia armazenada.</p>{% endif %}
+</section>
+</main></body></html>

@@ -6,6 +6,10 @@ on:
       - 'migrate.py'
       - 'picpay_mew.py'
       - 'cobrancas_avulsas.py'
+      - 'backup_sigeu.py'
+      - 'templates/mew/backups.html'
+      - 'tests/test_backup_sigeu.py'
+      - 'requirements.txt'
       - 'templates/cobranca_avulsa_cliente.html'
       - 'templates/contrato_cobranca_avulsa.html'
       - 'templates/mew/cobrancas_avulsas.html'
@@ -23,8 +27,9 @@ jobs:
         with:
           python-version: '3.13'
       - name: Dependencias minimas
-        run: python -m pip install 'Flask==3.1.2' 'requests==2.32.5' 'Pillow==12.1.0'
+        run: python -m pip install 'Flask==3.1.2' 'requests==2.32.5' 'Pillow==12.1.0' 'cryptography>=45.0,<47.0' 'psycopg2-binary==2.9.10' 'boto3==1.40.30'
       - name: Testes e verificacao sintatica
         run: |
+          python -m unittest discover -s tests -p 'test_backup_sigeu.py' -v
           python -m unittest discover -s tests -p 'test_picpay_mew.py' -v
           python -m unittest discover -s tests -p 'test_cobrancas_avulsas.py' -v
