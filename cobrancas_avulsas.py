@@ -939,8 +939,8 @@ def _contrato_documento(item):
         stamp = item["assinado_em"].astimezone(_TIMEZONE).strftime("%d/%m/%Y %H:%M:%S")
         # Evidências não são inseridas na página pública; só na área autenticada do MEW.
         extra = (
-            "<section style='border:1px solid #9ca3af;padding:16px;margin:22px auto;max-width:900px'>"
-            "<strong>ACEITE ELETRÔNICO REGISTRADO</strong><br>"
+            "<section style='border:1px solid #cbd7e0;border-top:4px solid #b29152;background:#f7f9fb;padding:20px 22px;margin:28px auto;max-width:900px;break-inside:avoid;font:11px/1.65 Arial,sans-serif;color:#273c4f;overflow-wrap:anywhere'>"
+            "<strong style='font:700 14px Georgia,serif;color:#153550;letter-spacing:.025em'>ACEITE ELETRÔNICO REGISTRADO</strong><hr style='border:0;border-top:1px solid #cbd7e0;margin:12px 0'>"
             "Data/hora: " + stamp + "<br>Hash do aceite: " + (item["hash_aceite"] or "") +
             "<br>O original do contrato foi mantido com hash SHA-256 de sua versão apresentada."
         )
@@ -948,9 +948,9 @@ def _contrato_documento(item):
             foto = escape(r2_presigned_url(item["foto_r2_key"], inline=True))
             ass = escape(r2_presigned_url(item["assinatura_r2_key"], inline=True))
             extra += (
-                "<div style='display:flex;gap:20px;flex-wrap:wrap;margin-top:20px'>"
-                "<div><b>Fotografia de confirmação</b><br><img style='max-width:240px;max-height:200px' src='" + foto + "'></div>"
-                "<div><b>Assinatura grafada</b><br><img style='max-width:300px;max-height:160px' src='" + ass + "'></div>"
+                "<div style='display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;border-top:1px solid #cbd7e0;padding-top:15px'>"
+                "<div style='flex:1;min-width:190px'><b style='display:block;color:#153550;margin-bottom:8px'>Fotografia de confirmação</b><img style='max-width:240px;max-height:200px;border:1px solid #cbd7e0;background:#fff;padding:5px' src='" + foto + "'></div>"
+                "<div style='flex:1;min-width:190px'><b style='display:block;color:#153550;margin-bottom:8px'>Assinatura grafada</b><img style='max-width:300px;max-height:160px;border:1px solid #cbd7e0;background:#fff;padding:5px' src='" + ass + "'></div>"
                 "</div>"
                 "<p>IP registrado: " + str(escape(item.get("ip_assinatura") or "")) +
                 "<br>Resumo da assinatura: " + (item.get("assinatura_sha256") or "") + "</p>"

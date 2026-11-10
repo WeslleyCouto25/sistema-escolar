@@ -4,29 +4,94 @@
 <meta name="robots" content="noindex,nofollow">
 <title>Contrato {{ c.numero_contrato }} · SIGEU Educacional</title>
 <style>
-@page{size:A4;margin:20mm 23mm}
+@page {
+  size: A4;
+  margin: 22mm 19mm 23mm;
+  @top-left {
+    content: "SIGEU  /  INSTRUMENTO CONTRATUAL";
+    font-family: Arial, Helvetica, sans-serif; font-size: 8pt; font-weight: bold;
+    color: #214363; letter-spacing: .7pt;
+    border-bottom: .5pt solid #c8d4df; padding-bottom: 5pt;
+  }
+  @top-right {
+    content: "DOCUMENTO INDIVIDUALIZADO";
+    font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt;
+    color: #647789; border-bottom: .5pt solid #c8d4df; padding-bottom: 5pt;
+  }
+  @bottom-left {
+    content: "SIGEU Educacional  |  Formalização eletrônica";
+    font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #647789;
+    border-top: .5pt solid #c8d4df; padding-top: 5pt;
+  }
+  @bottom-right {
+    content: "Página " counter(page) " de " counter(pages);
+    font-family: Arial, Helvetica, sans-serif; font-size: 7.5pt; color: #214363;
+    border-top: .5pt solid #c8d4df; padding-top: 5pt;
+  }
+}
+:root{--navy:#153550;--navy2:#245475;--gold:#b29152;--ink:#1c2934;--muted:#617183;--line:#cbd5de}
 *{box-sizing:border-box}
-body{font:13px/1.75 Georgia,"Times New Roman",serif;color:#15191d;margin:0;background:#e8edf0}
-main{width:min(890px,calc(100% - 22px));margin:24px auto;background:white;padding:46px 54px;box-shadow:0 7px 25px #20293113}
-header{text-align:center;border-bottom:2px solid #222;padding-bottom:19px;margin-bottom:22px}
-header small{display:block;letter-spacing:.17em;text-transform:uppercase;font:11px Arial,sans-serif}
-h1{font-size:18px;text-transform:uppercase;letter-spacing:.045em;margin:12px 0 5px;line-height:1.4}
-h2{font-size:13px;text-transform:uppercase;letter-spacing:.035em;margin:22px 0 7px}
-p{text-align:justify;margin:8px 0}
-table{width:100%;border-collapse:collapse;margin:14px 0}
-td,th{border:1px solid #9da3a9;padding:8px 10px;vertical-align:top;text-align:left}
-th{width:31%;font-size:12px;background:#f2f3f5}
-.footer{border-top:1px solid #555;margin-top:32px;padding-top:17px;text-align:center}
-.footer p{text-align:center;font-size:11px}
-@media(max-width:670px){main{width:100%;margin:0;padding:25px 18px;box-shadow:none}table{font-size:12px}th{width:38%}}
-@media print{body{background:white}main{width:100%;margin:0;padding:0;box-shadow:none}h2{break-after:avoid}p{orphans:3;widows:3}}
+html{background:#e9eef2}
+body{margin:0;color:var(--ink);font:12px/1.65 Georgia,"Times New Roman",serif;background:#e9eef2}
+main{width:min(850px,calc(100% - 32px));background:#fff;margin:32px auto;padding:48px 53px;box-shadow:0 18px 65px #102b431c}
+header{margin:0 0 24px;padding:0 0 20px;border-bottom:2px solid var(--navy)}
+.letterhead{display:table;width:100%;margin-bottom:22px}
+.brandmark{display:table-cell;width:52px;height:52px;background:var(--navy);color:#fff;text-align:center;vertical-align:middle;font:700 29px Georgia,serif;border-bottom:4px solid var(--gold)}
+.brand-copy{display:table-cell;vertical-align:middle;padding-left:15px;font-family:Arial,Helvetica,sans-serif}
+.brand-copy strong{display:block;font-size:17px;line-height:1.2;color:var(--navy);letter-spacing:.07em}
+.brand-copy span{display:block;font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:.09em;text-transform:uppercase}
+.doc-class{font:700 9px Arial,Helvetica,sans-serif;color:var(--navy2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:7px}
+h1{font-size:22px;line-height:1.26;margin:0 0 12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.01em}
+.doc-number{display:flex;align-items:center;justify-content:space-between;gap:12px;font:11px Arial,Helvetica,sans-serif;color:var(--muted)}
+.doc-number strong{color:var(--navy)}
+.doc-flag{display:inline-block;border:1px solid #c8d5df;background:#f2f6f9;padding:6px 9px;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy)}
+h2{font:700 11px/1.45 Arial,Helvetica,sans-serif;color:var(--navy);letter-spacing:.04em;text-transform:uppercase;margin:24px 0 10px;padding:0 0 6px;border-bottom:1px solid #d9e1e7;break-after:avoid}
+h2:not(:first-of-type){border-left:3px solid var(--gold);padding-left:10px;border-bottom:0;margin-bottom:5px}
+p{margin:7px 0 11px;text-align:justify;orphans:3;widows:3}
+table{width:100%;border-collapse:collapse;border:1px solid #cdd7df;margin:12px 0 18px;font:11px/1.5 Arial,Helvetica,sans-serif;table-layout:fixed}
+tr{break-inside:avoid}
+th,td{border-bottom:1px solid #dae2e9;padding:9px 11px;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+th{width:32%;background:#f1f5f8;color:#354e62;font-weight:700}
+tr:nth-child(even) td{background:#fbfcfd}
+td strong{color:var(--navy)}
+td[style]{white-space:pre-wrap}
+.legal-intro{font:10px/1.55 Arial,Helvetica,sans-serif;background:#f5f8fa;border-left:3px solid var(--gold);padding:13px 15px;margin:13px 0 18px;color:#496074;text-align:left}
+.section-label{color:#647789;font:700 9px Arial,Helvetica,sans-serif;letter-spacing:.07em;text-transform:uppercase}
+.execution{border:1px solid #d1dbe3;margin:24px 0 14px;padding:14px 17px;break-inside:avoid}
+.execution strong{display:block;font:700 10px Arial,Helvetica,sans-serif;color:var(--navy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.execution p{margin:0;font-size:10.5px;color:#4f6070;line-height:1.55;text-align:left}
+.footer{border-top:2px solid var(--navy);padding-top:14px;margin-top:24px;break-inside:avoid}
+.footer p{text-align:center;font:9px/1.5 Arial,Helvetica,sans-serif;color:var(--muted);margin:4px}
+.footer p:first-child{font-weight:700;color:var(--navy)}
+.footer p:last-child{font-size:9px;letter-spacing:.06em;font-weight:700;color:var(--navy)}
+@media(max-width:670px){
+  main{width:100%;margin:0;padding:28px 19px;box-shadow:none}
+  h1{font-size:19px}.brand-copy strong{font-size:15px}
+  .doc-number{display:block}.doc-flag{margin-top:8px}
+  th,td{padding:8px 7px;font-size:10px}th{width:38%}
+}
+@media print{
+  html,body{background:#fff}
+  main{width:auto;margin:0;padding:0;box-shadow:none}
+  header{break-after:avoid}
+  h1{font-size:20px}
+  .letterhead{margin-bottom:14px}
+  table{font-size:10px}
+  th,td{padding:7px 9px}
+  h2{margin-top:18px}
+}
 </style></head>
 <body><main>
 <header>
-  <small>Instrumento particular · Prestação de serviços educacionais</small>
+  <div class="letterhead">
+    <div class="brandmark">S</div>
+    <div class="brand-copy"><strong>SIGEU EDUCACIONAL</strong><span>Documentação institucional · Gestão de contratos</span></div>
+  </div>
+  <div class="doc-class">Instrumento particular de contratação eletrônica</div>
   <h1>Contrato de Prestação de Serviços Educacionais</h1>
-  <div>Número: <b>{{ c.numero_contrato }}</b> · Versão {{ versao }}</div>
+  <div class="doc-number"><span>Contrato nº <strong>{{ c.numero_contrato }}</strong> &nbsp;·&nbsp; Emissão {{ timestamp }} &nbsp;·&nbsp; Versão {{ versao }}</span><span class="doc-flag">Via do contratante</span></div>
 </header>
+<p class="legal-intro">O presente instrumento contém a identificação das partes, o objeto individualizado, as condições financeiras e as cláusulas aplicáveis. A leitura integral precede a formalização eletrônica e o acesso ao pagamento.</p>
 <h2>Quadro-resumo da contratação</h2>
 <table>
   <tr><th>Contratante</th><td>{{ c.nome }}</td></tr>
@@ -66,9 +131,10 @@ th{width:31%;font-size:12px;background:#f2f3f5}
 <p>Solicitações e divergências serão inicialmente encaminhadas ao atendimento administrativo informado na contratação, resguardado o acesso aos meios extrajudiciais e judiciais previstos na legislação. Eventual definição de competência observará as regras legais de proteção do consumidor.</p>
 <h2>Cláusula 11 — Concordância</h2>
 <p>O contratante declara ciência de que poderá examinar integralmente este documento antes de assinar, de que a página de pagamento somente será disponibilizada após a assinatura e de que os dados bancários e de cartão são processados diretamente pelo prestador externo de pagamento, não pela SIGEU Educacional.</p>
+<section class="execution" aria-label="Formalização eletrônica"><strong>Formalização e integridade documental</strong><p>A manifestação de vontade, quando realizada, será vinculada ao identificador contratual e ao respectivo registro de evidências. A assinatura e a fotografia de confirmação são documentadas separadamente, com data, horário e resumos criptográficos disponíveis para conferência administrativa.</p></section>
 <div class="footer">
-  <p>Instrumento individualizado n.º <strong>{{ c.numero_contrato }}</strong> · Emissão {{ timestamp }} · Versão {{ versao }}</p>
-  <p>Registro eletrônico de assinatura e fotografia em documento de evidências associado ao contrato.</p>
-  <p>** SIGEU EDUCACIONAL — DOCUMENTO CONTRATUAL **</p>
+  <p>Contrato nº {{ c.numero_contrato }} · Emitido em {{ timestamp }} · Versão {{ versao }}</p>
+  <p>Este instrumento é individualizado e deve ser preservado juntamente com os comprovantes de assinatura e de pagamento, quando existentes.</p>
+  <p>SIGEU EDUCACIONAL · DOCUMENTAÇÃO CONTRATUAL</p>
 </div>
 </main></body></html>

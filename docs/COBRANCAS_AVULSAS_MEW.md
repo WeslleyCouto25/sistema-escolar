@@ -19,8 +19,8 @@ a forma de pagamento. Nenhuma matrícula/certificação é efetivada por esta fu
    captura/seleciona fotografia e desenha assinatura no canvas.
 5. O servidor valida CSRF, aceita imagens reais com limites de tamanho, rejeita assinatura
    vazia, remove metadados EXIF, calcula hashes e armazena foto e assinatura no R2.
-6. Após o aceite gravado, a mesma URL passa a exibir QR Code ou botões para
-   abrir o link oficial do checkout PicPay na mesma aba ou em janela separada.
+6. Após o aceite gravado, a mesma URL passa a exibir QR Code ou o checkout PicPay:
+   ação principal em janela separada, nova aba, mesma aba ou teste experimental em modal iframe.
 7. O administrador consulta contratos, evidências e, **após comprovar recebimento**, registra
    baixa manual com valor conferido e identificação da transação.
 
@@ -36,11 +36,21 @@ a forma de pagamento. Nenhuma matrícula/certificação é efetivada por esta fu
   em celular, checkout externo e baixa administrativa.
 
 ## Limitações importantes
-- O checkout do link.picpay.com é aberto diretamente no PicPay, por padrão
-  na mesma aba. O cliente também pode escolher uma janela separada; se a criação
-  da janela for bloqueada, há redirecionamento automático para a mesma aba.
-  O sistema não usa iframe, proxy, clonagem nem remoção de proteções de terceiros.
-  A abertura depende de um clique do cliente e dispensa credenciais da API do PicPay.
+- O link manual link.picpay.com é sempre aberto no domínio oficial do PicPay.
+  O botão principal solicita uma janela separada, preservando a tela contratual;
+  alguns dispositivos móveis usarão outra aba. Se o navegador bloquear a janela,
+  a página informa o bloqueio e oferece links explícitos para outra aba ou a mesma.
+  Não existe redirecionamento automático inesperado. A janela é criada no clique,
+  isolada com window.opener = null antes de navegar para o PicPay.
+- O botão experimental **Testar pagamento dentro desta página** apresenta um iframe
+  em modal. O provedor pode bloquear o conteúdo por X-Frame-Options/CSP; um evento
+  onload não prova visibilidade do checkout. O modal explica o limite, pode ser
+  fechado com Escape, remove o iframe ao fechar e apresenta alternativas seguras.
+- A incorporação oficial (Checkout Lightbox) depende de integração autorizada do
+  PicPay: https://developers-business.picpay.com/checkout/docs/default-checkout-and-lightbox-checkout
+  O checkout deve ser criado no backend, sem expor credenciais no HTML.
+- Não usar proxy de checkout, browser remoto com captura de pagamento, contorno
+  de cabeçalhos de segurança ou marcação automática de pagamento.
 - **Não é possível alterar pelo site o nome legal do recebedor** do PicPay.
   A identificação SIGEU aparece apenas na página do sistema, que não esconde o beneficiário real.
   A personalização do *nome do link* deve ser feita no painel PicPay.
@@ -107,3 +117,28 @@ para PDF via WeasyPrint, tanto pelo administrador quanto pelo cliente detentor d
 link individual. Após a assinatura, a visualização administrativa contém foto,
 assinatura, carimbo de data/hora e hashes de evidência. O PDF pré-assinatura
 continua identificado como pendente, e não representa documento assinado.
+
+## Redesenho institucional dos contratos — novembro de 2026
+- A página pública apresenta cabeçalho institucional, cartões de leitura, painel
+  financeiro responsivo e rodapé com informações da formalização.
+- O instrumento contratual dispõe de papel timbrado SIGEU, azul institucional,
+  detalhes discretos em dourado, quadro-resumo, cláusulas hierarquizadas e bloco
+  de integridade documental. O WeasyPrint usa A4, cabeçalho e rodapé de página
+  e numeração Página X de Y.
+- O texto das 11 cláusulas foi preservado. Nenhuma pessoa jurídica ou entidade
+  certificadora adicional foi atribuída indevidamente como parte contratada.
+- **Documentos anteriores não são reescritos**: o servidor persiste HTML e SHA-256
+  no momento da publicação. Contratos novos receberão o layout reformulado.
+  Para gerar um documento antigo com layout novo, deve-se usar a revisão/reemissão
+  administrativa, com novo link e nova assinatura, preservando o histórico.
+
+## Roteiro de homologação
+1. Publicar cobrança de teste válida, concluir a assinatura e conferir a liberação.
+2. Usar o botão principal e verificar se a janela abre o link oficial do PicPay
+   enquanto a página do contrato continua disponível.
+3. Bloquear popups e verificar orientação para abertura explícita de nova aba.
+4. Testar o modal experimental. Se houver bloqueio do iframe, usar os botões
+   de popup/nova aba e confirmar que é possível retornar sem perda do contrato.
+5. Testar desktop, Android e iOS; conferir recebedor, valor, parcelas e domínio.
+6. Baixar PDF de contrato novo e inspecionar margens, paginação e rodapés.
+7. Não realizar pagamento duplicado somente para testar a interface.

@@ -51,12 +51,68 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
 .legal{font-size:12px;color:var(--muted);margin-top:22px}
 @media(max-width:900px){.split{grid-template-columns:1fr}}
 @media(max-width:580px){.shell{padding:0 10px;margin-top:17px}.top{padding:13px}.card{padding:17px}.steps{flex-direction:column}.summary{grid-template-columns:1fr}h1{font-size:23px}.doc{height:56vh}.safe{display:none}}
+
+/* Identidade institucional responsiva para contratação eletrônica */
+:root{--navy:#102b43;--navy2:#1c496b;--gold:#b99452;--paper:#ffffff;--bg:#edf1f5;--line:#cfd9e3}
+body{background:linear-gradient(180deg,#e7edf3 0,#f4f6f8 400px);letter-spacing:.004em}
+.header{border-top:5px solid var(--gold);box-shadow:0 4px 18px #102b4310}
+.top{padding-top:22px;padding-bottom:22px}
+.logo{font-family:Georgia,"Times New Roman",serif;font-size:23px;line-height:1.25;letter-spacing:.025em}
+.logo small{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:11px;margin-top:4px;letter-spacing:.03em}
+.safe{background:#ecf5f1;border:1px solid #b6d5c7;border-radius:30px;padding:9px 12px}
+.shell{margin-top:27px}
+.step{border-radius:4px;border-top:3px solid #c3d0db;box-shadow:0 2px 9px #142d4010}
+.step.active{border-top-color:var(--gold);background:#f7f9fb}
+.step.done{border-top-color:#28744f}
+.card{border-radius:8px;box-shadow:0 12px 30px #1230470c;border-top:3px solid #d2dde7;padding:30px}
+.split>section>.card:first-child{border-top-color:var(--navy2)}
+.split>aside>.card:first-child{border-top-color:var(--gold)}
+h1,h2{font-family:Georgia,"Times New Roman",serif;color:var(--navy)}
+h1{font-size:30px;letter-spacing:-.015em}
+h2{font-size:21px}
+.label{font-size:11px;letter-spacing:.09em;font-weight:750;color:#576b7d}
+.money{color:var(--navy)}
+.doc{height:min(68vh,650px);border-radius:3px;border:1px solid #aebfce;box-shadow:0 3px 14px #0f263310}
+.summary{gap:10px 18px}
+.summary>div{padding:15px 0}
+.btn{border-radius:5px;min-height:47px;transition:background .18s,transform .18s}
+.btn:hover:not(:disabled){transform:translateY(-1px);background:#214e70}
+.btn.secondary:hover:not(:disabled){background:#d9e8f2;color:#12344f}
+.btn:focus-visible,.checkout-close:focus-visible{outline:3px solid #b28d49;outline-offset:3px}
+.notice-institutional{margin:22px 0;padding:16px 20px;border:1px solid #d2dce5;border-left:4px solid var(--gold);background:#f7f9fb;font-size:13px;line-height:1.6}
+.doc-footer{max-width:1240px;margin:0 auto;padding:20px 18px 38px;text-align:center;color:#52687c;font-size:12px;border-top:1px solid #d4dee6}
+.doc-footer strong{color:var(--navy)}
+.payment-card{background:linear-gradient(135deg,#f9fbfd,#fff 55%)}
+.payment-feature{padding:17px;background:#edf4f8;border:1px solid #cfdfea;border-left:4px solid var(--navy2);margin:14px 0 18px;border-radius:4px}
+.payment-feature strong{display:block;color:var(--navy);font-size:15px}
+.payment-feature small{display:block;margin-top:5px;line-height:1.5}
+.payment-actions{display:grid;grid-template-columns:1fr;gap:10px;margin:17px 0 10px}
+.payment-actions .btn{width:100%;min-width:0}
+.payment-alt{display:flex;gap:14px;flex-wrap:wrap;margin:13px 0}
+.payment-alt button,.payment-alt a{font:600 13px system-ui,-apple-system,"Segoe UI",sans-serif;color:#205271;border:0;border-bottom:1px solid #91acbc;padding:4px 0;background:none;cursor:pointer;text-decoration:none}
+.payment-alt a:focus-visible,.payment-alt button:focus-visible{outline:2px solid var(--gold)}
+.payment-domain{font-size:12px;color:#4a667c;background:#f4f7f9;padding:9px 12px;border-radius:4px;word-break:break-all}
+.checkout-modal[hidden]{display:none!important}
+.checkout-modal{position:fixed;inset:0;z-index:10000;background:rgba(8,22,35,.78);display:flex;align-items:center;justify-content:center;padding:12px}
+.checkout-panel{background:#fff;width:min(100%,600px);height:min(93dvh,860px);display:flex;flex-direction:column;min-height:400px;border-radius:10px;overflow:hidden;box-shadow:0 20px 90px #0006}
+.checkout-bar{background:var(--navy);padding:15px 18px;color:white;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.checkout-bar strong{font-family:Georgia,serif;font-size:19px}
+.checkout-bar small{display:block;color:#d7e2ea}
+.checkout-close{background:transparent;color:white;border:1px solid #a8becf;border-radius:4px;padding:8px 12px;cursor:pointer;font-weight:650}
+.checkout-advice{padding:12px 16px;background:#fff7e9;border-bottom:1px solid #e8d1a0;font-size:12px;color:#69502b;line-height:1.4}
+.checkout-frame{display:block;border:0;width:100%;flex:1;min-height:260px;background:#f6f8fa}
+.checkout-bottom{padding:12px 16px;background:#f5f8fa;border-top:1px solid #dbe4eb;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.checkout-bottom .btn{font-size:12px;min-height:39px;padding:10px 13px}
+body.checkout-locked{overflow:hidden}
+@media(max-width:580px){.card{padding:19px}.top{padding:15px}.logo{font-size:20px}.steps{gap:7px}h1{font-size:25px}.checkout-modal{padding:0}.checkout-panel{width:100%;height:100dvh;max-height:none;border-radius:0}.checkout-bar{padding:12px}.checkout-bottom .btn{flex:1}}
+@media(prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover:not(:disabled){transform:none}}
+
 </style>
 </head>
 <body>
 <header class="header"><div class="top">
-  <div class="logo">SIGEU EDUCACIONAL <small>Contratos e pagamentos · FACOP quando aplicável à certificação</small></div>
-  <span class="safe">🔒 Jornada individual de contratação</span>
+  <div class="logo">SIGEU EDUCACIONAL <small>Central institucional de contratos e pagamentos</small></div>
+  <span class="safe">Ambiente de contratação individual · conexão protegida</span>
 </div></header>
 <main class="shell">
 <div class="steps">
@@ -162,20 +218,35 @@ video,#photoPreview{width:100%;max-width:430px;aspect-ratio:4/3;object-fit:cover
         <p class="muted">Se estiver no celular, salve a imagem ou abra-a em outro dispositivo para escanear.</p>
         <a class="btn secondary" href="/cobranca/{{ c.token }}/qrcode" target="_blank" rel="noopener">Abrir QR Code</a>
       {% else %}
-        <p>O pagamento será realizado diretamente no ambiente oficial do PicPay, sem incorporação e sem necessidade de integração por API.</p>
-        <div class="actions payment-actions">
-          <a id="picpayCheckout" class="btn" href="{{ c.link_pagamento }}" referrerpolicy="no-referrer">Pagar no PicPay (mesma aba)</a>
-          <button id="picpayPopup" class="btn secondary" type="button">Abrir em janela separada</button>
+        <div class="payment-feature"><strong>Pagamento seguro pelo PicPay</strong><small>O botão principal tenta abrir uma janela de pagamento, mantendo esta página do contrato aberta. Em celulares, o navegador poderá usar outra aba.</small></div>
+        <div class="payment-domain">Destino oficial: <strong>link.picpay.com</strong> · Confirme valor e favorecido no PicPay.</div>
+        <div class="payment-actions">
+          <button id="picpayPopup" class="btn" type="button">Abrir pagamento em janela PicPay</button>
+          <button id="picpayInline" class="btn secondary" type="button">Testar pagamento dentro desta página</button>
         </div>
-        <p class="muted" id="picpayPopupHelp" role="status">Se a janela separada for bloqueada pelo navegador, o checkout será aberto na mesma aba. Você também pode usar o botão principal.</p>
+        <div class="payment-alt">
+          <a id="picpayCheckout" href="{{ c.link_pagamento }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Abrir o PicPay em nova aba</a>
+          <a id="picpaySameTab" href="{{ c.link_pagamento }}" rel="noreferrer" referrerpolicy="no-referrer">Continuar na mesma aba</a>
+        </div>
+        <p class="muted" id="picpayPopupHelp" role="status" aria-live="polite">Caso o navegador bloqueie janelas, utilize o link de nova aba. O teste incorporado pode ser bloqueado pelo próprio PicPay e não comprova pagamento.</p>
+        <p class="legal">Confira o favorecido, o valor total e o parcelamento antes de confirmar. Nenhum dado de cartão é solicitado pela SIGEU. O retorno à página não comprova quitação.</p>
+        <div id="picpayModal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkoutModalTitle" hidden>
+          <div class="checkout-panel">
+            <div class="checkout-bar"><div><strong id="checkoutModalTitle">Checkout PicPay · teste incorporado</strong><small>Você continua no SiGEU</small></div><button type="button" class="checkout-close" id="picpayClose">Fechar</button></div>
+            <div class="checkout-advice">A exibição depende de autorização do PicPay. Se a área ficar vazia ou indicar bloqueio, clique em <b>Abrir janela PicPay</b>. Não digite dados de cartão em páginas que não sejam do provedor oficial.</div>
+            <iframe id="picpayFrame" class="checkout-frame" title="Tentativa de visualização do pagamento PicPay" referrerpolicy="no-referrer" allow="payment"></iframe>
+            <div class="checkout-bottom"><button id="picpayModalPopup" type="button" class="btn">Abrir janela PicPay</button><a class="btn secondary" href="{{ c.link_pagamento }}" target="_blank" rel="noopener noreferrer">Abrir nova aba</a><button type="button" class="btn secondary" id="picpayModalClose">Voltar ao contrato</button></div>
+          </div>
+        </div>
         <p class="legal">Confira o favorecido, o valor total e o parcelamento antes de confirmar. O retorno à SIGEU não confirma o recebimento: a instituição realizará a conferência financeira. Os dados do cartão não passam pela SIGEU.</p>
       {% endif %}
     </div>
   </aside>
 </div>
 {% endif %}
-<p class="legal" style="text-align:center">SIGEU Educacional · Contratação eletrônica individualizada · Nenhuma informação de cartão é solicitada nesta página.</p>
+<div class="notice-institutional"><strong>Informação contratual</strong> — Este ambiente organiza a leitura, a assinatura e o acesso ao pagamento. O contrato completo é disponibilizado para download. A confirmação do pagamento depende da verificação financeira pela prestadora.</div>
 </main>
+<footer class="doc-footer"><strong>SIGEU EDUCACIONAL</strong> · Central de contratos e cobranças<br>Documento eletrônico individualizado · Os dados bancários e de cartão são inseridos apenas no ambiente do prestador de pagamento.</footer>
 {% if c.status == 'aguardando_assinatura' %}
 <script>
 let streamCamera=null, fotoBlob=null, assinou=false, desenhando=false;
@@ -269,34 +340,82 @@ window.addEventListener('pagehide',()=>{if(streamCamera)streamCamera.getTracks()
 {% if c.status != 'pago' and c.forma_cobranca == 'link' %}
 <script>
 (() => {
-  const popupButton = document.getElementById('picpayPopup');
+  'use strict';
   const checkoutLink = document.getElementById('picpayCheckout');
-  if (!popupButton || !checkoutLink) return;
+  const popupButton = document.getElementById('picpayPopup');
+  const inlineButton = document.getElementById('picpayInline');
+  const help = document.getElementById('picpayPopupHelp');
+  const modal = document.getElementById('picpayModal');
+  const frame = document.getElementById('picpayFrame');
+  const closeBtn = document.getElementById('picpayClose');
+  const modalCloseBtn = document.getElementById('picpayModalClose');
+  const modalPopupBtn = document.getElementById('picpayModalPopup');
+  if (!checkoutLink || !popupButton || !inlineButton || !modal || !frame) return;
+  const url = checkoutLink.href;
+  let restoreFocus = null;
+  const originalHelp = help.textContent;
+  // Somente o domínio aprovado no servidor poderá ser aberto.
+  if (new URL(url).origin !== 'https://link.picpay.com') return;
 
-  popupButton.addEventListener('click', () => {
-    const paymentUrl = checkoutLink.href;
-    let popup = null;
-    // Abertura direta em resposta ao clique, sem chamadas assíncronas.
+  function openPopup() {
+    // Chamado diretamente do clique; não aguarda promises, nem cria proxy de pagamento.
+    let child = null;
     try {
-      popup = window.open('about:blank', 'sigeu_picpay_checkout',
-        'popup=yes,width=560,height=760,resizable=yes,scrollbars=yes');
-    } catch (error) {
-      // O navegador pode proibir a criação da janela.
-    }
-    if (!popup || popup.closed) {
-      window.location.assign(paymentUrl);
+      const width = Math.min(570, screen.availWidth || 570);
+      const height = Math.min(820, screen.availHeight || 820);
+      const left = Math.max(0, Math.floor(((screen.availWidth || width) - width) / 2));
+      const top = Math.max(0, Math.floor(((screen.availHeight || height) - height) / 3));
+      child = window.open('about:blank', 'sigeu_picpay_checkout', 'popup=yes,width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
+    } catch (_) {}
+    if (!child || child.closed) {
+      help.textContent = 'Janela bloqueada: selecione “Abrir o PicPay em nova aba”. Seu contrato continuará aberto.';
+      const fallback = !modal.hidden ? modal.querySelector('a[href]') : checkoutLink;
+      if (fallback) fallback.focus();
       return;
     }
     try {
-      // Rompe a referência à página original antes de acessar o PicPay.
-      popup.opener = null;
-      popup.location.replace(paymentUrl);
-      popup.focus();
-    } catch (error) {
-      try { popup.close(); } catch (_) {}
-      window.location.assign(paymentUrl);
+      // Isola a janela do portal ANTES de navegar para o domínio do provedor.
+      child.opener = null;
+      child.location.replace(url);
+      child.focus();
+      if (!modal.hidden) closeModal();
+      help.textContent = 'A janela oficial do PicPay foi solicitada. Confira as informações antes de pagar; mantenha esta página para retornar ao contrato.';
+    } catch (_) {
+      try { child.close(); } catch (_) {}
+      help.textContent = 'Não foi possível abrir a janela; use a opção “Abrir o PicPay em nova aba”.';
     }
+  }
+
+  function closeModal() {
+    if (modal.hidden) return;
+    modal.hidden = true;
+    frame.removeAttribute('src');
+    document.body.classList.remove('checkout-locked');
+    (restoreFocus || inlineButton).focus();
+  }
+  function openModal() {
+    restoreFocus = document.activeElement;
+    modal.hidden = false;
+    document.body.classList.add('checkout-locked');
+    frame.src = url;
+    closeBtn.focus();
+    help.textContent = 'Teste de incorporação aberto. A exibição efetiva depende de autorização do PicPay.';
+  }
+  popupButton.addEventListener('click', openPopup);
+  modalPopupBtn.addEventListener('click', openPopup);
+  inlineButton.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+  modalCloseBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !modal.hidden) closeModal();
+    if (event.key !== 'Tab' || modal.hidden) return;
+    const focusable = Array.from(modal.querySelectorAll('button,a[href]'));
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
+  window.addEventListener('pagehide', () => { frame.removeAttribute('src'); });
 })();
 </script>
 {% endif %}
