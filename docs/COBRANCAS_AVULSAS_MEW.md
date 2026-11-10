@@ -142,3 +142,11 @@ continua identificado como pendente, e não representa documento assinado.
 5. Testar desktop, Android e iOS; conferir recebedor, valor, parcelas e domínio.
 6. Baixar PDF de contrato novo e inspecionar margens, paginação e rodapés.
 7. Não realizar pagamento duplicado somente para testar a interface.
+
+## Correção de integração visual e deploy manual — novembro de 2026
+- A página pública de cobrança passou a reutilizar diretamente os componentes `_public_header.html` e `_public_footer.html` do portal, além do CSS exclusivo `static/css/contratacao_institucional.css`. O fluxo de assinatura (foto, canvas, CSRF) foi preservado.
+- O único botão principal de link PicPay é **Realizar pagamento**. Ele abre uma janela interna sobreposta com área para visualização do checkout hospedado, controle de fechamento e endereço oficial claramente identificado. O visitante não vê opções de mesma aba nem avisos técnicos de navegador na página principal.
+- Por política de enquadramento, o link manual pode não ser exibido dentro do iframe. A janela oferece **Abrir em janela** e **Continuar no PicPay**, sempre em nova janela/aba, sem alterar a aba do contrato. Essa saída não contorna proteções do PicPay e não equivale ao Checkout Lightbox oficial.
+- O instrumento contratual novo usa o logotipo real SIGEU incorporado em base64 no HTML fixado no banco, permitindo exportação PDF autocontida e com as mesmas cláusulas. Documentos antigos assinados continuam preservados e não são reescritos.
+- **Atenção à publicação:** o serviço `sistema-escolar` está com `autoDeploy: no` no Render. O merge no GitHub não atualiza o site sozinho: depois da aprovação da CI, é necessário realizar deploy manual do commit `main`. Conferir serviço e SHA na implantação.
+- **Teste real:** a renderização integral do checkout dentro do iframe depende do PicPay. Sem credenciais da API Lightbox, não há garantia de incorporação; não tratar o carregamento do iframe como confirmação de pagamento.
