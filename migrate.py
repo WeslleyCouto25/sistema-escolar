@@ -264,6 +264,18 @@ def ensure_extra_schema():
 
 
 def main():
+    # Snapshot imutavel antes de qualquer atualizacao estrutural no banco.
+    # Quando o backup esta habilitado, uma falha interrompe o novo deploy:
+    # o processo anterior pode continuar servindo enquanto a causa e corrigida.
+    if os.getenv("SIGEU_BACKUP_ON_DEPLOY") == "1":
+        from backup_sigeu import create_backup, database_overview
+        anterior = database_overview()
+        print("[SIGEU DB PRE-MIGRATE] id=%s contagens=%s" %
+              (anterior["database_id"], anterior["contagens"]), flush=True)
+        backup = create_backup()
+        print("[SIGEU BACKUP VERIFIED] source=%s tables=%s rows=%s critical=%s sha256=%s" %
+              (backup["database_id"], backup["tables"], backup["rows"],
+               backup["critical_counts"], backup["sha256"]), flush=True)
     init_db()
     init_contratos_db()
     init_pagamentos_db()
