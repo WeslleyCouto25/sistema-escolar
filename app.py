@@ -121,6 +121,10 @@ app.register_blueprint(picpay_bp)
 from cobrancas_avulsas import cobrancas_avulsas_bp, init_cobrancas_avulsas_db
 app.register_blueprint(cobrancas_avulsas_bp)
 
+# Snapshot a cada 6 horas no worker do SiGEU (sem recurso cron adicional).
+from backup_sigeu import start_periodic_backups
+start_periodic_backups()
+
 
 # ============================================================
 # CONFIGURACOES GERAIS
