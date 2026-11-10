@@ -4,12 +4,15 @@ Links PicPay e QR Codes são fornecidos pelo operador: NÃO se deve marcar como
 pago automaticamente a partir de retorno, clique ou captura de tela.
 O fluxo não cria matrícula nem altera os pagamentos dos alunos existentes.
 """
+import base64
 import hashlib
 import io
 import json
 import os
 import re
 import secrets
+from functools import lru_cache
+from pathlib import Path
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlparse
@@ -398,6 +401,17 @@ def _get_admin(id_):
     return item
 
 
+@lru_cache(maxsize=1)
+def _logo_contratual_data_uri():
+    """Incorpora o logotipo institucional para HTML/PDF sem chamadas de rede externas."""
+    caminho = Path(__file__).resolve().parent / "static" / "img" / "logo.png"
+    try:
+        arquivo = caminho.read_bytes()
+    except OSError:
+        return ""
+    return "data:image/png;base64," + base64.b64encode(arquivo).decode("ascii")
+
+
 def _contract_data(c):
     parcelas = int(c["parcelas"])
     cents = int(c["valor_centavos"])
@@ -407,6 +421,7 @@ def _contract_data(c):
         "parcela": _money((Decimal(cents) / Decimal(parcelas)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)),
         "timestamp": now.strftime("%d/%m/%Y %H:%M"),
         "versao": _VERSION,
+        "logo_data_uri": _logo_contratual_data_uri(),
         "valor_extenso": "",
     }
 
