@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, render_template
 from PIL import Image, ImageDraw
 
 fake_db = sys.modules.setdefault("db_pool", types.ModuleType("db_pool"))
@@ -154,10 +154,15 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         self.assertIn(obj["link_pagamento"], body)
         self.assertIn('id="picpayCheckout"', body)
         self.assertIn('id="picpayPopup"', body)
-        self.assertIn('Pagar no PicPay (mesma aba)', body)
-        self.assertIn("window.open('about:blank'", body)
-        self.assertNotIn('title="Checkout oficial PicPay"', body)
-        self.assertNotIn('class="checkout"', body)
+        self.assertIn('Abrir pagamento em janela PicPay', body)
+        self.assertIn('id="picpayInline"', body)
+        self.assertIn('id="picpayModal"', body)
+        self.assertIn('id="picpayFrame"', body)
+        self.assertIn('target="_blank" rel="noopener noreferrer"', body)
+        self.assertIn("window.open(url, 'sigeu_picpay_checkout'", body)
+        self.assertIn("if (!child || child.closed)", body)
+        self.assertIn("frame.removeAttribute('src')", body)
+        self.assertNotIn("window.location.assign(url)", body)
         self.assertNotIn('id="signatureCanvas"', body)
 
     def test_checkout_nao_aparece_apos_pagamento_confirmado(self):
@@ -168,7 +173,38 @@ class TestsCobrancasAvulsas(unittest.TestCase):
         body = response.get_data(as_text=True)
         self.assertNotIn('id="picpayCheckout"', body)
         self.assertNotIn('id="picpayPopup"', body)
+        self.assertNotIn('id="picpayInline"', body)
+        self.assertNotIn('id="picpayFrame"', body)
         self.assertNotIn(obj["link_pagamento"], body)
+
+
+    def test_contrato_layout_institucional_paginado_e_conteudo_preservado(self):
+        item = example_item()
+        with app_for_tests().app_context():
+            html = render_template("contrato_cobranca_avulsa.html", **av._contract_data(item))
+        self.assertIn("SIGEU EDUCACIONAL", html)
+        self.assertIn("CONTRATO DE PRESTAÇÃO", html.upper())
+        self.assertIn("@page", html)
+        self.assertIn('counter(page)', html)
+        self.assertIn('counter(pages)', html)
+        self.assertIn("Formalização e integridade documental", html)
+        self.assertIn("Cliente Teste", html)
+        self.assertIn("R$ 959,84", html)
+        for clause in range(1, 12):
+            self.assertIn("Cláusula " + str(clause), html)
+        self.assertNotIn("** SIGEU", html)
+
+    def test_somente_pagina_publica_assinada_oferece_tentativa_iframe(self):
+        obj = example_item()
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(obj)):
+            unsigned = app_for_tests().test_client().get("/cobranca/" + obj["token"]).get_data(as_text=True)
+        self.assertNotIn('id="picpayFrame"', unsigned)
+        obj = example_item(status="aguardando_pagamento")
+        with patch.object(av, "get_db_connection", return_value=FakeConnection(obj)):
+            signed = app_for_tests().test_client().get("/cobranca/" + obj["token"]).get_data(as_text=True)
+        self.assertIn('id="picpayFrame"', signed)
+        self.assertIn("A exibição depende de autorização do PicPay", signed)
+        self.assertIn("const url = checkoutLink.href", signed)
 
     def test_assinatura_registrada_com_hash_antes_de_liberar_pagamento(self):
         obj = example_item()
