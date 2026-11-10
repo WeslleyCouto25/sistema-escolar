@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from flask import (
     Blueprint, abort, current_app, redirect, render_template, request,
-    session, url_for, make_response,
+    session, url_for, make_response, jsonify,
 )
 from PIL import Image, ImageChops, ImageOps, UnidentifiedImageError
 from markupsafe import escape
@@ -501,6 +501,55 @@ def _create_admin():
     finally:
         conn.close()
     return token
+
+
+# Backup criptografado (somente administracao), sem expor arquivos/segredos ao navegador.
+@cobrancas_avulsas_bp.route("/mew/backups", methods=["GET", "POST"])
+def painel_backups():
+    if not _admin():
+        return redirect("/mew/login")
+    from backup_sigeu import database_overview, recent_backups, create_backup
+    erro = None
+    realizado = None
+    if request.method == "POST":
+        _check_csrf()
+        if request.form.get("acao") != "criar":
+            abort(400)
+        try:
+            realizado = create_backup()
+        except Exception:
+            current_app.logger.exception("Falha de backup criptografado SIGEU")
+            erro = "O backup nao foi confirmado no armazenamento. Verifique as configuracoes ou consulte o suporte tecnico."
+    diagnostico = {}
+    backups = []
+    try:
+        diagnostico = database_overview()
+        backups = recent_backups()
+    except Exception:
+        current_app.logger.exception("Falha ao consultar diagnostico de backup")
+        if not erro:
+            erro = "Nao foi possivel consultar a base ou o armazenamento nesta tentativa."
+    return render_template(
+        "mew/backups.html", diagnostico=diagnostico, backups=backups,
+        realizado=realizado, erro=erro, csrf_token=_csrf()
+    )
+
+
+@cobrancas_avulsas_bp.post("/internal/sigeu/backup/v1")
+def backup_agendado():
+    """Apenas job remoto com segredo em header; sem login de cliente nem retorno de dados."""
+    segredo = os.getenv("SIGEU_BACKUP_TRIGGER_TOKEN", "")
+    recebido = request.headers.get("X-SIGEU-Backup-Token", "")
+    if not segredo or not recebido or not secrets.compare_digest(segredo, recebido):
+        abort(404)
+    from backup_sigeu import create_backup
+    resultado = create_backup()
+    current_app.logger.info(
+        "SIGEU_BACKUP_OK: source=%s tables=%s rows=%s sha256=%s",
+        resultado["database_id"], resultado["tables"], resultado["rows"], resultado["sha256"]
+    )
+    return jsonify({"ok": True, "database_id": resultado["database_id"],
+                    "tables": resultado["tables"], "rows": resultado["rows"]})
 
 
 @cobrancas_avulsas_bp.route("/mew/cobrancas-avulsas", methods=["GET", "POST"])
