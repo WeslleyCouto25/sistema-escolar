@@ -39,6 +39,11 @@ As variáveis permanecem *somente* nos ambientes, nunca no Git:
   evitando prosseguir sem a proteção solicitada.
 - `SIGEU_BACKUP_TRIGGER_TOKEN`: segredo independente para acionar backups
   via POST em `/internal/sigeu/backup/v1`; não aparece em templates/logs.
+- `SIGEU_BACKUP_PERIODIC=1`: faz cópia periódica no worker Python existente, sem
+  criar um cron pago. A periodicidade padrão é 6 horas; ajuste opcional
+  `SIGEU_BACKUP_INTERVAL_HOURS=6`. O thread é daemon, então pode ser interrompido
+  em uma reinicialização; os backups no início do deploy e no botão administrativo
+  são proteções adicionais.
 
 O painel `/mew/backups` exige sessão `mew_admin` para diagnóstico e POST com CSRF
 para gerar cópia manual. O endpoint interno de agendamento exige segredo forte
@@ -48,8 +53,10 @@ pelo header `X-SIGEU-Backup-Token` e não responde a GET.
 O script `backup_trigger.py` aciona o serviço web usando duas variáveis:
 `SIGEU_BACKUP_URL=https://sistema-escolar-0bad.onrender.com/internal/sigeu/backup/v1`
 e `SIGEU_BACKUP_TRIGGER_TOKEN`.
-É indicado para cron diário no Render (UTC). Um cron separado pode gerar
-cobrança mensal mínima; aprovar o custo antes de ativar o recurso.
+O agendamento principal usa o worker já contratado com a variável
+`SIGEU_BACKUP_PERIODIC=1`, sem criar infraestrutura adicional. O script de cron
+fica disponível para reforço futuro. Um cron Render dedicado tem custo mínimo
+de US$ 1/mês e só deve ser ativado mediante autorização explícita.
 
 ## Verificação e recuperação
 1. Verificar a origem/contagens no painel, e o log `[SIGEU DB PRE-MIGRATE]`.
