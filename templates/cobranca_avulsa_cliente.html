@@ -365,15 +365,25 @@ window.addEventListener('pagehide',()=>{if(streamCamera)streamCamera.getTracks()
       const height = Math.min(820, screen.availHeight || 820);
       const left = Math.max(0, Math.floor(((screen.availWidth || width) - width) / 2));
       const top = Math.max(0, Math.floor(((screen.availHeight || height) - height) / 3));
-      child = window.open(url, 'sigeu_picpay_checkout', 'popup=yes,width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
+      child = window.open('about:blank', 'sigeu_picpay_checkout', 'popup=yes,width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes');
     } catch (_) {}
     if (!child || child.closed) {
-      help.textContent = 'Janela bloqueada: selecione “Abrir o PicPay em nova aba” logo acima. Seu contrato continuará aberto.';
-      checkoutLink.focus();
+      help.textContent = 'Janela bloqueada: selecione “Abrir o PicPay em nova aba”. Seu contrato continuará aberto.';
+      const fallback = !modal.hidden ? modal.querySelector('a[href]') : checkoutLink;
+      if (fallback) fallback.focus();
       return;
     }
-    try { child.opener = null; child.focus(); } catch (_) {}
-    help.textContent = 'A janela oficial do PicPay foi solicitada. Confira as informações antes de pagar; mantenha esta página para retornar ao contrato.';
+    try {
+      // Isola a janela do portal ANTES de navegar para o domínio do provedor.
+      child.opener = null;
+      child.location.replace(url);
+      child.focus();
+      if (!modal.hidden) closeModal();
+      help.textContent = 'A janela oficial do PicPay foi solicitada. Confira as informações antes de pagar; mantenha esta página para retornar ao contrato.';
+    } catch (_) {
+      try { child.close(); } catch (_) {}
+      help.textContent = 'Não foi possível abrir a janela; use a opção “Abrir o PicPay em nova aba”.';
+    }
   }
 
   function closeModal() {
