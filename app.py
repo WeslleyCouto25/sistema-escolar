@@ -119,7 +119,8 @@ from picpay_mew import (picpay_bp, criar_cobranca_picpay, init_picpay_db,
 app.register_blueprint(picpay_bp)
 
 # Contratação avulsa com contrato, fotografia, assinatura e link/QR fornecido pelo MEW.
-from cobrancas_avulsas import cobrancas_avulsas_bp, init_cobrancas_avulsas_db
+from cobrancas_avulsas import (cobrancas_avulsas_bp, init_cobrancas_avulsas_db,
+                              _csrf as _mew_csrf, _check_csrf as _mew_check_csrf)
 app.register_blueprint(cobrancas_avulsas_bp)
 
 # Snapshot a cada 6 horas no worker do SiGEU (sem recurso cron adicional).
@@ -2881,7 +2882,8 @@ def mew_alunos():
         "mew/alunos.html", disciplinas=disciplinas, alunos=alunos_completo,
         cobranca_criada=cobranca_criada, picpay_cobranca=picpay_cobranca,
         erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
-        page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages
+        page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages,
+        csrf_token=_mew_csrf()
     )
 
 @app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
@@ -3528,10 +3530,12 @@ def mew_editar_aluno(aluno_id):
         return f"Erro ao carregar dados: {str(e)}", 500
 
 
-@app.route("/mew/deletar-aluno/<int:aluno_id>")
+@app.route("/mew/deletar-aluno/<int:aluno_id>", methods=["POST"])
 def mew_deletar_aluno(aluno_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
+    # Nunca excluir registros acadêmicos por GET ou sem prova de origem do formulário.
+    _mew_check_csrf()
 
     conn = get_db_connection()
     cursor = conn.cursor()
