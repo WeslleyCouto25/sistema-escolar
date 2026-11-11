@@ -563,13 +563,23 @@ def backup_agendado():
     if not segredo or not recebido or not secrets.compare_digest(segredo, recebido):
         abort(404)
     from backup_sigeu import create_backup
+    from backup_postgres_full_r2 import create_full_backup
     resultado = create_backup()
     current_app.logger.info(
         "SIGEU_BACKUP_OK: source=%s tables=%s rows=%s sha256=%s",
         resultado["database_id"], resultado["tables"], resultado["rows"], resultado["sha256"]
     )
+    integral_ok = False
+    try:
+        full = create_full_backup()
+        integral_ok = True
+        current_app.logger.info(
+            "SIGEU_FULL_BACKUP_OK: bytes=%s sha256=%s", full["bytes"], full["sha256"])
+    except Exception:
+        current_app.logger.exception("SIGEU_FULL_BACKUP_FAILED; CSV preservado")
     return jsonify({"ok": True, "database_id": resultado["database_id"],
-                    "tables": resultado["tables"], "rows": resultado["rows"]})
+                    "tables": resultado["tables"], "rows": resultado["rows"],
+                    "full_backup_ok": integral_ok})
 
 
 @cobrancas_avulsas_bp.route("/mew/cobrancas-avulsas", methods=["GET", "POST"])
