@@ -14,10 +14,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from werkzeug.security import generate_password_hash
-
-from db_pool import get_db_connection
-
 SCHEDULE_TZ = ZoneInfo("America/Sao_Paulo")
 COURSES = (
     "Fundamentos da Psicologia Positiva",
@@ -192,6 +188,7 @@ def _ensure_student(cur, entry, course_ids, enrolled_on):
         # Senha aleatoria nao recuperavel, NUNCA CPF e nunca gravada no log.
         # No primeiro acesso, o administrador devera definir uma senha temporaria
         # segura no cadastro antes de liberar as credenciais ao estudante.
+        from werkzeug.security import generate_password_hash
         password_hash = generate_password_hash(secrets.token_urlsafe(40))
         cur.execute(
             "INSERT INTO alunos (nome,email,ra,senha) "
@@ -274,6 +271,7 @@ def provision_initial_enrollments():
         return None
     entries = validate_payload(json.loads(raw))
     enrolled_on = datetime.now(SCHEDULE_TZ).date()
+    from db_pool import get_db_connection
     conn = get_db_connection()
     try:
         cur = conn.cursor()
