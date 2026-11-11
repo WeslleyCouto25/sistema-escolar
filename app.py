@@ -3392,21 +3392,28 @@ def mew_editar_aluno(aluno_id):
                     conn.close()
                     return "Valor total inválido.", 400
 
-                # Determinar parcelas totais
+                # Preserva o parcelamento do contrato, inclusive PicPay em 8x.
+                # Nunca presume quitação pelo simples uso de link ou QR.
+                try:
+                    parcelas_total = int(request.form.get("parcelas_total") or "1")
+                    if not 1 <= parcelas_total <= 12:
+                        raise ValueError()
+                except ValueError:
+                    conn.rollback()
+                    conn.close()
+                    return "Total de parcelas inválido.", 400
                 if forma_pagamento == "boleto_pix":
                     parcelas_total = 2
-                    # Se pagou as 2 parcelas, status é "pago"
                     if parcelas_pagas == "2":
                         status_financeiro = "pago"
                     elif not status_financeiro:
                         status_financeiro = "parcial"
                 else:
-                    parcelas_total = 1
                     if not status_financeiro:
                         status_financeiro = ("pendente"
-                                            if forma_pagamento in ("picpay", "mercadopago")
+                                            if forma_pagamento in ("picpay", "mercadopago", "qr_code")
                                             else "pago")
-                    if forma_pagamento in ("picpay", "mercadopago") and status_financeiro != "pago":
+                    if forma_pagamento in ("picpay", "mercadopago", "qr_code") and status_financeiro != "pago":
                         parcelas_pagas = "0"
 
                 # Verificar se já existe situação financeira
