@@ -49,6 +49,7 @@ import plano_ensino
 
 from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
+from chapter_release import chapter_is_released, released_chapters, chapter_release_date
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -1652,6 +1653,50 @@ def mew_salvar_nota_final():
             conn.close()
 
 
+@app.before_request
+def _proteger_avaliacoes_por_calendario():
+    """O link direto de prova/instrucoes tambem obedece a liberacao D+3, D+6..."""
+    if request.endpoint not in ("instrucoes_prova", "prova"):
+        return None
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+    args = request.view_args or {}
+    disciplina_id = args.get("disciplina_id")
+    numero = args.get("capitulo_numero")
+    if not isinstance(numero, int) or numero not in (1, 2, 3, 4):
+        return render_template("acesso_bloqueado.html",
+                               mensagem="Capítulo inválido."), 403
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT addd.data_inicio
+            FROM aluno_disciplina ad
+            JOIN aluno_disciplina_datas addd
+              ON addd.aluno_id=ad.aluno_id AND addd.disciplina_id=ad.disciplina_id
+            WHERE ad.aluno_id=%s AND ad.disciplina_id=%s
+        """, (aluno_id, disciplina_id))
+        row = cur.fetchone()
+    finally:
+        conn.close()
+    if not row or not row.get("data_inicio"):
+        return render_template("acesso_bloqueado.html",
+                               mensagem="Disciplina não matriculada."), 403
+    try:
+        allowed = chapter_is_released(row["data_inicio"], numero)
+        available_on = chapter_release_date(row["data_inicio"], numero).strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        return render_template("acesso_bloqueado.html",
+                               mensagem="Data de matrícula inválida."), 403
+    if not allowed:
+        return render_template(
+            "acesso_bloqueado.html",
+            mensagem=f"Capítulo {numero} disponível a partir de {available_on}."
+        ), 403
+    return None
+
+
 @app.route("/disciplina/<int:disciplina_id>")
 def disciplina(disciplina_id):
     aluno_id = session.get("aluno_id")
@@ -1700,24 +1745,11 @@ def disciplina(disciplina_id):
         return render_template("acesso_bloqueado.html",
                              mensagem="Disciplina não configurada")
 
-    # Calcular dias desde o início
-    from datetime import datetime
+    # Matrícula D+3 para o primeiro capítulo; D+6, D+9 e D+12 para os demais.
+    # Usa datas locais, evitando deslocamentos de um dia por UTC.
     try:
-        data_inicio = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
-        hoje = datetime.now()
-        dias_desde_inicio = (hoje - data_inicio).days
-
-        # Determinar capítulos liberados
-        capitulos_liberados = 0
-        if dias_desde_inicio >= 12:
-            capitulos_liberados = 4
-        elif dias_desde_inicio >= 9:
-            capitulos_liberados = 3
-        elif dias_desde_inicio >= 6:
-            capitulos_liberados = 2
-        elif dias_desde_inicio >= 3:
-            capitulos_liberados = 1
-    except:
+        capitulos_liberados = released_chapters(data_info["data_inicio"])
+    except (ValueError, TypeError):
         capitulos_liberados = 0
 
     # Buscar disciplina e capítulos
