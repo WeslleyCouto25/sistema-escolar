@@ -293,7 +293,8 @@ def provision_initial_enrollments():
             if int(cur.fetchone()["total"]) < len(entry["disciplinas"]):
                 raise RuntimeError("Matricula incompleta")
         conn.commit()
-        return {"alunos": 2, "disciplinas": 3, "vinculos": 3}
+        return {"alunos": 2, "disciplinas": 3, "vinculos": 3,
+                "student_ids": student_ids}
     except Exception:
         conn.rollback()
         raise
