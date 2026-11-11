@@ -373,5 +373,57 @@
   renderStage(0);
 })();
 </script>
+
+<!-- SIGEU Research: contato imediato por WhatsApp -->
+<style>
+  .sigeu-offer-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(9,22,31,.72);backdrop-filter:blur(5px)}
+  .sigeu-offer-overlay[hidden]{display:none!important}
+  .sigeu-offer-dialog{position:relative;width:min(100%,480px);max-height:calc(100dvh - 40px);overflow:auto;padding:35px 29px 29px;border-radius:22px;background:#fff;color:#192b38;box-shadow:0 28px 85px rgba(0,0,0,.3);text-align:center;font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+  .sigeu-offer-close{position:absolute;top:12px;right:13px;width:38px;height:38px;border:0;border-radius:50%;background:#eef3f1;color:#233c36;font-size:26px;line-height:1;cursor:pointer}
+  .sigeu-offer-mark{display:inline-flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:16px;background:#e5f5e7;color:#245a42;font-size:26px;font-weight:800}
+  .sigeu-offer-dialog h2{margin:18px 0 12px;font-size:clamp(23px,4.8vw,29px);line-height:1.2;letter-spacing:-.03em;color:#142c35}
+  .sigeu-offer-dialog p{font-size:15px;line-height:1.65;margin:0 0 22px;color:#536570}
+  .sigeu-offer-action{display:flex;align-items:center;justify-content:center;gap:9px;min-height:53px;padding:12px 18px;background:#247b4b;color:white!important;text-decoration:none;border-radius:12px;font-weight:800;font-size:15px}
+  .sigeu-offer-action:hover{background:#1c653c}
+  .sigeu-offer-later{margin-top:14px;background:none;border:0;color:#536570;text-decoration:underline;font-size:13px;cursor:pointer}
+  @media(max-width:420px){.sigeu-offer-dialog{padding:32px 19px 24px}}
+  @media(prefers-reduced-motion:no-preference){.sigeu-offer-dialog{animation:sigeu-offer-in .22s ease-out}@keyframes sigeu-offer-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}}
+</style>
+<div class="sigeu-offer-overlay" id="sigeu-offer-overlay" hidden>
+  <section class="sigeu-offer-dialog" role="dialog" aria-modal="true" aria-labelledby="sigeu-offer-title" aria-describedby="sigeu-offer-description">
+    <button class="sigeu-offer-close" id="sigeu-offer-close" type="button" aria-label="Fechar oferta">&times;</button>
+    <span class="sigeu-offer-mark" aria-hidden="true">S</span>
+    <h2 id="sigeu-offer-title">Precisa de um artigo científico com rapidez?</h2>
+    <p id="sigeu-offer-description">Busca artigos científicos prontos para revisão ou apoio para desenvolver seu artigo em prazo reduzido, com acompanhamento de professores qualificados? Fale com nossa equipe e conheça as opções disponíveis.</p>
+    <a class="sigeu-offer-action" id="sigeu-offer-whatsapp" href="https://wa.me/5541985015076?text=Ol%C3%A1%21%20Vim%20da%20p%C3%A1gina%20SIGEU%20Research%20e%20quero%20informa%C3%A7%C3%B5es%20sobre%20artigos%20cient%C3%ADficos%20e%20prazos." target="_blank" rel="noopener noreferrer">Falar agora pelo WhatsApp &#8599;</a>
+    <button class="sigeu-offer-later" id="sigeu-offer-later" type="button">Continuar navegando</button>
+  </section>
+</div>
+<script>
+(function(){
+  'use strict';
+  const overlay=document.getElementById('sigeu-offer-overlay');
+  const close=document.getElementById('sigeu-offer-close');
+  const later=document.getElementById('sigeu-offer-later');
+  const whatsapp=document.getElementById('sigeu-offer-whatsapp');
+  const previousFocus=document.activeElement;
+  function dismiss(){overlay.hidden=true;document.removeEventListener('keydown',onKey);if(previousFocus&&previousFocus.focus)previousFocus.focus();}
+  function onKey(e){
+    if(e.key==='Escape')dismiss();
+    if(e.key==='Tab'){
+      const focusable=[close,whatsapp,later];
+      const index=focusable.indexOf(document.activeElement);
+      if(e.shiftKey&&index<=0){e.preventDefault();later.focus();}
+      else if(!e.shiftKey&&index===focusable.length-1){e.preventDefault();close.focus();}
+    }
+  }
+  close.addEventListener('click',dismiss);
+  later.addEventListener('click',dismiss);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)dismiss();});
+  overlay.hidden=false;
+  close.focus();
+  document.addEventListener('keydown',onKey);
+})();
+</script>
 </body>
 </html>
