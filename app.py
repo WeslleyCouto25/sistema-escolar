@@ -2790,7 +2790,16 @@ def mew_alunos():
     page = max(1, request.args.get("page", 1, type=int) or 1)
     per_page = min(100, max(10, request.args.get("per_page", 50, type=int) or 50))
     offset = (page - 1) * per_page
-    cursor.execute("SELECT COUNT(*) AS total FROM alunos")
+    # Busca no banco inteiro, nao apenas nos registros visiveis da pagina atual.
+    busca = (request.args.get("q") or "").strip()[:100]
+    termo_busca = "%" + busca.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    filtro_busca = (busca, termo_busca, termo_busca, termo_busca)
+    cursor.execute("""
+        SELECT COUNT(*) AS total
+        FROM alunos a LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
+        WHERE (%s = '' OR COALESCE(a.nome,'') ILIKE %s
+               OR COALESCE(a.ra,'') ILIKE %s OR COALESCE(dp.cpf,'') ILIKE %s)
+    """, filtro_busca)
     total_alunos = int((cursor.fetchone() or {}).get("total") or 0)
 
     cursor.execute("""
@@ -2835,9 +2844,11 @@ def mew_alunos():
             SELECT id, status, data_envio FROM contratos_alunos
             WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
         ) c ON TRUE
+        WHERE (%s = '' OR COALESCE(a.nome,'') ILIKE %s
+               OR COALESCE(a.ra,'') ILIKE %s OR COALESCE(dp.cpf,'') ILIKE %s)
         ORDER BY a.nome
         LIMIT %s OFFSET %s
-    """, (per_page, offset))
+    """, (*filtro_busca, per_page, offset))
     alunos_completo=[]
     for row in cursor.fetchall():
         r=dict(row)
@@ -2883,7 +2894,7 @@ def mew_alunos():
         cobranca_criada=cobranca_criada, picpay_cobranca=picpay_cobranca,
         erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
         page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages,
-        csrf_token=_mew_csrf()
+        csrf_token=_mew_csrf(), busca=busca
     )
 
 @app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
