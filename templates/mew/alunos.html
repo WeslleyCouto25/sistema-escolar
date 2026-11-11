@@ -650,10 +650,14 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                     <button type="submit" class="btn btn-sm btn-success" title="Gerar cobrança PicPay"><i class="fas fa-credit-card"></i></button>
                                 </form>
                                 {% endif %}
-                                <a href="/mew/deletar-aluno/{{ aluno.id }}" class="btn btn-sm btn-danger"
-                                   onclick="return confirmDelete('{{ aluno.nome }}')" title="Excluir Aluno">
-                                    <i class="fas fa-trash"></i>
-                                </a>
+                                <form method="post" action="/mew/deletar-aluno/{{ aluno.id }}"
+                                      style="display:inline; margin:0;"
+                                      onsubmit="return confirmDelete({{ aluno.nome|tojson|forceescape }})">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir Aluno">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% endfor %}
