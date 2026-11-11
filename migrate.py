@@ -305,6 +305,19 @@ def main():
         print("[SIGEU INITIAL ENROLLMENTS VERIFIED] "
               "alunos=%s disciplinas=%s vinculos=%s" %
               (initial["alunos"], initial["disciplinas"], initial["vinculos"]), flush=True)
+        # O backup anterior à migração ainda não inclui a matrícula recém-criada.
+        # Protege IMEDIATAMENTE os novos alunos com duas cópias independentes.
+        from backup_sigeu import create_backup as csv_backup
+        from backup_postgres_full_r2 import create_full_backup, verify_full_backup
+        csv = csv_backup()
+        print("[SIGEU INITIAL CSV BACKUP VERIFIED] tables=%s rows=%s" %
+              (csv["tables"], csv["rows"]), flush=True)
+        full = create_full_backup()
+        verification = verify_full_backup(full["id"])
+        if not verification.get("verified") or not verification.get("archive_readable"):
+            raise RuntimeError("Backup integral pos-matricula nao verificado")
+        print("[SIGEU INITIAL FULL BACKUP VERIFIED] bytes=%s sha256=%s" %
+              (full["bytes"], full["sha256"]), flush=True)
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
