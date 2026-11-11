@@ -51,6 +51,7 @@ from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
 from chapter_release import chapter_is_released, released_chapters, chapter_release_date
 from payment_release import get_course_access
+from dashboard_grades import dashboard_grades
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -1337,11 +1338,15 @@ def dashboard():
                      addd.progresso_manual, addd.frequencia, addd.data_inicio
             ORDER BY d.nome
         """, (aluno_id,))
+        rows_disciplinas = cursor.fetchall()
+        notas_logicas, notas = dashboard_grades(
+            cursor, aluno_id, [d["id"] for d in rows_disciplinas]
+        )
         disciplinas = []
-        for row in cursor.fetchall():
+        for row in rows_disciplinas:
             d = dict(row)
             total = int(d.get("total_capitulos") or 0)
-            unidades_dashboard = _notas_logicas_disciplina(cursor, aluno_id, d["id"])
+            unidades_dashboard = notas_logicas.get(int(d["id"]), [])
             feitas = sum(1 for u in unidades_dashboard if u["nota"] is not None)
             status_final = _normalizar_status_academico(d.get("status_final"))
 
@@ -1373,12 +1378,6 @@ def dashboard():
             disciplinas.append(d)
 
         cursor.execute("""
-            SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
-            FROM notas n JOIN disciplinas d ON n.disciplina_id = d.id
-            WHERE n.aluno_id = %s ORDER BY n.disciplina_id, n.capitulo
-        """, (aluno_id,))
-        notas = cursor.fetchall()
-        cursor.execute("""
             SELECT sm.*, d.nome AS disciplina_nome FROM solicitacoes_material sm
             LEFT JOIN disciplinas d ON sm.disciplina_id = d.id
             WHERE sm.aluno_id = %s ORDER BY sm.data_solicitacao DESC
@@ -1390,7 +1389,10 @@ def dashboard():
         # Estatística geral sem duplicar unidades legadas/canônicas.
         todas_notas = []
         for d in disciplinas:
-            todas_notas.extend([x["nota"] for x in _notas_logicas_disciplina(cursor, aluno_id, d["id"]) if x["nota"] is not None])
+            todas_notas.extend(
+                x["nota"] for x in notas_logicas.get(int(d["id"]), [])
+                if x["nota"] is not None
+            )
         total_provas = len(todas_notas)
         media_geral = round(sum(todas_notas) / len(todas_notas), 2) if todas_notas else 0
 
@@ -1424,6 +1426,7 @@ def dashboard():
         disciplinas_alternativas=disciplinas_alternativas, notas=notas,
         solicitacoes_material=solicitacoes_material, solicitacoes_declaracoes=solicitacoes_declaracoes,
         total_provas_realizadas=total_provas, media_geral=media_geral,
+        progressos=[d["progresso"] for d in disciplinas],
         material_pendente=material_pendente, declaracoes_pendentes=declaracoes_pendentes,
         nao_visualizados=nao_visualizados
     )
