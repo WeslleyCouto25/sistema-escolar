@@ -1437,18 +1437,18 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <div class="footer-section">
                         <h4><i class="fas fa-info-circle"></i> Recursos</h4>
                         <ul class="footer-links">
-                            <li><a href="#"><i class="fas fa-question-circle"></i> Ajuda e Suporte</a></li>
-                            <li><a href="#"><i class="fas fa-download"></i> Materiais para Download</a></li>
-                            <li><a href="#"><i class="fas fa-chart-line"></i> Estatísticas de Aprendizado</a></li>
-                            <li><a href="#"><i class="fas fa-certificate"></i> Certificados</a></li>
+                            <li><a href="mailto:contato@campusvirtualfacop.com.br"><i class="fas fa-question-circle"></i> Ajuda e Suporte</a></li>
+                            {% if capitulos %}<li><a href="#chapter-1"><i class="fas fa-download"></i> Materiais da Disciplina</a></li>{% endif %}
+                            <li><a href="/dashboard?section=notas"><i class="fas fa-chart-line"></i> Minhas Notas</a></li>
+                            <li><a href="/dashboard?section=meus-documentos"><i class="fas fa-file-pdf"></i> Documentos Acadêmicos</a></li>
                         </ul>
                     </div>
 
                     <div class="footer-section">
                         <h4><i class="fas fa-envelope"></i> Contato</h4>
                         <p><i class="fas fa-university"></i> Certificadora FACOP | com SiGEU Educação </p>
-                        <p><i class="fas fa-envelope"></i> contato@campusvirtualfacop.com.br</p>
-                        <p><i class="fas fa-phone"></i> 21 99002-0262 | 11 3302-0501</p>
+                        <p><i class="fas fa-envelope"></i> <a href="mailto:contato@campusvirtualfacop.com.br">contato@campusvirtualfacop.com.br</a></p>
+                        <p><i class="fas fa-phone"></i> <a href="tel:+5521990020262">21 99002-0262</a> | <a href="tel:+551133020501">11 3302-0501</a></p>
                         <p style="margin-top: 20px;">
                             <i class="fas fa-clock"></i> Horário de atendimento:<br>
                             Segunda a Sexta, 8h às 18h
@@ -1457,7 +1457,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 </div>
 
                 <div class="footer-bottom">
-                    <p>© 2026 Plataforma Acadêmica. Todos os direitos reservados. | Desenvolvido com <i
+                    <p>© 2026 SIGEU Educacional. Todos os direitos reservados. | Desenvolvido com <i
                             class="fas fa-heart"></i> para a educação</p>
                 </div>
             </footer>
