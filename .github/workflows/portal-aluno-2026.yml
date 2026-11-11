@@ -1,0 +1,49 @@
+name: Testar portal do aluno azul e desempenho
+on:
+  pull_request:
+    paths:
+      - 'app.py'
+      - 'migrate.py'
+      - 'dashboard_grades.py'
+      - 'payment_release.py'
+      - 'static/css/student_campus_2026.css'
+      - 'static/js/student_campus_2026.js'
+      - 'templates/**'
+      - 'tests/test_student_campus_2026.py'
+      - '.github/workflows/portal-aluno-2026.yml'
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compilar modulos Python
+        run: python -m py_compile app.py migrate.py payment_release.py dashboard_grades.py
+      - name: Executar testes de acesso e boletim
+        run: python -m unittest discover -s tests -p 'test_student_campus_2026.py' -v
+      - name: Testar templates e componentes
+        run: |
+          pip install --quiet Jinja2
+          python - <<'PY'
+          from jinja2 import Environment
+          from pathlib import Path
+          files = [
+            "dashboard.html", "disciplina.html", "disciplina_concluida.html",
+            "aluno/meus_documentos.html", "login.html", "disciplina_alternativa.html",
+            "avaliacao_final.html", "situacao_academica.html",
+          ]
+          for path in files:
+              t = (Path("templates") / path).read_text(encoding="utf-8")
+              Environment().parse(t)
+              assert "student_campus_2026.css" in t, path
+              assert "student_campus_2026.js" in t, path
+          dashboard = Path("templates/dashboard.html").read_text(encoding="utf-8")
+          assert "sigeu-campus-hero" in dashboard
+          assert "sigeu-campus-courses" in dashboard
+          print("8 templates Jinja válidos; dashboard novo presente")
+          PY
+      - name: Testar sintaxe JavaScript
+        run: |
+          node --check static/js/student_campus_2026.js

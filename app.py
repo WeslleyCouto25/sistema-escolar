@@ -50,6 +50,8 @@ import plano_ensino
 from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
 from chapter_release import chapter_is_released, released_chapters, chapter_release_date
+from payment_release import get_course_access
+from dashboard_grades import dashboard_grades
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -1224,38 +1226,13 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
 
 
 def verificar_acesso_disciplina(aluno_id, disciplina_id):
-    """Verifica se o aluno pode acessar a disciplina baseado na data"""
-    from datetime import datetime
-
+    """Compatibilidade com chamadas antigas: a regra reside no banco."""
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT data_inicio, data_fim_previsto
-        FROM aluno_disciplina_datas
-        WHERE aluno_id = %s AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    data_info = cursor.fetchone()
-    conn.close()
-
-    if not data_info:
-        return False, "Disciplina não encontrada ou não matriculada"
-
-    # Converter data string para objeto datetime
     try:
-        data_inicio = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
-        hoje = datetime.now()
-
-        if hoje < data_inicio:
-            data_formatada = data_inicio.strftime("%d/%m/%Y")
-            data_fim = datetime.strptime(data_info['data_fim_previsto'], "%d/%m/%Y")
-            data_fim_formatada = data_fim.strftime("%d/%m/%Y")
-            return False, f"Suas aulas iniciarão apenas em {data_formatada} com término máximo previsto para {data_fim_formatada}"
-
-        return True, "Acesso permitido"
-    except ValueError:
-        return False, "Erro na data de início"
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+        return result["acesso_permitido"], result["mensagem"]
+    finally:
+        conn.close()
 
 @app.route("/")
 def index():
@@ -1361,11 +1338,15 @@ def dashboard():
                      addd.progresso_manual, addd.frequencia, addd.data_inicio
             ORDER BY d.nome
         """, (aluno_id,))
+        rows_disciplinas = cursor.fetchall()
+        notas_logicas, notas = dashboard_grades(
+            cursor, aluno_id, [d["id"] for d in rows_disciplinas]
+        )
         disciplinas = []
-        for row in cursor.fetchall():
+        for row in rows_disciplinas:
             d = dict(row)
             total = int(d.get("total_capitulos") or 0)
-            unidades_dashboard = _notas_logicas_disciplina(cursor, aluno_id, d["id"])
+            unidades_dashboard = notas_logicas.get(int(d["id"]), [])
             feitas = sum(1 for u in unidades_dashboard if u["nota"] is not None)
             status_final = _normalizar_status_academico(d.get("status_final"))
 
@@ -1397,12 +1378,6 @@ def dashboard():
             disciplinas.append(d)
 
         cursor.execute("""
-            SELECT n.disciplina_id, n.capitulo, n.nota, d.nome AS disciplina_nome
-            FROM notas n JOIN disciplinas d ON n.disciplina_id = d.id
-            WHERE n.aluno_id = %s ORDER BY n.disciplina_id, n.capitulo
-        """, (aluno_id,))
-        notas = cursor.fetchall()
-        cursor.execute("""
             SELECT sm.*, d.nome AS disciplina_nome FROM solicitacoes_material sm
             LEFT JOIN disciplinas d ON sm.disciplina_id = d.id
             WHERE sm.aluno_id = %s ORDER BY sm.data_solicitacao DESC
@@ -1414,7 +1389,10 @@ def dashboard():
         # Estatística geral sem duplicar unidades legadas/canônicas.
         todas_notas = []
         for d in disciplinas:
-            todas_notas.extend([x["nota"] for x in _notas_logicas_disciplina(cursor, aluno_id, d["id"]) if x["nota"] is not None])
+            todas_notas.extend(
+                x["nota"] for x in notas_logicas.get(int(d["id"]), [])
+                if x["nota"] is not None
+            )
         total_provas = len(todas_notas)
         media_geral = round(sum(todas_notas) / len(todas_notas), 2) if todas_notas else 0
 
@@ -1448,6 +1426,7 @@ def dashboard():
         disciplinas_alternativas=disciplinas_alternativas, notas=notas,
         solicitacoes_material=solicitacoes_material, solicitacoes_declaracoes=solicitacoes_declaracoes,
         total_provas_realizadas=total_provas, media_geral=media_geral,
+        progressos=[d["progresso"] for d in disciplinas],
         material_pendente=material_pendente, declaracoes_pendentes=declaracoes_pendentes,
         nao_visualizados=nao_visualizados
     )
@@ -1651,6 +1630,31 @@ def mew_salvar_nota_final():
     finally:
         if conn:
             conn.close()
+
+
+@app.before_request
+def _proteger_pagamento_disciplina():
+    """Proteção do lado do servidor: não basta ocultar botões no navegador."""
+    if request.endpoint not in ("disciplina", "prova", "instrucoes_prova", "plano_ensino_privado"):
+        return None
+    if request.endpoint == "plano_ensino_privado" and session.get("mew_admin"):
+        return None
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+    args = request.view_args or {}
+    disciplina_id = args.get("disciplina_id")
+    if not isinstance(disciplina_id, int):
+        abort(404)
+    conn = get_db_connection()
+    try:
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+    finally:
+        conn.close()
+    if not result["acesso_permitido"]:
+        return render_template("acesso_bloqueado.html",
+                               mensagem=result["mensagem"]), 403
+    return None
 
 
 @app.before_request
@@ -2186,17 +2190,20 @@ def prova(disciplina_id, capitulo_numero):
 
 @app.route("/verificar-acesso/<int:disciplina_id>")
 def verificar_acesso(disciplina_id):
-    """Verifica acesso à disciplina via AJAX"""
+    """Retorna status de matrícula, confirmação e prazo documental de 24h."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
-        return jsonify({"acesso_permitido": False, "mensagem": "Não autenticado"})
-
-    acesso_permitido, mensagem = verificar_acesso_disciplina(aluno_id, disciplina_id)
-
-    return jsonify({
-        "acesso_permitido": acesso_permitido,
-        "mensagem": mensagem
-    })
+        return jsonify({"acesso_permitido": False, "motivo": "sem_sessao",
+                        "titulo": "Faça login para continuar",
+                        "mensagem": "Entre em sua conta para acessar a disciplina."}), 401
+    conn = get_db_connection()
+    try:
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+    finally:
+        conn.close()
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 @app.route("/verificar-conclusao/<int:disciplina_id>")
 def verificar_conclusao(disciplina_id):

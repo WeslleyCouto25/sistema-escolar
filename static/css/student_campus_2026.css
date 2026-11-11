@@ -1,0 +1,311 @@
+/* SIGEU Campus 2026 — linguagem visual educacional, mobile-first.
+ * Somente area do aluno. Não altera o MEW administrativo ou páginas públicas.
+ * Referência: estrutura de portal acadêmico azul; identidade e marca SIGEU.
+ */
+body.portal07.student-page {
+  --primary:#0964dd; --primary-dark:#073b87; --primary-light:#2f7ef4;
+  --secondary:#08a1dc; --secondary-light:#4dd4ec; --accent:#1765cf;
+  --success:#167a54; --warning:#c46b04; --info:#3863ae;
+  --gray-50:#f9fbff; --gray-100:#f4f6fa; --gray-200:#e5eaf2;
+  --gray-300:#d1d9e6; --gray-400:#9ba7b9; --gray-500:#6b788b;
+  --gray-600:#53637a; --gray-700:#263b54; --gray-800:#172b44;
+  --gray-900:#10223b;
+  color:#182c49!important;
+  background:#f4f6fa!important;
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important;
+  font-synthesis:none;
+}
+body.portal07.student-page .topbar{
+  height:74px!important;min-height:74px!important;
+  background:#fff!important;background-image:none!important;
+  color:#143452!important;border:0!important;border-bottom:1px solid #e5ebf4!important;
+  box-shadow:0 1px 5px rgba(8,43,94,.04)!important;
+  padding:0 25px!important;z-index:450!important;
+}
+body.portal07.student-page .logo-text{
+  display:flex!important;align-items:center!important;gap:10px!important;
+  background:transparent!important;color:#152b4b!important;border:0!important;
+  padding:0!important;border-radius:0!important;letter-spacing:-.025em!important;
+  font-size:20px!important;font-weight:800!important;box-shadow:none!important;
+}
+body.portal07.student-page .sigeu-brand-icon{
+ display:grid;place-items:center;width:36px;height:36px;border-radius:12px;
+ background:linear-gradient(145deg,#0da9ec,#0b59d5);color:white;font-size:19px;
+}
+body.portal07.student-page .logout-btn{
+ color:#1a4d8f!important;background:transparent!important;
+ border:1px solid #e1e9f4!important;border-radius:9px!important;
+ padding:9px 14px!important;font-size:13px!important;font-weight:650!important;
+ box-shadow:none!important;
+}
+body.portal07.student-page .logout-btn:hover,
+body.portal07.student-page .logout-btn.active{background:#e7f0ff!important;color:#0756c2!important;}
+body.portal07.student-page .sigeu-top-context{
+ font-size:12px;color:#657791;font-weight:650;border-left:1px solid #e1e8f3;
+ padding-left:16px;margin-left:19px;line-height:1.45;
+}
+body.portal07.student-page .sigeu-top-context strong{display:block;color:#14365d;font-size:15px;}
+body.portal07.student-page .sigeu-nav-toggle{
+ display:grid;place-items:center;appearance:none;border:0;background:#fff;
+ color:#245a9b;border-radius:9px;width:38px;height:38px;
+ margin-right:14px;font-size:17px;cursor:pointer;
+}
+body.portal07.student-page .sigeu-nav-toggle:hover{background:#e8f1ff;}
+body.portal07.student-page .main-container{background:#f4f6fa!important;min-height:calc(100vh - 74px)!important;}
+body.portal07.student-page .sidebar{
+ width:250px!important;min-width:250px!important;max-width:250px!important;
+ background:#fff!important;background-image:none!important;
+ border-right:1px solid #e4eaf4!important;color:#29425e!important;
+ box-shadow:none!important;padding:18px 10px!important;
+ position:sticky!important;top:74px!important;align-self:flex-start;
+ height:calc(100vh - 74px);overflow-y:auto!important;
+}
+body.portal07.student-page .sidebar .user-profile{
+ background:#f4f8ff!important;border:1px solid #e4edfa!important;border-radius:15px!important;
+ margin:0 6px 16px!important;padding:14px 10px!important;text-align:left!important;
+ display:flex!important;align-items:center!important;gap:10px!important;
+}
+body.portal07.student-page .sidebar .profile-img{
+ width:39px!important;height:39px!important;min-width:39px!important;
+ border-radius:12px!important;display:grid!important;place-items:center!important;
+ background:#dceaff!important;color:#075dda!important;margin:0!important;
+}
+body.portal07.student-page .sidebar .profile-img i{color:#0b61d2!important;}
+body.portal07.student-page .sidebar .profile-text .name{color:#143251!important;font-size:13px!important;font-weight:750!important;}
+body.portal07.student-page .sidebar .profile-text .ra{color:#61728b!important;font-size:11px!important;}
+body.portal07.student-page .dashboard-menu-header,
+body.portal07.student-page .sidebar .menu-section{
+ color:#71829c!important;background:transparent!important;border:0!important;
+ text-transform:uppercase!important;letter-spacing:.11em!important;
+ font-size:10px!important;font-weight:800!important;padding:14px 14px 7px!important;
+}
+body.portal07.student-page .sidebar ul.section-menu{
+ display:block!important;padding:0!important;margin:0!important;white-space:normal!important;
+ overflow:visible!important;
+}
+body.portal07.student-page .sidebar .section-menu-item,
+body.portal07.student-page .sidebar .menu-item,
+body.portal07.student-page .sidebar .main-menu a{
+ display:flex!important;align-items:center!important;gap:12px!important;
+ color:#35516e!important;background:transparent!important;
+ border:1px solid transparent!important;border-left:0!important;border-radius:11px!important;
+ font-weight:650!important;font-size:12.5px!important;
+ margin:3px 3px!important;padding:11px 13px!important;min-height:44px!important;
+ text-decoration:none!important;transition:background .15s,color .15s!important;
+}
+body.portal07.student-page .sidebar .section-menu-item i,
+body.portal07.student-page .sidebar .menu-item i{
+ color:#3874bc!important;width:19px;text-align:center;font-size:17px!important;
+ flex-shrink:0;
+}
+body.portal07.student-page .sidebar .section-menu-item.active,
+body.portal07.student-page .sidebar .menu-item.active{
+ background:#e2edff!important;color:#0657c7!important;box-shadow:none!important;
+ border-color:#e2edff!important;
+}
+body.portal07.student-page .sidebar .section-menu-item:hover,
+body.portal07.student-page .sidebar .menu-item:hover{background:#f0f5fd!important;color:#075fcf!important;}
+body.portal07.student-page .sidebar .main-menu{margin-top:13px!important;border-top:1px solid #e5eaf2!important;}
+body.portal07.student-page .content-area{flex:1!important;min-width:0!important;background:#f4f6fa!important;padding:26px 30px 48px!important;}
+body.portal07.student-page .content-section{max-width:1400px;margin:0 auto;}
+body.portal07.student-page .page-title{
+ color:#112e51!important;font-size:clamp(23px,2vw,30px)!important;
+ font-weight:800!important;letter-spacing:-.035em!important;
+}
+body.portal07.student-page .page-subtitle{color:#61728b!important;font-size:14px!important;}
+body.portal07.student-page .sigeu-campus-hero{
+ display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,.9fr);
+ align-items:center;gap:26px;min-height:274px;
+ padding:34px 38px;margin:0 0 26px;border-radius:18px;
+ background:linear-gradient(118deg,#1168e8 0%,#0954bd 53%,#063878 100%);
+ color:#fff;box-shadow:0 12px 25px rgba(3,66,156,.13);
+}
+body.portal07.student-page .sigeu-campus-hero *{box-sizing:border-box;}
+body.portal07.student-page .sigeu-campus-hero h1{
+ font-weight:500!important;font-size:clamp(31px,3.3vw,46px)!important;
+ letter-spacing:-.035em!important;color:#fff!important;line-height:1.15!important;
+ margin:22px 0 12px!important;
+}
+body.portal07.student-page .sigeu-campus-hero p{color:#e5efff!important;font-size:15px!important;line-height:1.6!important;margin:0!important;}
+body.portal07.student-page .sigeu-campus-hero .sigeu-eyebrow{
+ color:#c4defe!important;font-size:12px!important;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+}
+body.portal07.student-page .sigeu-campus-hero .sigeu-hero-meta{
+ display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:9px 13px;
+ background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+ border-radius:9px;color:#fff;font-size:12px;
+}
+body.portal07.student-page .sigeu-hero-notices{display:grid;gap:12px;}
+body.portal07.student-page .sigeu-hero-notice{
+ background:#fff;border:1px solid rgba(232,239,253,.9);border-radius:14px;
+ padding:16px 18px;box-shadow:0 4px 12px rgba(0,35,98,.08);color:#173353;
+}
+body.portal07.student-page .sigeu-notice-heading{
+ display:flex;align-items:center;gap:8px;margin:0 0 8px;
+ color:#315c9f;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.035em;
+}
+body.portal07.student-page .sigeu-hero-notice strong{display:block;font-size:16px;line-height:1.35;color:#15385e;}
+body.portal07.student-page .sigeu-hero-notice p{font-size:12px!important;color:#526782!important;margin-top:5px!important;line-height:1.5!important;}
+body.portal07.student-page .sigeu-campus-subheading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:24px 0 18px;}
+body.portal07.student-page .sigeu-campus-subheading h2{
+ color:#19365b!important;font-size:21px!important;font-weight:800!important;
+}
+body.portal07.student-page .info-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:12px!important;margin-bottom:26px!important;}
+body.portal07.student-page .info-card{
+ background:#fff!important;border:1px solid #e7edf6!important;border-radius:14px!important;
+ text-align:left!important;box-shadow:none!important;padding:18px!important;min-height:116px!important;
+}
+body.portal07.student-page .info-card:hover{border-color:#accafa!important;box-shadow:0 8px 20px rgba(19,87,173,.06)!important;transform:none!important;}
+body.portal07.student-page .info-card h4{
+ color:#61738c!important;justify-content:flex-start!important;font-size:11.5px!important;
+ font-weight:750!important;margin:0 0 14px!important;
+}
+body.portal07.student-page .info-card h4 i{color:#0b6ce5!important;}
+body.portal07.student-page .info-card p{
+ color:#15375e!important;font-size:25px!important;font-weight:800!important;
+}
+body.portal07.student-page .cards-container{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;}
+body.portal07.student-page .cards-container>.card{
+ background:#fff!important;border:1px solid #e1e9f5!important;border-radius:15px!important;
+ box-shadow:0 3px 12px rgba(18,61,109,.045)!important;overflow:hidden!important;
+}
+body.portal07.student-page .card-header{
+ background:#e0ecfe!important;background-image:none!important;
+ padding:18px 18px 13px!important;color:#153c6c!important;min-height:96px!important;
+ display:flex!important;flex-direction:column!important;gap:8px!important;
+ border-bottom:1px solid #cfddf3!important;
+}
+body.portal07.student-page .card-header h3,
+body.portal07.student-page .card-header h3 i{color:#17477d!important;}
+body.portal07.student-page .card-header h3{font-size:15px!important;line-height:1.42!important;font-weight:800!important;}
+body.portal07.student-page .status-badge{
+ display:inline-flex!important;align-items:center!important;align-self:flex-start!important;
+ color:#0f5a9d!important;background:#cce2ff!important;font-size:10px!important;
+ font-weight:800!important;border:0!important;border-radius:6px!important;
+ padding:4px 9px!important;
+}
+body.portal07.student-page .card-content{background:#fff!important;color:#2d4563!important;padding:20px!important;}
+body.portal07.student-page .course-name{font-weight:750!important;color:#17375e!important;}
+body.portal07.student-page .progress-bar{background:#e7effc!important;border-radius:30px!important;}
+body.portal07.student-page .progress-fill{background:#0e71e7!important;background-image:none!important;border-radius:30px!important;}
+body.portal07.student-page .btn-primary,
+body.portal07.student-page .card-actions .btn-primary{
+ border-radius:9px!important;background:#0c67e4!important;background-image:none!important;
+ border:1px solid #0c67e4!important;color:#fff!important;box-shadow:none!important;
+ font-weight:750!important;
+}
+body.portal07.student-page .btn-primary:hover{background:#0856c4!important;color:white!important;transform:none!important;}
+body.portal07.student-page .btn-secondary{color:#075fcf!important;border:1px solid #b8d3ff!important;border-radius:9px!important;}
+body.portal07.student-page .card,
+body.portal07.student-page .dados-aluno-card,
+body.portal07.student-page .disciplina-notas,
+body.portal07.student-page .stat-card{
+ border-radius:15px!important;border-color:#e5ebf5!important;box-shadow:0 2px 14px rgba(18,52,91,.045)!important;
+}
+body.portal07.student-page .dados-aluno-card{background:#fff!important;}
+body.portal07.student-page .section-title{color:#15385e!important;}
+body.portal07.student-page .discipline-header{
+ background:linear-gradient(115deg,#1369e5,#084699)!important;background-image:linear-gradient(115deg,#1369e5,#084699)!important;
+ border:0!important;color:#fff!important;
+}
+body.portal07.student-page .discipline-header .page-title,
+body.portal07.student-page .discipline-header .page-subtitle,
+body.portal07.student-page .discipline-header .back-link{color:#fff!important;}
+body.portal07.student-page .progress-step.current .step-icon{background:#0c68e8!important;color:#fff!important;}
+body.portal07.student-page th{background:#e8f0ff!important;color:#183b62!important;}
+body.portal07.student-page a:focus-visible,
+body.portal07.student-page button:focus-visible,
+body.portal07.student-page .section-menu-item:focus-visible{outline:3px solid #0b8fea!important;outline-offset:2px;}
+body.portal07.student-page .header{background:#fff!important;color:#163452!important;border-bottom:1px solid #e1eafa!important;}
+body.portal07.student-page .header .logo-area h1,
+body.portal07.student-page .header .logo-area i{color:#145ac4!important;}
+body.portal07.student-page .welcome-card{background:linear-gradient(115deg,#126be6,#064589)!important;color:#fff!important;border-radius:15px!important;}
+body.portal07.student-page.login-page{
+ background:linear-gradient(135deg,#ecf4ff 0%,#f7f9fd 62%,#e2edff 100%)!important;
+}
+body.portal07.student-page.login-page .login-container{
+ border:1px solid #dce7f5!important;border-top:5px solid #116aeb!important;
+ border-radius:18px!important;box-shadow:0 20px 60px rgba(10,65,127,.12)!important;
+}
+body.portal07.student-page.login-page .login-academic-header{
+ background:linear-gradient(120deg,#086be5,#054999)!important;color:white!important;
+}
+body.portal07.student-page.sigeu-sidebar-compact .sidebar{width:79px!important;min-width:79px!important;max-width:79px!important;}
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .profile-text,
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .dashboard-menu-header,
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .menu-section,
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .section-menu-item span,
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .menu-item span{display:none!important;}
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .user-profile{justify-content:center!important;padding:9px 4px!important;}
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .section-menu-item,
+body.portal07.student-page.sigeu-sidebar-compact .sidebar .menu-item{justify-content:center!important;padding:13px 8px!important;}
+body.portal07.student-page .sigeu-access-overlay{
+ position:fixed;inset:0;z-index:55000;display:flex;align-items:center;justify-content:center;
+ padding:18px;background:rgba(8,27,59,.65);backdrop-filter:blur(4px);
+}
+body.portal07.student-page .sigeu-access-card{
+ background:white;border:1px solid #dce6f4;border-radius:18px;max-width:510px;width:100%;
+ padding:30px 30px 23px;box-shadow:0 25px 70px rgba(0,20,60,.28);
+}
+body.portal07.student-page .sigeu-access-symbol{
+ display:grid;place-items:center;width:54px;height:54px;background:#e1edff;color:#0962d7;
+ border-radius:16px;font-size:26px;margin-bottom:17px;
+}
+body.portal07.student-page .sigeu-access-card h2{color:#183c66;font-size:23px;font-weight:800;margin:0 0 13px;}
+body.portal07.student-page .sigeu-access-card p{color:#526681;line-height:1.68;font-size:14px;margin:0 0 17px;}
+body.portal07.student-page .sigeu-access-step{
+ display:flex;align-items:start;gap:12px;border-top:1px solid #e8eef6;
+ padding:12px 0;font-size:12px;color:#586c83;
+}
+body.portal07.student-page .sigeu-access-step i{color:#0e71de;font-size:16px;margin-top:2px;}
+body.portal07.student-page .sigeu-access-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:10px;margin-top:14px;}
+body.portal07.student-page .sigeu-access-actions button{border:1px solid #c1d5f1;border-radius:9px;padding:11px 17px;background:#f6f9ff;color:#1559a8;font-weight:800;cursor:pointer;}
+body.portal07.student-page .sigeu-access-actions button.main{background:#0865e3;color:white;border-color:#0865e3;}
+@media (max-width:1150px){
+ body.portal07.student-page .cards-container{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+ body.portal07.student-page .info-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+ body.portal07.student-page .sigeu-campus-hero{grid-template-columns:1fr!important;}
+ body.portal07.student-page .sigeu-hero-notices{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:820px){
+ body.portal07.student-page .topbar{height:62px!important;min-height:62px!important;padding:0 12px!important;}
+ body.portal07.student-page .sigeu-top-context{display:none!important;}
+ body.portal07.student-page .main-container{display:block!important;}
+ body.portal07.student-page .sidebar{width:100%!important;min-width:0!important;max-width:none!important;
+  position:static!important;height:auto!important;overflow:visible!important;
+  padding:8px!important;border-right:0!important;border-bottom:1px solid #e4eaf4!important;}
+ body.portal07.student-page .sidebar .user-profile,
+ body.portal07.student-page .sidebar .dashboard-menu-header,
+ body.portal07.student-page .sidebar .main-menu{display:none!important;}
+ body.portal07.student-page .sidebar .section-menu{
+ display:flex!important;gap:4px!important;overflow-x:auto!important;white-space:nowrap!important;
+ -webkit-overflow-scrolling:touch!important;padding:3px!important;
+ }
+ body.portal07.student-page .sidebar .section-menu-item{
+ flex:0 0 auto!important;white-space:nowrap!important;padding:9px 11px!important;
+ font-size:12px!important;
+ }
+ body.portal07.student-page .sidebar .section-menu-item span{display:inline!important;}
+ body.portal07.student-page .content-area{padding:16px 13px 34px!important;}
+ body.portal07.student-page .sigeu-campus-hero{padding:23px 20px!important;min-height:0!important;border-radius:14px!important;}
+ body.portal07.student-page .cards-container{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+ body.portal07.student-page .info-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+ body.portal07.student-page .sigeu-nav-toggle{display:none!important;}
+}
+@media (max-width:560px){
+ body.portal07.student-page .logo-text{font-size:16px!important;}
+ body.portal07.student-page .sigeu-brand-icon{width:30px;height:30px;font-size:16px;}
+ body.portal07.student-page .logout-btn{padding:8px!important;}
+ body.portal07.student-page .topbar .user-menu .logout-btn span{display:none!important;}
+ body.portal07.student-page .cards-container{grid-template-columns:1fr!important;}
+ body.portal07.student-page .sigeu-hero-notices{grid-template-columns:1fr!important;}
+ body.portal07.student-page .sigeu-campus-hero h1{font-size:30px!important;}
+ body.portal07.student-page .info-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+ body.portal07.student-page .info-card{min-height:90px!important;padding:13px!important;}
+ body.portal07.student-page .sigeu-access-card{padding:24px 19px!important;}
+}
+@media (prefers-reduced-motion:reduce){
+ body.portal07.student-page *,body.portal07.student-page *::before,body.portal07.student-page *::after{
+ transition-duration:.01ms!important;animation-duration:.01ms!important;
+ }
+}
