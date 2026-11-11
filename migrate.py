@@ -378,7 +378,7 @@ def main():
             print("[SIGEU ADMIN SMOKE] %s status=200" % rota, flush=True)
         # Emissao de links de R2 em rotas privadas (nao baixa o PDF).
         from publish_academic_plans import SOURCES
-        from db_pool import get_db_connection
+        # get_db_connection já é importado no escopo global deste módulo.
         connection = get_db_connection()
         try:
             cursor = connection.cursor()
