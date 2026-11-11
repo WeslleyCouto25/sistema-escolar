@@ -50,6 +50,7 @@ import plano_ensino
 from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
 from chapter_release import chapter_is_released, released_chapters, chapter_release_date
+from payment_release import get_course_access
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -1224,38 +1225,13 @@ def gerar_declaracao_conclusao(aluno_id, disciplina_id, dados_aluno, dados_disci
 
 
 def verificar_acesso_disciplina(aluno_id, disciplina_id):
-    """Verifica se o aluno pode acessar a disciplina baseado na data"""
-    from datetime import datetime
-
+    """Compatibilidade com chamadas antigas: a regra reside no banco."""
     conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT data_inicio, data_fim_previsto
-        FROM aluno_disciplina_datas
-        WHERE aluno_id = %s AND disciplina_id = %s
-    """, (aluno_id, disciplina_id))
-
-    data_info = cursor.fetchone()
-    conn.close()
-
-    if not data_info:
-        return False, "Disciplina não encontrada ou não matriculada"
-
-    # Converter data string para objeto datetime
     try:
-        data_inicio = datetime.strptime(data_info['data_inicio'], "%d/%m/%Y")
-        hoje = datetime.now()
-
-        if hoje < data_inicio:
-            data_formatada = data_inicio.strftime("%d/%m/%Y")
-            data_fim = datetime.strptime(data_info['data_fim_previsto'], "%d/%m/%Y")
-            data_fim_formatada = data_fim.strftime("%d/%m/%Y")
-            return False, f"Suas aulas iniciarão apenas em {data_formatada} com término máximo previsto para {data_fim_formatada}"
-
-        return True, "Acesso permitido"
-    except ValueError:
-        return False, "Erro na data de início"
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+        return result["acesso_permitido"], result["mensagem"]
+    finally:
+        conn.close()
 
 @app.route("/")
 def index():
@@ -1651,6 +1627,31 @@ def mew_salvar_nota_final():
     finally:
         if conn:
             conn.close()
+
+
+@app.before_request
+def _proteger_pagamento_disciplina():
+    """Proteção do lado do servidor: não basta ocultar botões no navegador."""
+    if request.endpoint not in ("disciplina", "prova", "instrucoes_prova", "plano_ensino_privado"):
+        return None
+    if request.endpoint == "plano_ensino_privado" and session.get("mew_admin"):
+        return None
+    aluno_id = session.get("aluno_id")
+    if not aluno_id:
+        return redirect(url_for("login"))
+    args = request.view_args or {}
+    disciplina_id = args.get("disciplina_id")
+    if not isinstance(disciplina_id, int):
+        abort(404)
+    conn = get_db_connection()
+    try:
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+    finally:
+        conn.close()
+    if not result["acesso_permitido"]:
+        return render_template("acesso_bloqueado.html",
+                               mensagem=result["mensagem"]), 403
+    return None
 
 
 @app.before_request
@@ -2186,17 +2187,20 @@ def prova(disciplina_id, capitulo_numero):
 
 @app.route("/verificar-acesso/<int:disciplina_id>")
 def verificar_acesso(disciplina_id):
-    """Verifica acesso à disciplina via AJAX"""
+    """Retorna status de matrícula, confirmação e prazo documental de 24h."""
     aluno_id = session.get("aluno_id")
     if not aluno_id:
-        return jsonify({"acesso_permitido": False, "mensagem": "Não autenticado"})
-
-    acesso_permitido, mensagem = verificar_acesso_disciplina(aluno_id, disciplina_id)
-
-    return jsonify({
-        "acesso_permitido": acesso_permitido,
-        "mensagem": mensagem
-    })
+        return jsonify({"acesso_permitido": False, "motivo": "sem_sessao",
+                        "titulo": "Faça login para continuar",
+                        "mensagem": "Entre em sua conta para acessar a disciplina."}), 401
+    conn = get_db_connection()
+    try:
+        result = get_course_access(conn.cursor(), aluno_id, disciplina_id)
+    finally:
+        conn.close()
+    response = jsonify(result)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 @app.route("/verificar-conclusao/<int:disciplina_id>")
 def verificar_conclusao(disciplina_id):
