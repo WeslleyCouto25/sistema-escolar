@@ -276,6 +276,15 @@ def main():
         print("[SIGEU BACKUP VERIFIED] source=%s tables=%s rows=%s critical=%s sha256=%s" %
               (backup["database_id"], backup["tables"], backup["rows"],
                backup["critical_counts"], backup["sha256"]), flush=True)
+        # Dump integral antes das migracoes; CSV validado acima segue obrigatorio.
+        try:
+            from backup_postgres_full_r2 import create_full_backup
+            integral = create_full_backup()
+            print("[SIGEU FULL BACKUP VERIFIED] bytes=%s sha256=%s key=%s" %
+                  (integral["bytes"], integral["sha256"], integral["id"]), flush=True)
+        except Exception as exc:
+            print("[SIGEU FULL BACKUP FAILED] type=%s (CSV backup preservado)" %
+                  type(exc).__name__, flush=True)
     init_db()
     init_contratos_db()
     init_pagamentos_db()
