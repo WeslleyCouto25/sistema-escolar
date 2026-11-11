@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Verificar sintaxe Python
         run: python -m py_compile app.py migrate.py schema_alunos.py backup_postgres_full_r2.py
       - name: Testar schema sem acesso a dados reais
