@@ -297,6 +297,20 @@ def main():
         publicar_rascunho_individual_95984()
     init_documentos_integrados_db()
     ensure_extra_schema()
+    # Garante controle transacional de liberacao D+1 (24h apos pagamento)
+    # e preserva data documentada de baixa administrativa anterior.
+    from payment_release import ensure_payment_release_schema
+    con = get_db_connection()
+    try:
+        cur = con.cursor()
+        ensure_payment_release_schema(cur)
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+    print("[SIGEU PAYMENT RELEASE SCHEMA VERIFIED] prazo_horas=24", flush=True)
     # Os dados pessoais jamais sao colocados no GitHub. Um JSON temporario do
     # ambiente permite cadastrar a turma inicial em UMA transacao idempotente.
     from initial_enrollments import provision_initial_enrollments
