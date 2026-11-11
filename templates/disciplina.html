@@ -1189,6 +1189,13 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <i class="fas fa-book"></i>
                     <span class="text">{{ disciplina['nome'][:20] }}...</span>
                 </a>
+                {% if plano_disponivel %}
+                <a href="{{ url_for('plano_ensino_privado', disciplina_id=disciplina['id']) }}"
+                   class="menu-item" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-file-pdf"></i>
+                    <span class="text">Plano de ensino (PDF)</span>
+                </a>
+                {% endif %}
                 <div class="menu-section">Capítulos</div>
                 {% for c in capitulos %}
                 <a href="#chapter-{{ loop.index }}" class="menu-item chapter-nav" data-chapter="{{ loop.index }}">
