@@ -1097,7 +1097,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
     <!-- Top Bar -->
     <header class="topbar">
         <div class="navbar-header">
-            <div class="logo-text">SIGEU Educacional</div>
+            <button class="sigeu-nav-toggle" type="button" aria-label="Recolher ou expandir navegação" aria-expanded="true" title="Alternar menu"><i class="fas fa-bars"></i></button>
+            <div class="logo-text"><span class="sigeu-brand-icon" aria-hidden="true"><i class="fas fa-graduation-cap"></i></span>SIGEU <span style="font-weight:500;color:#4f6682">Educacional</span></div>
+            <div class="sigeu-top-context" aria-hidden="true">Ambiente virtual<strong>Área do estudante</strong></div>
         </div>
         <div class="spacer"></div>
         <div class="user-menu">
@@ -1200,9 +1202,28 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         <main class="content-area">
             <!-- SEÇÃO: DASHBOARD -->
             <div class="content-section active" id="dashboard-section">
-                <h1 class="page-title">Visão Geral Acadêmica</h1>
-                <p class="page-subtitle">Bem-vindo(a), {{ aluno_nome }}</p>
+                <section class="sigeu-campus-hero" aria-labelledby="sigeu-hero-heading">
+                    <div>
+                        <div class="sigeu-eyebrow">Seu ambiente virtual de aprendizagem</div>
+                        <h1 id="sigeu-hero-heading">Boas-vindas, {{ (aluno_nome or 'Estudante').split(' ')[0]|title }}!</h1>
+                        <p>Aprender é construir possibilidades. Acompanhe suas disciplinas, atividades, documentos e seu progresso acadêmico em um só lugar.</p>
+                        <div class="sigeu-hero-meta"><i class="fas fa-graduation-cap" aria-hidden="true"></i> {{ disciplinas|length }} disciplina(s) matriculada(s) <span aria-hidden="true">•</span> Portal acadêmico</div>
+                    </div>
+                    <div class="sigeu-hero-notices" aria-label="Mural acadêmico">
+                        <div class="sigeu-hero-notice">
+                            <div class="sigeu-notice-heading"><i class="fas fa-bullhorn" aria-hidden="true"></i> Mural de avisos</div>
+                            <strong>Seu semestre em andamento</strong>
+                            <p>Consulte as disciplinas e acompanhe as datas de liberação de cada capítulo.</p>
+                        </div>
+                        <div class="sigeu-hero-notice">
+                            <div class="sigeu-notice-heading"><i class="fas fa-shield-alt" aria-hidden="true"></i> Secretaria acadêmica</div>
+                            <strong>Validação da matrícula</strong>
+                            <p>O acesso à disciplina é liberado após a confirmação do pagamento e o prazo de 24 horas para análise documental.</p>
+                        </div>
+                    </div>
+                </section>
 
+                <div class="sigeu-campus-subheading"><h2>Meu desempenho acadêmico</h2><span style="font-size:12px;color:#6e8099">Resumo da sua jornada de aprendizagem</span></div>
                 <div class="info-grid">
                     <div class="info-card">
                         <h4><i class="fas fa-book"></i> Disciplinas</h4>
@@ -1226,7 +1247,37 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     </div>
                 </div>
 
-                <h2 class="section-title">👤 Meus Dados</h2>
+                <div class="sigeu-campus-subheading">
+                    <h2>Minhas disciplinas</h2>
+                    <button type="button" class="btn btn-secondary" onclick="showSection('disciplinas')">Ver todas <i class="fas fa-arrow-right" aria-hidden="true"></i></button>
+                </div>
+                {% if disciplinas %}
+                <div class="cards-container sigeu-campus-courses">
+                    {% for d in disciplinas %}
+                    <article class="card">
+                        <div class="card-header">
+                            <span class="status-badge">Digital · 80 horas</span>
+                            <h3><i class="fas fa-book-open" aria-hidden="true"></i> {{ d['nome'] }}</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="progress-container">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;color:#536681;font-size:12px;margin-bottom:9px">
+                                    <span>Seu progresso</span><strong>{{ d['progresso'] }}%</strong>
+                                </div>
+                                <div class="progress-bar" role="progressbar" aria-label="Progresso na disciplina" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ d['progresso'] }}">
+                                    <div class="progress-fill" style="width:{{ d['progresso'] }}%"></div>
+                                </div>
+                            </div>
+                            <div class="card-actions"><a href="/disciplina/{{ d['id'] }}" class="btn btn-primary w-100"><i class="fas fa-arrow-right" aria-hidden="true"></i> Acessar disciplina</a></div>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="card" style="padding:25px;background:white;border-radius:14px">Ainda não há disciplinas associadas à sua matrícula.</div>
+                {% endif %}
+
+                <h2 class="section-title" style="margin-top:30px"><i class="fas fa-user-graduate" aria-hidden="true"></i> Meu cadastro</h2>
                 <div class="dados-aluno-card">
                     <div class="dados-aluno-grid">
                         <div class="dado-item">
