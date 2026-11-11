@@ -48,6 +48,7 @@ from openpyxl import Workbook, load_workbook
 import plano_ensino
 
 from db_pool import get_db_connection, pool_stats
+from schema_alunos import garantir_campos_dados_pessoais
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -118,7 +119,8 @@ from picpay_mew import (picpay_bp, criar_cobranca_picpay, init_picpay_db,
 app.register_blueprint(picpay_bp)
 
 # Contratação avulsa com contrato, fotografia, assinatura e link/QR fornecido pelo MEW.
-from cobrancas_avulsas import cobrancas_avulsas_bp, init_cobrancas_avulsas_db
+from cobrancas_avulsas import (cobrancas_avulsas_bp, init_cobrancas_avulsas_db,
+                              _csrf as _mew_csrf, _check_csrf as _mew_check_csrf)
 app.register_blueprint(cobrancas_avulsas_bp)
 
 # Snapshot a cada 6 horas no worker do SiGEU (sem recurso cron adicional).
@@ -616,6 +618,9 @@ def init_db():
             FOREIGN KEY (aluno_id) REFERENCES alunos(id)
         )
     """)
+    # Colunas adicionadas ao longo das versoes eram lidas pelo painel MEW,
+    # mas nao eram criadas em bases novas ou antigas. Esta rotina e idempotente.
+    garantir_campos_dados_pessoais(cursor)
 
     # Nova tabela: situacao_financeira do aluno
     cursor.execute("""
@@ -2785,7 +2790,16 @@ def mew_alunos():
     page = max(1, request.args.get("page", 1, type=int) or 1)
     per_page = min(100, max(10, request.args.get("per_page", 50, type=int) or 50))
     offset = (page - 1) * per_page
-    cursor.execute("SELECT COUNT(*) AS total FROM alunos")
+    # Busca no banco inteiro, nao apenas nos registros visiveis da pagina atual.
+    busca = (request.args.get("q") or "").strip()[:100]
+    termo_busca = "%" + busca.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    filtro_busca = (busca, termo_busca, termo_busca, termo_busca)
+    cursor.execute("""
+        SELECT COUNT(*) AS total
+        FROM alunos a LEFT JOIN dados_pessoais dp ON dp.aluno_id=a.id
+        WHERE (%s = '' OR COALESCE(a.nome,'') ILIKE %s
+               OR COALESCE(a.ra,'') ILIKE %s OR COALESCE(dp.cpf,'') ILIKE %s)
+    """, filtro_busca)
     total_alunos = int((cursor.fetchone() or {}).get("total") or 0)
 
     cursor.execute("""
@@ -2830,9 +2844,11 @@ def mew_alunos():
             SELECT id, status, data_envio FROM contratos_alunos
             WHERE aluno_id=a.id ORDER BY id DESC LIMIT 1
         ) c ON TRUE
+        WHERE (%s = '' OR COALESCE(a.nome,'') ILIKE %s
+               OR COALESCE(a.ra,'') ILIKE %s OR COALESCE(dp.cpf,'') ILIKE %s)
         ORDER BY a.nome
         LIMIT %s OFFSET %s
-    """, (per_page, offset))
+    """, (*filtro_busca, per_page, offset))
     alunos_completo=[]
     for row in cursor.fetchall():
         r=dict(row)
@@ -2877,7 +2893,8 @@ def mew_alunos():
         "mew/alunos.html", disciplinas=disciplinas, alunos=alunos_completo,
         cobranca_criada=cobranca_criada, picpay_cobranca=picpay_cobranca,
         erro_mp=request.args.get("erro_mp"), sucesso=request.args.get("sucesso"),
-        page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages
+        page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages,
+        csrf_token=_mew_csrf(), busca=busca
     )
 
 @app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
@@ -3524,10 +3541,12 @@ def mew_editar_aluno(aluno_id):
         return f"Erro ao carregar dados: {str(e)}", 500
 
 
-@app.route("/mew/deletar-aluno/<int:aluno_id>")
+@app.route("/mew/deletar-aluno/<int:aluno_id>", methods=["POST"])
 def mew_deletar_aluno(aluno_id):
     if not session.get("mew_admin"):
         return redirect("/mew/login")
+    # Nunca excluir registros acadêmicos por GET ou sem prova de origem do formulário.
+    _mew_check_csrf()
 
     conn = get_db_connection()
     cursor = conn.cursor()

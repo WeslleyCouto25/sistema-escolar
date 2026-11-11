@@ -1,0 +1,26 @@
+name: Validar cadastro de alunos e codigo de backup
+on:
+  pull_request:
+    paths:
+      - 'app.py'
+      - 'schema_alunos.py'
+      - 'backup_postgres_full_r2.py'
+      - 'tests/test_schema_alunos.py'
+      - '.github/workflows/cadastro-alunos.yml'
+  push:
+    paths:
+      - 'schema_alunos.py'
+      - 'tests/test_schema_alunos.py'
+      - '.github/workflows/cadastro-alunos.yml'
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verificar sintaxe Python
+        run: python -m py_compile app.py migrate.py schema_alunos.py backup_postgres_full_r2.py
+      - name: Testar schema sem acesso a dados reais
+        run: python -m unittest discover -s tests -p 'test_schema_alunos.py' -v
