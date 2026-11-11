@@ -297,7 +297,20 @@ def main():
         publicar_rascunho_individual_95984()
     init_documentos_integrados_db()
     ensure_extra_schema()
-    print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.")
+    print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
+    # Teste funcional real, somente leitura, no banco conectado ao deploy.
+    # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+        for rota in ("/mew/dashboard", "/mew/alunos"):
+            result = client.get(rota, follow_redirects=False)
+            if result.status_code != 200:
+                raise RuntimeError(
+                    "SIGEU ADMIN SMOKE falhou em %s: HTTP %s" %
+                    (rota, result.status_code)
+                )
+            print("[SIGEU ADMIN SMOKE] %s status=200" % rota, flush=True)
 
 
 if __name__ == "__main__":
