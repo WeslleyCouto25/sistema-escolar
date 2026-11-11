@@ -1,0 +1,38 @@
+name: Validar matriculas iniciais e liberacao de capitulos
+on:
+  pull_request:
+    paths:
+      - 'app.py'
+      - 'initial_enrollments.py'
+      - 'chapter_release.py'
+      - 'migrate.py'
+      - 'templates/mew/editar_aluno.html'
+      - 'tests/test_chapter_release.py'
+      - 'tests/test_initial_enrollments.py'
+      - '.github/workflows/matriculas-iniciais.yml'
+  push:
+    paths:
+      - 'app.py'
+      - 'initial_enrollments.py'
+      - 'chapter_release.py'
+      - 'migrate.py'
+      - 'templates/mew/editar_aluno.html'
+      - 'tests/test_chapter_release.py'
+      - 'tests/test_initial_enrollments.py'
+      - '.github/workflows/matriculas-iniciais.yml'
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compilar codigo
+        run: python -m py_compile app.py initial_enrollments.py chapter_release.py migrate.py
+      - name: Testar cadastro e bloqueio progressivo D+3
+        run: python -m unittest discover -s tests -p 'test_initial_enrollments.py' -v && python -m unittest discover -s tests -p 'test_chapter_release.py' -v
+      - name: Verificar template Jinja
+        run: |
+          python -m pip install --quiet Jinja2
+          python -c "from jinja2 import Environment; Environment().parse(open('templates/mew/editar_aluno.html', encoding='utf-8').read())"
