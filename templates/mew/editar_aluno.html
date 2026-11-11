@@ -378,6 +378,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 <option value="">Selecione...</option>
                                 <option value="avista" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'avista' %}selected{% endif %}>À Vista</option>
                                 <option value="cartao" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'cartao' %}selected{% endif %}>Cartão</option>
+                                <option value="picpay" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'picpay' %}selected{% endif %}>PicPay</option>
+                                <option value="qr_code" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'qr_code' %}selected{% endif %}>QR Code</option>
                                 <option value="boleto_pix" {% if situacao_financeira and situacao_financeira.forma_pagamento == 'boleto_pix' %}selected{% endif %}>Boleto/PIX (2x)</option>
                             </select>
                         </div>
@@ -388,6 +390,13 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                    value="{% if situacao_financeira and situacao_financeira.valor_total %}{{ situacao_financeira.valor_total }}{% endif %}"
                                    placeholder="Ex: 1500,00">
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Total de parcelas contratadas</label>
+                        <input type="number" min="1" max="12" name="parcelas_total"
+                               value="{{ situacao_financeira.parcelas_total if situacao_financeira and situacao_financeira.parcelas_total else 1 }}">
+                        <small style="color:#666;">Preserva o parcelamento original contratado; não registra pagamento.</small>
                     </div>
 
                     <div class="form-row" id="parcelasSection" style="{% if not situacao_financeira or situacao_financeira.forma_pagamento != 'boleto_pix' %}display: none;{% endif %}">

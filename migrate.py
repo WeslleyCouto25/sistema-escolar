@@ -297,19 +297,48 @@ def main():
         publicar_rascunho_individual_95984()
     init_documentos_integrados_db()
     ensure_extra_schema()
+    # Os dados pessoais jamais sao colocados no GitHub. Um JSON temporario do
+    # ambiente permite cadastrar a turma inicial em UMA transacao idempotente.
+    from initial_enrollments import provision_initial_enrollments
+    initial = provision_initial_enrollments()
+    if initial:
+        print("[SIGEU INITIAL ENROLLMENTS VERIFIED] "
+              "alunos=%s disciplinas=%s vinculos=%s" %
+              (initial["alunos"], initial["disciplinas"], initial["vinculos"]), flush=True)
+        # O backup anterior à migração ainda não inclui a matrícula recém-criada.
+        # Protege IMEDIATAMENTE os novos alunos com duas cópias independentes.
+        from backup_sigeu import create_backup as csv_backup
+        from backup_postgres_full_r2 import create_full_backup, verify_full_backup
+        csv = csv_backup()
+        print("[SIGEU INITIAL CSV BACKUP VERIFIED] tables=%s rows=%s" %
+              (csv["tables"], csv["rows"]), flush=True)
+        full = create_full_backup()
+        verification = verify_full_backup(full["id"])
+        if not verification.get("verified") or not verification.get("archive_readable"):
+            raise RuntimeError("Backup integral pos-matricula nao verificado")
+        print("[SIGEU INITIAL FULL BACKUP VERIFIED] bytes=%s sha256=%s" %
+              (full["bytes"], full["sha256"]), flush=True)
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
     with app.test_client() as client:
         with client.session_transaction() as sess:
             sess["mew_admin"] = True
-        for rota in ("/mew/dashboard", "/mew/alunos"):
+        rotas = ["/mew/dashboard", "/mew/alunos", "/mew/disciplinas"]
+        if initial:
+            for aluno_id in initial["student_ids"]:
+                rotas.extend([
+                    "/mew/editar-aluno/%d" % aluno_id,
+                    "/mew/aluno/%d/disciplinas" % aluno_id,
+                ])
+        for rota in rotas:
             result = client.get(rota, follow_redirects=False)
             if result.status_code != 200:
                 raise RuntimeError(
                     "SIGEU ADMIN SMOKE falhou em %s: HTTP %s" %
                     (rota, result.status_code)
                 )
+            # Somente nomes de rotas; sem dados cadastrais, CPF ou emails.
             print("[SIGEU ADMIN SMOKE] %s status=200" % rota, flush=True)
 
 
