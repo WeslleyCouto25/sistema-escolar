@@ -267,6 +267,17 @@ def start_periodic_backups():
                         result["database_id"], result["tables"], result["rows"], result["sha256"])
                 except Exception:
                     logging.getLogger("sigeu.backups").exception("SIGEU PERIODIC BACKUP FAILED")
+                    continue
+                # A cópia integral complementa os CSV, sem descarte de versões anteriores.
+                try:
+                    from backup_postgres_full_r2 import create_full_backup
+                    full = create_full_backup()
+                    logging.getLogger("sigeu.backups").info(
+                        "SIGEU PERIODIC FULL BACKUP VERIFIED sha256=%s bytes=%s",
+                        full["sha256"], full["bytes"])
+                except Exception:
+                    logging.getLogger("sigeu.backups").exception(
+                        "SIGEU PERIODIC FULL BACKUP FAILED; CSV backup preservado")
 
         threading.Thread(target=runner, name="sigeu-r2-backup", daemon=True).start()
         return True

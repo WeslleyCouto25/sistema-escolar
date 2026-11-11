@@ -276,6 +276,15 @@ def main():
         print("[SIGEU BACKUP VERIFIED] source=%s tables=%s rows=%s critical=%s sha256=%s" %
               (backup["database_id"], backup["tables"], backup["rows"],
                backup["critical_counts"], backup["sha256"]), flush=True)
+        # Dump integral antes das migracoes; CSV validado acima segue obrigatorio.
+        try:
+            from backup_postgres_full_r2 import create_full_backup
+            integral = create_full_backup()
+            print("[SIGEU FULL BACKUP VERIFIED] bytes=%s sha256=%s key=%s" %
+                  (integral["bytes"], integral["sha256"], integral["id"]), flush=True)
+        except Exception as exc:
+            print("[SIGEU FULL BACKUP FAILED] type=%s (CSV backup preservado)" %
+                  type(exc).__name__, flush=True)
     init_db()
     init_contratos_db()
     init_pagamentos_db()
@@ -288,7 +297,20 @@ def main():
         publicar_rascunho_individual_95984()
     init_documentos_integrados_db()
     ensure_extra_schema()
-    print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.")
+    print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
+    # Teste funcional real, somente leitura, no banco conectado ao deploy.
+    # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
+    with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["mew_admin"] = True
+        for rota in ("/mew/dashboard", "/mew/alunos"):
+            result = client.get(rota, follow_redirects=False)
+            if result.status_code != 200:
+                raise RuntimeError(
+                    "SIGEU ADMIN SMOKE falhou em %s: HTTP %s" %
+                    (rota, result.status_code)
+                )
+            print("[SIGEU ADMIN SMOKE] %s status=200" % rota, flush=True)
 
 
 if __name__ == "__main__":

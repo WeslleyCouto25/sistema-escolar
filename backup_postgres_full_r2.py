@@ -182,6 +182,23 @@ def verify_full_backup(key: str) -> dict:
         return {"id": key, "bytes": size, "verified": True, "archive_readable": True}
 
 
+def recent_full_backups(limit: int = 20) -> list[dict]:
+    """Lista apenas metadados dos dumps completos, nunca conteudo."""
+    if not is_configured():
+        return []
+    paginator = get_client().get_paginator("list_objects_v2")
+    objects = []
+    for page in paginator.paginate(Bucket=bucket_name(), Prefix=PREFIX):
+        for item in page.get("Contents", []):
+            if item["Key"].endswith(".sigeu"):
+                objects.append({
+                    "id": item["Key"],
+                    "bytes": int(item["Size"]),
+                    "time": item["LastModified"].isoformat(),
+                })
+    return sorted(objects, key=lambda x: x["time"], reverse=True)[:max(1, min(limit, 100))]
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dump integral PostgreSQL -> R2 privado e criptografado")
     action = parser.add_mutually_exclusive_group(required=True)

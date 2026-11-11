@@ -33,8 +33,9 @@ code{overflow-wrap:anywhere;font-size:12px}
 <h1>Proteção dos registros</h1>
 <p class="lead">Diagnóstico do PostgreSQL conectado e cópias criptografadas no Cloudflare R2.</p>
 {% if erro %}<div class="error" role="alert">{{ erro }}</div>{% endif %}
-{% if realizado %}<div class="success" role="status"><strong>Backup conferido no R2.</strong>
-  <div class="small">{{ realizado.tables }} tabelas · {{ realizado.rows }} registros · SHA-256 {{ realizado.sha256[:16] }}…</div>
+{% if realizado %}<div class="success" role="status"><strong>Backup criptografado confirmado no R2.</strong>
+  {% if realizado.id %}<div class="small">PostgreSQL integral (estrutura e dados) · {{ (realizado.bytes / 1048576)|round(2) }} MB · SHA-256 {{ realizado.sha256[:16] }}…</div>
+  {% else %}<div class="small">{{ realizado.tables }} tabelas · {{ realizado.rows }} registros · SHA-256 {{ realizado.sha256[:16] }}…</div>{% endif %}
 </div>{% endif %}
 <div class="grid">
   <section class="panel">
@@ -58,7 +59,12 @@ code{overflow-wrap:anywhere;font-size:12px}
       <input type="hidden" name="acao" value="criar">
       <button type="submit">Criar backup criptografado agora</button>
     </form>
-    <p class="small">A recuperação de dados exige uma restauração controlada em um banco separado, com conferência das integridades.</p>
+    <form method="post" action="/mew/backups" style="margin-top:15px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="acao" value="criar_completo">
+      <button type="submit">Criar backup INTEGRAL PostgreSQL (estrutura + dados) no R2</button>
+    </form>
+    <p class="small">O backup integral é gerado pelo pg_dump e protegido com AES-256-GCM. A restauração deve ser testada em um banco isolado, nunca diretamente nesta base.</p>
   </section>
 </div>
 <section class="panel">
@@ -70,5 +76,22 @@ code{overflow-wrap:anywhere;font-size:12px}
     {% endfor %}
   </tbody></table>
   {% else %}<p class="small">Ainda não foi possível confirmar uma cópia armazenada.</p>{% endif %}
+</section>
+<section class="panel">
+  <h2>Backups integrais verificáveis no R2</h2>
+  {% if completos %}
+  <table><thead><tr><th>Data/hora UTC</th><th>Tamanho</th><th>Identificador</th></tr></thead><tbody>
+  {% for item in completos %}<tr><td>{{ item.time }}</td><td>{{ (item.bytes / 1048576)|round(2) }} MB</td><td><code>{{ item.id }}</code></td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="small">Nenhuma cópia integral confirmada nesta verificação.</p>{% endif %}
+</section>
+<section class="panel">
+  <h2>Contratos anteriores disponíveis no R2</h2>
+  <p class="small">Documentos históricos que podem auxiliar na conferência manual de matrículas antigas. Os links privados expiram em 10 minutos.</p>
+  {% if legados %}
+  <table><thead><tr><th>Arquivo</th><th>Tamanho</th><th>Acesso temporário</th></tr></thead><tbody>
+  {% for item in legados %}<tr><td>{{ item.nome }}</td><td>{{ (item.bytes / 1024)|round(1) }} KB</td><td><a href="{{ item.url }}" target="_blank" rel="noreferrer noopener">Abrir PDF</a></td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="small">Nenhum PDF encontrado na pasta histórica de contratos deste bucket.</p>{% endif %}
 </section>
 </main></body></html>
