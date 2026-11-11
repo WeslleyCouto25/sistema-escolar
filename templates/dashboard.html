@@ -2074,8 +2074,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             });
         });
 
+        // Links do rodapé abrem diretamente a aba solicitada, inclusive
+        // quando o aluno vem da página de uma disciplina/documento.
+        const sectionFromUrl = new URLSearchParams(window.location.search).get('section');
         const savedSection = localStorage.getItem('activeSection');
-        showSection(savedSection || 'dashboard');
+        const initialSection = sectionFromUrl &&
+            document.getElementById(sectionFromUrl + '-section')
+            ? sectionFromUrl : savedSection;
+        showSection(initialSection && document.getElementById(initialSection + '-section')
+            ? initialSection : 'dashboard');
 
         // Observer para histórico de solicitações
         const solicitacoesSection = document.getElementById('solicitar-documentos-section');
