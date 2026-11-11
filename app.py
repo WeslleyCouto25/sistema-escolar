@@ -48,6 +48,7 @@ from openpyxl import Workbook, load_workbook
 import plano_ensino
 
 from db_pool import get_db_connection, pool_stats
+from schema_alunos import garantir_campos_dados_pessoais
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
     render_html_to_pdf_file,
@@ -616,6 +617,9 @@ def init_db():
             FOREIGN KEY (aluno_id) REFERENCES alunos(id)
         )
     """)
+    # Colunas adicionadas ao longo das versoes eram lidas pelo painel MEW,
+    # mas nao eram criadas em bases novas ou antigas. Esta rotina e idempotente.
+    garantir_campos_dados_pessoais(cursor)
 
     # Nova tabela: situacao_financeira do aluno
     cursor.execute("""
