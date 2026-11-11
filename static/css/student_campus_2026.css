@@ -309,3 +309,174 @@ body.portal07.student-page .sigeu-access-actions button.main{background:#0865e3;
  transition-duration:.01ms!important;animation-duration:.01ms!important;
  }
 }
+
+
+/* SIGEU Campus — acabamento visual da barra superior e rodapé 11/11/2026.
+   Regra colocada ao final do tema para sobrepor os estilos antigos sem
+   afetar formulários, matrículas, notas ou rotas do ambiente virtual. */
+body.portal07.student-page header.topbar,
+body.portal07.student-page .topbar{
+  background:#0751af!important;
+  background-image:linear-gradient(112deg,#08418f 0%,#0a60ca 56%,#0878cf 100%)!important;
+  border:0!important;border-bottom:3px solid #36bbf6!important;
+  color:#fff!important;box-shadow:0 4px 16px rgba(5,39,92,.18)!important;
+}
+body.portal07.student-page header.topbar *,
+body.portal07.student-page .topbar .logo-text,
+body.portal07.student-page .topbar .logo-text span:not(.sigeu-brand-icon),
+body.portal07.student-page .topbar .sigeu-top-context,
+body.portal07.student-page .topbar .sigeu-top-context strong{
+  color:#fff!important;
+}
+body.portal07.student-page .topbar .sigeu-top-context{
+  border-left:1px solid rgba(255,255,255,.27)!important;
+  color:#dcecff!important;
+}
+body.portal07.student-page .topbar .sigeu-brand-icon{
+  background:rgba(255,255,255,.17)!important;
+  border:1px solid rgba(255,255,255,.26)!important;
+  color:#fff!important;
+}
+body.portal07.student-page .topbar .sigeu-nav-toggle{
+  background:rgba(255,255,255,.12)!important;
+  color:#fff!important;border:1px solid rgba(255,255,255,.2)!important;
+}
+body.portal07.student-page .topbar .sigeu-nav-toggle:hover,
+body.portal07.student-page .topbar .sigeu-nav-toggle:focus-visible{
+  background:rgba(255,255,255,.22)!important;
+}
+body.portal07.student-page .topbar .logout-btn,
+body.portal07.student-page .topbar a.logout-btn{
+  color:#fff!important;background:rgba(255,255,255,.10)!important;
+  border:1px solid rgba(255,255,255,.34)!important;
+  border-radius:9px!important;box-shadow:none!important;
+}
+body.portal07.student-page .topbar .logout-btn:hover,
+body.portal07.student-page .topbar .logout-btn.active{
+  background:rgba(255,255,255,.22)!important;
+  border-color:rgba(255,255,255,.48)!important;color:#fff!important;
+}
+
+/* Rodapé comum nas páginas do estudante, com contraste e links reais. */
+body.portal07.student-page footer.sigeu-campus-footer{
+  display:block!important;position:relative;clear:both;
+  width:100%!important;margin:0!important;padding:0!important;
+  background:#09264b!important;background-image:linear-gradient(115deg,#0b2e61,#081c3a)!important;
+  color:#d9e8fa!important;border:0!important;border-top:4px solid #278bea!important;
+  border-radius:0!important;box-shadow:none!important;
+}
+body.portal07.student-page .sigeu-footer-inner{
+  display:grid;grid-template-columns:minmax(230px,1.5fr) repeat(3,minmax(145px,1fr));
+  gap:36px;width:min(100%,1460px);margin:auto;
+  padding:42px 34px 34px;
+}
+body.portal07.student-page .sigeu-footer-wordmark{
+  display:flex;align-items:center;gap:10px;
+  font-size:21px;line-height:1.2;letter-spacing:-.035em;
+  font-weight:850;color:#fff!important;margin-bottom:15px;
+}
+body.portal07.student-page .sigeu-footer-wordmark-light{color:#c5e2ff!important;font-weight:550;}
+body.portal07.student-page .sigeu-footer-emblem{
+  display:grid;place-items:center;width:36px;height:36px;border-radius:11px;
+  background:#1472e3;color:#fff!important;
+}
+body.portal07.student-page footer.sigeu-campus-footer p,
+body.portal07.student-page footer.sigeu-campus-footer span{
+  color:#d0e1f5!important;
+}
+body.portal07.student-page .sigeu-footer-brand>p{
+  line-height:1.75!important;font-size:12.5px!important;
+  max-width:360px;margin:0 0 14px;
+}
+body.portal07.student-page .sigeu-footer-trust{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 10px;
+  font-size:11px;font-weight:700;color:#d7eaff!important;
+  border:1px solid rgba(166,208,255,.24);border-radius:8px;
+}
+body.portal07.student-page .sigeu-footer-group h2{
+  color:#fff!important;font-size:14px!important;line-height:1.35;
+  font-weight:800!important;margin:4px 0 16px!important;
+}
+body.portal07.student-page .sigeu-footer-group a{
+  display:flex;align-items:flex-start;gap:10px;width:fit-content;
+  font-size:12px;line-height:1.5;text-decoration:none;
+  padding:4px 0;margin:0 0 8px;color:#d4e4f9!important;
+  transition:color .15s ease;
+}
+body.portal07.student-page .sigeu-footer-group a i,
+body.portal07.student-page .sigeu-footer-contact i{
+  color:#79c8ff!important;min-width:16px;margin-top:2px;
+}
+body.portal07.student-page .sigeu-footer-group a:hover,
+body.portal07.student-page .sigeu-footer-group a:focus-visible{
+  color:#fff!important;text-decoration:underline;text-underline-offset:4px;
+}
+body.portal07.student-page .sigeu-footer-contact>p{
+  display:flex;align-items:flex-start;gap:8px;margin:0 0 13px;
+  line-height:1.65!important;font-size:12px!important;
+}
+body.portal07.student-page .sigeu-footer-bottom{
+  border-top:1px solid rgba(185,220,255,.16);
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  width:min(100%,1460px);margin:auto;padding:16px 34px 19px;
+  font-size:11px;color:#b8cce5;
+}
+body.portal07.student-page .sigeu-footer-bottom a{
+  display:inline-flex;align-items:center;gap:7px;
+  color:#def1ff!important;text-decoration:none;font-size:11px;font-weight:750;
+}
+body.portal07.student-page .sigeu-footer-bottom a:hover{text-decoration:underline;}
+
+/* Rodapés de disciplinas existentes continuam com seus links e estrutura:
+   somente reestilização, sem substituir navegação ou scripts do portal. */
+body.portal07.student-page footer:not(.sigeu-campus-footer){
+  background:#0b284e!important;
+  background-image:linear-gradient(115deg,#0d3264,#082349)!important;
+  color:#d8e9fc!important;border-top:4px solid #268cec!important;
+  padding:33px 0 19px!important;border-radius:14px 14px 0 0!important;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-content{
+  gap:30px!important;max-width:1320px!important;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-section h4,
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-section h4 i{
+  color:#fff!important;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-section p,
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-links a,
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-bottom{
+  color:#d4e5fa!important;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-links a i{
+  color:#82d2ff!important;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-links a:hover{
+  color:#fff!important;text-decoration:underline;
+}
+body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-bottom{
+  border-top-color:rgba(202,230,255,.18)!important;
+}
+body.portal07.student-page footer a:focus-visible{
+  outline:2px solid #81deff!important;outline-offset:4px;border-radius:3px;
+}
+@media(max-width:1020px){
+  body.portal07.student-page .sigeu-footer-inner{
+    grid-template-columns:repeat(2,minmax(0,1fr));gap:27px;
+    padding:33px 24px 26px;
+  }
+}
+@media(max-width:600px){
+  body.portal07.student-page .topbar .logo-text{font-size:16px!important;}
+  body.portal07.student-page .sigeu-footer-inner{
+    grid-template-columns:1fr;gap:19px;padding:29px 20px 22px;
+  }
+  body.portal07.student-page .sigeu-footer-bottom{
+    padding:15px 20px 20px;flex-wrap:wrap;
+  }
+  body.portal07.student-page footer:not(.sigeu-campus-footer) .footer-content{
+    padding:0 20px!important;gap:20px!important;
+  }
+}
+@media print{
+  body.portal07.student-page .sigeu-campus-footer{display:none!important;}
+}

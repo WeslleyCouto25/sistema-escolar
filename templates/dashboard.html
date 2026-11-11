@@ -1090,7 +1090,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
  body.portal07 .card-actions .btn,body.portal07 .action-buttons .btn{width:100%!important}
 }
 </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/student_campus_2026.css') }}?v=20261111a">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/student_campus_2026.css') }}?v=20261111b">
 </head>
 
 <body class="portal07 student-page dashboard-page">
@@ -1827,6 +1827,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 </div>
         </main>
     </div>
+    {% include 'student/_campus_footer.html' %}
 
     <!-- SCRIPT (mantido IDÊNTICO, apenas com pequenas correções de sintaxe) -->
 <script>
@@ -2073,8 +2074,15 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             });
         });
 
+        // Links do rodapé abrem diretamente a aba solicitada, inclusive
+        // quando o aluno vem da página de uma disciplina/documento.
+        const sectionFromUrl = new URLSearchParams(window.location.search).get('section');
         const savedSection = localStorage.getItem('activeSection');
-        showSection(savedSection || 'dashboard');
+        const initialSection = sectionFromUrl &&
+            document.getElementById(sectionFromUrl + '-section')
+            ? sectionFromUrl : savedSection;
+        showSection(initialSection && document.getElementById(initialSection + '-section')
+            ? initialSection : 'dashboard');
 
         // Observer para histórico de solicitações
         const solicitacoesSection = document.getElementById('solicitar-documentos-section');

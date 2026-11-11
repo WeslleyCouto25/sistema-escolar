@@ -10,6 +10,7 @@ on:
       - 'static/js/student_campus_2026.js'
       - 'templates/**'
       - 'tests/test_student_campus_2026.py'
+      - 'tests/test_portal_topbar_footer.py'
       - '.github/workflows/portal-aluno-2026.yml'
 jobs:
   regression:
@@ -23,6 +24,8 @@ jobs:
         run: python -m py_compile app.py migrate.py payment_release.py dashboard_grades.py
       - name: Executar testes de acesso e boletim
         run: python -m unittest discover -s tests -p 'test_student_campus_2026.py' -v
+      - name: Validar rodape e cabeçalho do portal
+        run: python -m unittest discover -s tests -p 'test_portal_topbar_footer.py' -v
       - name: Evitar shadowing de conexoes no deploy
         run: python -m unittest discover -s tests -p 'test_migrate_scope.py' -v
       - name: Testar templates e componentes
