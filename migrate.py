@@ -318,6 +318,29 @@ def main():
             raise RuntimeError("Backup integral pos-matricula nao verificado")
         print("[SIGEU INITIAL FULL BACKUP VERIFIED] bytes=%s sha256=%s" %
               (full["bytes"], full["sha256"]), flush=True)
+    # Atualizacao de uma ficha existente, com dados confidenciais SOMENTE do
+    # ambiente Render. O mesmo deploy publica os planos institucionais no R2.
+    from update_student_record import atualizar_ficha_autorizada
+    from publish_academic_plans import publish_academic_plans
+    updated = atualizar_ficha_autorizada()
+    if updated:
+        print("[SIGEU STUDENT UPDATE VERIFIED] students=%s titles=%s paid_admin=%s" %
+              (updated["alunos"], updated["titulos"],
+               updated["status_financeiro"] == "pago"), flush=True)
+    plans = publish_academic_plans()
+    if plans["planos"] != 2:
+        raise RuntimeError("Planos de ensino incompletos")
+    print("[SIGEU COURSE PLANS R2 VERIFIED] count=%s" % plans["planos"], flush=True)
+    if updated:
+        from backup_sigeu import create_backup
+        from backup_postgres_full_r2 import create_full_backup, verify_full_backup
+        csv = create_backup()
+        full = create_full_backup()
+        verified = verify_full_backup(full["id"])
+        if not verified.get("verified") or not verified.get("archive_readable"):
+            raise RuntimeError("Backup posterior ao cadastro nao validado")
+        print("[SIGEU STUDENT POST-UPDATE BACKUP VERIFIED] tables=%s rows=%s bytes=%s" %
+              (csv["tables"], csv["rows"], full["bytes"]), flush=True)
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
@@ -338,8 +361,25 @@ def main():
                     "SIGEU ADMIN SMOKE falhou em %s: HTTP %s" %
                     (rota, result.status_code)
                 )
-            # Somente nomes de rotas; sem dados cadastrais, CPF ou emails.
             print("[SIGEU ADMIN SMOKE] %s status=200" % rota, flush=True)
+        # Emissao de links de R2 em rotas privadas (nao baixa o PDF).
+        from publish_academic_plans import SOURCES
+        from db_pool import get_db_connection
+        connection = get_db_connection()
+        try:
+            cursor = connection.cursor()
+            for course, _, _ in SOURCES:
+                cursor.execute("SELECT id FROM disciplinas WHERE nome=%s", (course,))
+                ids = cursor.fetchall()
+                if len(ids) != 1:
+                    raise RuntimeError("Disciplina de plano nao univoca")
+                url = "/disciplina/%s/plano-ensino" % ids[0]["id"]
+                result = client.get(url, follow_redirects=False)
+                if result.status_code != 302:
+                    raise RuntimeError("Plano de ensino privado sem link R2")
+                print("[SIGEU PLAN URL SMOKE] status=302", flush=True)
+        finally:
+            connection.close()
 
 
 if __name__ == "__main__":
