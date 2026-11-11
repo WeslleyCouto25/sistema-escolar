@@ -509,28 +509,48 @@ def painel_backups():
     if not _admin():
         return redirect("/mew/login")
     from backup_sigeu import database_overview, recent_backups, create_backup
+    from backup_postgres_full_r2 import create_full_backup, recent_full_backups
+    from r2_storage import bucket_name, get_client, presigned_url
     erro = None
     realizado = None
     if request.method == "POST":
         _check_csrf()
-        if request.form.get("acao") != "criar":
+        acao = request.form.get("acao")
+        if acao not in ("criar", "criar_completo"):
             abort(400)
         try:
-            realizado = create_backup()
+            realizado = create_backup() if acao == "criar" else create_full_backup()
         except Exception:
             current_app.logger.exception("Falha de backup criptografado SIGEU")
-            erro = "O backup nao foi confirmado no armazenamento. Verifique as configuracoes ou consulte o suporte tecnico."
+            erro = "O backup nao foi confirmado no armazenamento. Consulte logs do serviço."
     diagnostico = {}
     backups = []
+    completos = []
+    legados = []
     try:
         diagnostico = database_overview()
         backups = recent_backups()
+        completos = recent_full_backups()
+        # Contratos arquivados antes da perda do banco anterior.
+        # Somente administradores autenticados recebem links assinados.
+        old = get_client().list_objects_v2(
+            Bucket=bucket_name(), Prefix="contratos_antes/", MaxKeys=100,
+        )
+        for obj in old.get("Contents", []):
+            key = obj["Key"]
+            if key.lower().endswith(".pdf"):
+                legados.append({
+                    "nome": key.split("/")[-1],
+                    "bytes": int(obj["Size"]),
+                    "url": presigned_url(key, expires=600),
+                })
     except Exception:
-        current_app.logger.exception("Falha ao consultar diagnostico de backup")
+        current_app.logger.exception("Falha ao consultar diagnóstico ou inventário R2")
         if not erro:
-            erro = "Nao foi possivel consultar a base ou o armazenamento nesta tentativa."
+            erro = "Não foi possível consultar todo o armazenamento nesta tentativa."
     return render_template(
         "mew/backups.html", diagnostico=diagnostico, backups=backups,
+        completos=completos, legados=legados,
         realizado=realizado, erro=erro, csrf_token=_csrf()
     )
 
