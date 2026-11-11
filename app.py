@@ -1764,15 +1764,60 @@ def disciplina(disciplina_id):
         ORDER BY c.id
     """, (disciplina_id,))
     capitulos = cursor.fetchall()
-
+    cursor.execute(
+        "SELECT r2_key FROM planos_ensino_r2 WHERE disciplina_id=%s",
+        (disciplina_id,),
+    )
+    plano_disponivel = cursor.fetchone() is not None
     conn.close()
 
     return render_template(
         "disciplina.html",
         disciplina=disciplina,
         capitulos=capitulos,
-        capitulos_liberados=capitulos_liberados
+        capitulos_liberados=capitulos_liberados,
+        plano_disponivel=plano_disponivel
     )
+
+@app.route("/disciplina/<int:disciplina_id>/plano-ensino")
+def plano_ensino_privado(disciplina_id):
+    """URL estavel no SIGEU; gera link temporario do R2 a cada acesso."""
+    aluno_id = session.get("aluno_id")
+    is_admin = bool(session.get("mew_admin"))
+    if not is_admin and not aluno_id:
+        return redirect("/login")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if not is_admin:
+            cur.execute("""
+                SELECT 1 FROM aluno_disciplina ad
+                WHERE ad.aluno_id=%s AND ad.disciplina_id=%s
+            """, (aluno_id, disciplina_id))
+            if not cur.fetchone():
+                abort(403)
+            cur.execute("""
+                SELECT status FROM situacao_financeira
+                WHERE aluno_id=%s ORDER BY id DESC LIMIT 1
+            """, (aluno_id,))
+            row = cur.fetchone()
+            if not row or row.get("status") != "pago":
+                abort(403)
+        cur.execute(
+            "SELECT r2_key FROM planos_ensino_r2 WHERE disciplina_id=%s",
+            (disciplina_id,),
+        )
+        plan = cur.fetchone()
+    finally:
+        conn.close()
+    if not plan:
+        abort(404)
+    from r2_storage import presigned_url
+    response = redirect(presigned_url(plan["r2_key"], expires=600))
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
 
 @app.route("/instrucoes/<int:disciplina_id>/<int:capitulo_numero>")
 def instrucoes_prova(disciplina_id, capitulo_numero):

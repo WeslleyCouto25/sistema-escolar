@@ -1,0 +1,28 @@
+name: Validar atualizacao de cadastro e planos R2
+on:
+  pull_request:
+    paths:
+      - 'academic_plans/**'
+      - 'update_student_record.py'
+      - 'publish_academic_plans.py'
+      - 'app.py'
+      - 'migrate.py'
+      - 'templates/disciplina.html'
+      - 'tests/test_course_plans_2026.py'
+      - '.github/workflows/planos-cadastro.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Python static check
+        run: python -m py_compile app.py migrate.py update_student_record.py publish_academic_plans.py academic_plans/course_chapters.py
+      - name: Conteudos do plano de ensino
+        run: python -m unittest discover -s tests -p 'test_course_plans_2026.py' -v
+      - name: Template Jinja
+        run: |
+          pip install --quiet Jinja2
+          python -c "from jinja2 import Environment; Environment().parse(open('templates/disciplina.html',encoding='utf-8').read())"
