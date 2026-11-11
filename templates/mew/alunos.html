@@ -565,15 +565,16 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             <div class="mew-card">
                 <h2 class="section-title">📋 Alunos Cadastrados</h2>
 
-                <div style="margin-bottom: 15px;">
-                    <input
-                        type="text"
-                        id="searchAlunos"
-                        placeholder="🔍 Pesquisar aluno pelo nome..."
-                        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc;"
-                        onkeyup="filtrarAlunos()"
-                    >
-                </div>
+                <form method="get" action="/mew/alunos"
+                      style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
+                    <input type="search" id="searchAlunos" name="q" value="{{ busca|default('') }}"
+                           placeholder="Pesquisar em todos os alunos: nome, RA ou CPF"
+                           aria-label="Pesquisar alunos em todo o banco"
+                           style="flex:1; min-width:240px; padding:10px; border:1px solid #ccc;">
+                    <input type="hidden" name="per_page" value="{{ per_page }}">
+                    <button type="submit" class="btn btn-primary">Pesquisar</button>
+                    {% if busca %}<a class="btn btn-secondary" href="/mew/alunos">Limpar</a>{% endif %}
+                </form>
 
                 {% if alunos %}
                 <table class="table">
@@ -592,7 +593,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         {% for aluno in alunos %}
                         <tr>
                             <td>{{ aluno.ra }}</td>
-                            <td>{{ aluno.nome }}</td>
+                            <td><a href="/mew/editar-aluno/{{ aluno.id }}" title="Abrir cadastro completo do aluno">{{ aluno.nome }}</a></td>
                             <td>{{ aluno.cpf }}</td>
                             <td>{{ aluno.telefone }}</td>
                             <td>
@@ -666,8 +667,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding:12px;background:#f1f3f4;border:1px solid #c9d0d5;">
                     <span><strong>{{ total_alunos }}</strong> aluno(s) • página {{ page }} de {{ total_pages }}</span>
                     <div style="display:flex;gap:8px;">
-                        {% if page > 1 %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page-1, per_page=per_page) }}">← Anterior</a>{% endif %}
-                        {% if page < total_pages %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page+1, per_page=per_page) }}">Próxima →</a>{% endif %}
+                        {% if page > 1 %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page-1, per_page=per_page, q=busca) }}">← Anterior</a>{% endif %}
+                        {% if page < total_pages %}<a class="btn btn-sm btn-secondary" href="{{ url_for('mew_alunos', page=page+1, per_page=per_page, q=busca) }}">Próxima →</a>{% endif %}
                     </div>
                 </div>
                 {% else %}
