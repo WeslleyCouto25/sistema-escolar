@@ -409,14 +409,17 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                             <small style="color: #666;">Para boleto/PIX em 2x</small>
                         </div>
                         
-                        <div class="form-group">
-                            <label>Status Financeiro</label>
-                            <select name="status_financeiro">
-                                <option value="pendente" {% if situacao_financeira and situacao_financeira.status == 'pendente' %}selected{% endif %}>Pendente</option>
-                                <option value="parcial" {% if situacao_financeira and situacao_financeira.status == 'parcial' %}selected{% endif %}>Parcial</option>
-                                <option value="pago" {% if situacao_financeira and situacao_financeira.status == 'pago' %}selected{% endif %}>Pago</option>
-                            </select>
-                        </div>
+
+                    </div>
+
+                    <div class="form-group" style="margin:12px 0 18px;">
+                        <label for="status_financeiro_aluno"><strong>Pagamento confirmado?</strong></label>
+                        <select name="status_financeiro" id="status_financeiro_aluno">
+                            <option value="pendente" {% if not situacao_financeira or situacao_financeira.status == 'pendente' %}selected{% endif %}>Não — pendente</option>
+                            <option value="parcial" {% if situacao_financeira and situacao_financeira.status == 'parcial' %}selected{% endif %}>Parcial</option>
+                            <option value="pago" {% if situacao_financeira and situacao_financeira.status == 'pago' %}selected{% endif %}>Sim — conferido pela administração</option>
+                        </select>
+                        <small>Selecione Pago somente após conferência. A baixa administrativa não altera o comprovante do gateway.</small>
                     </div>
 
                     <!-- GERENCIAR DISCIPLINAS -->
