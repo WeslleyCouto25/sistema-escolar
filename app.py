@@ -7710,7 +7710,9 @@ def mew_processar_plano_ensino():
     conn.commit()
     conn.close()
 
-    if not os.getenv("OPENAI_API_KEY"):
+    from planos_referencia_60h import obter_conteudo_plano_referencia
+    plano_referencia = obter_conteudo_plano_referencia(disc["nome"])
+    if not plano_referencia and not os.getenv("OPENAI_API_KEY"):
         return jsonify({"success": False, "message": "OPENAI_API_KEY não configurada no Render."}), 500
 
     # ÚNICOS DADOS DE CONTEÚDO: título real da disciplina + sugestão de ementa.
@@ -7723,7 +7725,9 @@ def mew_processar_plano_ensino():
 
     try:
         from api_planos import consultar_openai_para_plano
-        conteudo_ia = consultar_openai_para_plano(dados_ia)
+        # Nas três disciplinas do PDF, utiliza dados revisados sem refazer as
+        # referências com IA. As demais continuam usando o gerador existente.
+        conteudo_ia = plano_referencia or consultar_openai_para_plano(dados_ia)
         if not conteudo_ia:
             raise ValueError("A IA retornou conteúdo vazio.")
 
@@ -7733,7 +7737,9 @@ def mew_processar_plano_ensino():
         # Modalidade e pré-requisitos são gerados pela IA; metodologia e avaliação continuam institucionais/fixas.
         dados_html = dict(conteudo_ia)
         modalidade = (dados_html.pop("modalidade", None) or "EaD").strip()
-        numero_unidades = max(6, min(8, int(conteudo_ia.get("numero_unidades") or 6)))
+        numero_unidades = int(conteudo_ia.get("numero_unidades") or 8)
+        if numero_unidades != 8:
+            raise ValueError("O modelo institucional de quatro páginas exige 8 unidades.")
         dados_html.pop("numero_unidades", None)
 
         data_formatada = datetime.now().strftime("%d/%m/%Y")
@@ -7810,7 +7816,7 @@ def mew_processar_plano_ensino():
             "carga_horaria": carga_horaria,
             "modalidade": modalidade,
             "numero_unidades": numero_unidades,
-            "bibliografia_gerada_por_ia": True,
+            "bibliografia_gerada_por_ia": plano_referencia is None,
             "url_visualizar": f"/ver-documento/{codigo}",
             "data_emissao": data_emissao,
             "data_validade": data_validade
