@@ -7,8 +7,21 @@ PLANOS_REFERENCIA_60H = json.loads("{\"Química Geral e Experimental\":{\"carga_
 
 
 def obter_conteudo_plano_referencia(nome_disciplina):
-    nome = " ".join(str(nome_disciplina or "").casefold().split())
-    entrada = next((v for k, v in PLANOS_REFERENCIA_60H.items() if " ".join(k.casefold().split()) == nome), None)
+    # O cadastro pode conter acentos diferentes e sufixos como "(60h)".
+    import re
+    import unicodedata
+
+    def normalizar(valor):
+        texto = unicodedata.normalize("NFKD", str(valor or "")).casefold()
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        texto = re.sub(r"\\b60\\s*(?:h|horas)\\b", " ", texto)
+        texto = re.sub(r"[^a-z0-9]+", " ", texto)
+        return " ".join(texto.split())
+
+    nome = normalizar(nome_disciplina)
+    entradas = {normalizar(k): v for k, v in PLANOS_REFERENCIA_60H.items()}
+    entradas["quimica geral experimental"] = entradas["quimica geral e experimental"]
+    entrada = entradas.get(nome)
     if entrada is None:
         return None
     unidades = [
