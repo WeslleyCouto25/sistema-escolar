@@ -2753,6 +2753,13 @@ def mew_alunos():
         email_alternativo = request.form.get("email_alternativo", "")
 
         gerar_cobranca = request.form.get("gerar_cobranca") == "1"
+        status_financeiro_form = request.form.get("status_financeiro", "pendente")
+        if status_financeiro_form not in {"pendente", "parcial", "pago"}:
+            conn.close()
+            return "Status financeiro inválido.", 400
+        if gerar_cobranca and status_financeiro_form == "pago":
+            conn.close()
+            return "Escolha entre gerar cobrança ou confirmar manualmente pagamento.", 400
 
         if not data_inicio:
             conn.close()
@@ -2816,22 +2823,12 @@ def mew_alunos():
                   data_nascimento, sexo, estado_civil, email_alternativo))
 
             if forma_pagamento and valor_total is not None:
-                if gerar_cobranca:
-                    status_financeiro = "pendente"
-                    parcelas_total = 1
-                    parcelas_pagas = 0
-                elif forma_pagamento in ("mercadopago", "picpay"):
-                    status_financeiro = "pendente"
-                    parcelas_total = 1
-                    parcelas_pagas = 0
-                elif forma_pagamento in ["avista", "cartao"]:
-                    status_financeiro = "pago"
-                    parcelas_total = 1
-                    parcelas_pagas = 1
-                else:
-                    status_financeiro = "parcial"
-                    parcelas_total = 2
-                    parcelas_pagas = 1
+                status_financeiro = "pendente" if gerar_cobranca else status_financeiro_form
+                parcelas_total = 2 if forma_pagamento == "boleto_pix" else 1
+                parcelas_pagas = (
+                    parcelas_total if status_financeiro == "pago"
+                    else 1 if status_financeiro == "parcial" else 0
+                )
 
                 cursor.execute("""
                     INSERT INTO situacao_financeira
@@ -3570,6 +3567,10 @@ def mew_editar_aluno(aluno_id):
             forma_pagamento = request.form.get("forma_pagamento")
             valor_total = request.form.get("valor_total")
             status_financeiro = request.form.get("status_financeiro")
+            if status_financeiro not in {"pendente", "parcial", "pago"}:
+                conn.rollback()
+                conn.close()
+                return "Status financeiro inválido.", 400
             parcelas_pagas = request.form.get("parcelas_pagas", "1")
 
             if forma_pagamento and valor_total:
@@ -3591,17 +3592,12 @@ def mew_editar_aluno(aluno_id):
                     return "Total de parcelas inválido.", 400
                 if forma_pagamento == "boleto_pix":
                     parcelas_total = 2
-                    if parcelas_pagas == "2":
-                        status_financeiro = "pago"
-                    elif not status_financeiro:
-                        status_financeiro = "parcial"
-                else:
-                    if not status_financeiro:
-                        status_financeiro = ("pendente"
-                                            if forma_pagamento in ("picpay", "mercadopago", "qr_code")
-                                            else "pago")
-                    if forma_pagamento in ("picpay", "mercadopago", "qr_code") and status_financeiro != "pago":
-                        parcelas_pagas = "0"
+                # O status selecionado pelo gestor prevalece sobre inferências de
+                # forma de pagamento. Não confundir link gerado com quitação.
+                parcelas_pagas = str(
+                    parcelas_total if status_financeiro == "pago"
+                    else 1 if status_financeiro == "parcial" else 0
+                )
 
                 # Verificar se já existe situação financeira
                 cursor.execute("SELECT id FROM situacao_financeira WHERE aluno_id = %s", (aluno_id,))
