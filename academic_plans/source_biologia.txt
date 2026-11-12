@@ -1,0 +1,214 @@
+PLANO DE ENSINO — BIOLOGIA CELULAR E TECIDUAL — 80 HORAS
+MINUTA ACADÊMICA PARA TESTES DO SIGEU (pendente de revisão e homologação institucional)
+Instituição vinculada ao sistema: FACOP/SIGEU — Grupo Educacional Unificado
+Natureza: disciplina teórico-prática de formação básica; oferta conforme matriz curricular aprovada
+Área: Ciências Biológicas e da Saúde | Carga horária proposta: 80 horas
+Modalidade planejada: híbrida, com atividades presenciais e recursos virtuais de microscopia
+Pré-requisito recomendado: conhecimentos introdutórios de Biologia, Química e citologia
+Versão: 12 de novembro de 2026 | Documento técnico para implantação e validação
+
+1. EMENTA
+
+Fundamentos epistemológicos e histórico-conceituais da teoria celular. Níveis de organização biológica e métodos de observação em Biologia Celular e Histologia. Microscopia óptica e eletrônica; preparo de amostras, coloração histológica, resolução, ampliação e interpretação de micrografias. Composição química dos sistemas celulares: água, íons, carboidratos, lipídios, proteínas e ácidos nucleicos. Estrutura, função e dinâmica das membranas biológicas, transporte, receptores, comunicação intercelular e adesão. Organização do citoplasma, ribossomos, retículo endoplasmático, complexo de Golgi, mitocôndrias, lisossomos, peroxissomos e citoesqueleto. Compartimentalização celular, energia, síntese e transporte intracelular. Organização do núcleo, cromatina, replicação, transcrição, tradução e regulação da expressão gênica.
+
+Ciclo celular, checkpoints, mitose, meiose, diferenciação, células-tronco, senescência, apoptose e noções de oncogênese. Matriz extracelular e relações célula-tecido. Princípios estruturais, funcionais e de identificação histológica dos tecidos epitelial, conjuntivo, adiposo, cartilaginoso, ósseo, sanguíneo, muscular e nervoso. Organização, histofisiologia, reparação e remodelamento tecidual. Correlações biomédicas: inflamação, cicatrização, regeneração, fibrose, distúrbios de transporte, neoplasias e condições degenerativas. Biossegurança, ética na pesquisa, integridade acadêmica e leitura crítica de evidências científicas.
+
+2. OBJETIVOS DE APRENDIZAGEM
+
+Objetivo geral: integrar a compreensão da estrutura e função da célula e dos principais tecidos humanos, relacionando organização molecular, mecanismos celulares e histofisiologia a situações biológicas e aplicações em saúde.
+
+Objetivos específicos:
+— Explicar postulados centrais da teoria celular e diferenciar os níveis molecular, subcelular, celular e tecidual.
+— Interpretar micrografias e relacionar técnicas de preparação e coloração às características observáveis.
+— Descrever as funções das principais organelas e os mecanismos de integração e compartimentalização intracelular.
+— Comparar transporte passivo, ativo e vesicular e analisar a atuação de receptores e sinalização celular.
+— Caracterizar replicação, expressão gênica, ciclo celular, morte programada e diferenciação.
+— Reconhecer critérios histológicos de classificação dos tecidos e suas especializações.
+— Relacionar composição da matriz extracelular a propriedades mecânicas e funcionais.
+— Interpretar exemplos de alterações celulares e teciduais sem extrapolação diagnóstica.
+— Utilizar vocabulário técnico, princípios de biossegurança, ética e fontes bibliográficas confiáveis.
+
+3. COMPETÊNCIAS E HABILIDADES
+
+Ao final do percurso, espera-se que o estudante seja capaz de identificar estruturas celulares e padrões histológicos em materiais didáticos, formular explicações mecanísticas coerentes, estabelecer relações entre células, matriz extracelular e fisiologia dos tecidos, analisar problemas introdutórios de biomedicina, produzir registros de observação com nomenclatura apropriada e avaliar a consistência de argumentos científicos. O trabalho com imagens de microscopia deverá distinguir observação, interpretação e hipótese; reconhecer limites de resolução, processamento, seleção de amostras e variabilidade biológica. O estudante deverá ainda adotar procedimentos compatíveis com biossegurança, privacidade e integridade na documentação acadêmica.
+
+=== PRÓXIMA PÁGINA ===
+
+4. ORGANIZAÇÃO DA CARGA HORÁRIA E DOS CONTEÚDOS
+
+A carga horária proposta é de 80 horas, distribuída em quatro unidades de 20 horas. Cada unidade compreende aulas dialogadas, estudo dirigido de bibliografia, atividades com imagens, resolução de problemas e avaliação formativa. A distribuição interna constitui planejamento pedagógico, sujeita à homologação acadêmica.
+
+UNIDADE I — FUNDAMENTOS DE BIOLOGIA CELULAR E MICROSCOPIA (20h)
+
+4.1 Fundamentos histórico-científicos da citologia (2h)
+Teoria celular, desenvolvimento da microscopia, métodos de investigação, unidade e diversidade celular, classificação entre células procarióticas e eucarióticas, e níveis de organização dos organismos.
+
+4.2 Métodos de investigação e microscopia (4h)
+Partes do microscópio óptico; aumento, resolução, contraste e campo de visão; princípios da microscopia eletrônica e confocal; cortes histológicos, fixação, inclusão, microtomia, H&E, colorações especiais e artefatos. Técnicas de observação e limites inferenciais.
+
+4.3 Bioquímica celular essencial (4h)
+Água, eletrólitos e pH; ligações químicas e interações intermoleculares; carboidratos, lipídios, proteínas e ácidos nucleicos; enzimas e estrutura-função; relação entre propriedades moleculares e processos celulares.
+
+4.4 Membrana plasmática e transporte (6h)
+Bicamada fosfolipídica, fluidez, proteínas de membrana, glicocálice, transporte por canais e carreadores, osmose, difusão facilitada, bombas, cotransporte, endocitose e exocitose. Exemplos relacionados ao equilíbrio osmótico e ao potencial eletroquímico.
+
+4.5 Integração e síntese (4h)
+Mapeamento de estruturas celulares em micrografias, estudo de caso sobre alteração do transporte transmembrana, glossário técnico e avaliação objetiva de dez questões.
+
+Resultados esperados da Unidade I: diferenciar organelas visíveis e inferir funções gerais; explicar mecanismos de transporte em situações contextualizadas; reconhecer limites da microscopia.
+
+UNIDADE II — ORGANELAS, METABOLISMO E CICLO CELULAR (20h)
+
+4.6 Sistema de endomembranas (4h)
+Retículo endoplasmático rugoso e liso; síntese, modificações e trânsito de proteínas; complexo de Golgi, secreção, lisossomos, peroxissomos e autofagia; mecanismos de endereçamento intracelular.
+
+4.7 Citoesqueleto e comunicação (4h)
+Microtúbulos, filamentos de actina e filamentos intermediários; proteínas motoras, adesão, junções celulares e comunicação por receptores; princípios da transdução de sinais e resposta celular.
+
+4.8 Bioenergética e mitocôndrias (3h)
+ATP, vias metabólicas, respiração celular aeróbica, cadeia respiratória, papel das mitocôndrias, peroxissomos, metabolismo adaptativo e noções de espécies reativas de oxigênio.
+
+4.9 Núcleo, expressão gênica e divisão (6h)
+Cromatina, cromossomos, nucleolo, replicação, transcrição e tradução; controle da expressão gênica; interfase, checkpoints, mitose, meiose, senescência, apoptose e diferenciação; noções básicas de desregulação celular e oncogênese.
+
+4.10 Integração e síntese (3h)
+Problema aplicado a distúrbios de organelas, comparação entre mitose e meiose, mapa conceitual e avaliação objetiva de dez questões.
+
+Resultados esperados da Unidade II: compreender redes de interação subcelular e mecanismos de manutenção, proliferação e morte celular.
+
+=== PRÓXIMA PÁGINA ===
+
+UNIDADE III — EPITÉLIOS E TECIDOS CONJUNTIVOS (20h)
+
+4.11 Organização dos tecidos e matriz extracelular (3h)
+Origem dos tecidos, polaridade celular, especialização, lâmina basal, fibras colágenas e elásticas, proteoglicanos, matriz extracelular, interações célula-matriz e interdependência funcional.
+
+4.12 Tecido epitelial (5h)
+Epitélios de revestimento simples, pseudoestratificado e estratificado; morfologia pavimentosa, cúbica e prismática; microvilosidades e cílios; junções; epitélios glandulares exócrinos e endócrinos; secreção e renovação epitelial. Exemplos em mucosas, pele e glândulas.
+
+4.13 Tecido conjuntivo propriamente dito (4h)
+Fibroblastos, macrófagos, mastócitos, plasmócitos, células imunes e adipócitos; tecido conjuntivo frouxo e denso, fibras, substância fundamental, vascularização e suporte mecânico; relações com inflamação e fibrose.
+
+4.14 Tecidos especializados (6h)
+Adiposo branco e marrom; cartilagem hialina, elástica e fibrosa; condrócitos e matriz cartilaginosa; tecido ósseo compacto e esponjoso, osteoblastos, osteócitos, osteoclastos, remodelamento e mineralização; elementos figurados do sangue e fundamentos de hematopoiese. Aulas de identificação comparada por imagens.
+
+4.15 Integração e síntese (2h)
+Comparação histológica de epitélios e tecidos conjuntivos; estudo de caso sobre cicatrização e matriz; avaliação objetiva de dez questões.
+
+Resultados esperados da Unidade III: reconhecer os principais padrões histológicos e associar a organização da matriz à função do tecido.
+
+UNIDADE IV — TECIDOS MUSCULAR E NERVOSO, REPARAÇÃO E APLICAÇÕES (20h)
+
+4.16 Tecido muscular (4h)
+Músculo estriado esquelético, estriado cardíaco e liso; sarcômeros, unidades contráteis, junções, controle da contração e diferenciação funcional; exemplos de adaptação e lesão muscular.
+
+4.17 Tecido nervoso (5h)
+Neurônios, soma, dendritos, axônio, mielina, sinapses, células da glia; organização em sistema nervoso central e periférico; transmissão sináptica, sustentação tecidual e neuroplasticidade.
+
+4.18 Desenvolvimento, reparo e regeneração (4h)
+Noções de histogênese e células progenitoras; diferenças entre regeneração, cicatrização e fibrose; resposta inflamatória, angiogênese, reorganização da matriz e fatores que interferem na reparação.
+
+4.19 Integração morfofuncional e correlações em saúde (4h)
+Análise integrada de tecidos em órgãos; relações entre alterações celulares e manifestações teciduais; exemplos educativos de neoplasias e degeneração. Discussão de limites éticos: o ensino não constitui habilitação para diagnóstico ou execução de procedimentos.
+
+4.20 Síntese, revisão e avaliação final (3h)
+Revisão dos conceitos fundamentais, matriz comparativa de tecidos, análise de micrografias, avaliação objetiva de dez questões e devolutiva formativa.
+
+Resultados esperados da Unidade IV: distinguir tecidos musculares e nervosos, explicar princípios de reparação e integrar estrutura celular e função tecidual.
+
+=== PRÓXIMA PÁGINA ===
+
+5. METODOLOGIA DE ENSINO E APRENDIZAGEM
+
+A metodologia organiza-se por progressão conceitual, estudo orientado e aplicação. A introdução de cada unidade apresenta a pergunta-problema e os objetivos observáveis; conteúdos são desenvolvidos por exposições dialogadas, leituras comentadas, diagramas, exercícios de interpretação de imagens e situações-problema fundamentadas em evidências. O estudante articula a dimensão descritiva da histologia à explicação mecanística da Biologia Celular, empregando terminologia precisa.
+
+Aulas expositivas e dialogadas: contextualização histórica, fundamentos moleculares e modelos de organização dos tecidos; resolução guiada de dúvidas; perguntas de recuperação e sínteses ao fim de cada unidade.
+
+Estudo dirigido: textos básicos e complementares, fichamentos, mapas conceituais e questões de aplicação, com foco em identificação de relações estrutura-função e não apenas memorização de nomes.
+
+Atividades práticas ou virtualizadas: identificação de estruturas em micrografias de uso autorizado, observação de lâminas quando disponível e simulações didáticas. Registros devem indicar ampliação, técnica, fonte e incertezas observacionais.
+
+Aprendizagem baseada em problemas: análise contextualizada de situações como edema osmótico, falhas no transporte vesicular, alterações no ciclo celular, lesões epiteliais, processos inflamatórios e regeneração. As situações têm finalidade educativa e não clínica.
+
+Feedback formativo: questões de autoavaliação, exercícios comparativos, rubricas de identificação de tecidos e comentários sobre erros frequentes. A devolutiva deve priorizar explicações conceituais, demonstração de raciocínio e indicação de bibliografia de aprofundamento.
+
+Recursos didáticos: textos digitais em PDF, videoaulas, esquemas autorais, atlas histológicos, imagens científicas com atribuição adequada, questionários digitais e repositórios de apoio. O uso de imagens reais exige respeito às licenças e identificação das fontes.
+
+6. AVALIAÇÃO DA APRENDIZAGEM
+
+Proposta de avaliação de quatro unidades mais avaliação final integradora. Cada capítulo contém dez questões objetivas com quatro alternativas e uma resposta correta; as questões devem incluir explicação conceitual e exemplos aplicados, evitando ambiguidades, negativas desnecessárias e alternativas artificiais. O banco deve passar por revisão de conteúdo, equilíbrio de dificuldade e conferência do gabarito antes de publicação.
+
+Avaliações formativas: questionários por unidade, exercícios com micrografias e estudos dirigidos. Avaliação somativa: média das quatro unidades e avaliação final de dez questões, com nota de zero a dez.
+
+Para parametrização do ambiente demonstrativo do SIGEU: média das unidades = (U1 + U2 + U3 + U4)/4; média final = (média das unidades + nota da avaliação final)/2. O parâmetro provisório de aprovação é média final igual ou superior a 7,0, condicionado a requisitos institucionais adicionais quando aplicáveis. O lançamento de nota deve refletir atividade efetivamente realizada; não é autorizado preenchimento automático de aproveitamento ou frequência.
+
+A frequência e a carga horária somente podem ser certificadas a partir de registros acadêmicos verificáveis; visualização de vídeo ou desempenho em questionários não comprova, isoladamente, cumprimento da carga horária. Emissões documentais definitivas dependem de homologação do plano, observância do regulamento aplicável, integralização e verificação dos registros.
+
+A avaliação final não substitui a verificação da carga horária prevista. O ambiente de testes deve manter identificada sua natureza demonstrativa e evitar emissão de declarações de conclusão com aparência de comprovação real de estudos não integralizados.
+
+=== PRÓXIMA PÁGINA ===
+
+7. MATRIZ DE ALINHAMENTO PEDAGÓGICO
+
+Unidade I: fundamentos celulares e microscopia. Competência: reconhecer estruturas e explicar transporte. Evidências: identificação de micrografias, questões de mecanismo, comparação de técnicas. Instrumentos: lista orientada e questionário 1 (10 itens).
+
+Unidade II: organelas, metabolismo e ciclo. Competência: explicar mecanismos de compartimentalização, sinalização e divisão. Evidências: esquemas de fluxo vesicular, relações entre organelas e análise de situações-problema. Instrumentos: lista orientada e questionário 2 (10 itens).
+
+Unidade III: epitélio e tecidos conjuntivos. Competência: classificar tecidos e correlacionar matriz e função. Evidências: discriminação de lâminas, descrição morfológica e raciocínio de reparação. Instrumentos: roteiro de análise e questionário 3 (10 itens).
+
+Unidade IV: músculos, tecido nervoso e integração. Competência: caracterizar histofisiologia e reparação tecidual. Evidências: quadro comparativo, identificação de glia, tipos musculares e interpretação de respostas teciduais. Instrumentos: atividade integradora e questionário 4 (10 itens).
+
+Avaliação final: competência integradora. Evidências: capacidade de identificar relações estrutura-função, interpretar exemplos e resolver problemas introdutórios com justificativa científica. Instrumento: questionário final com dez itens no ambiente demonstrativo.
+
+8. CRONOGRAMA INDICATIVO
+
+Semana 1: apresentação da disciplina, teoria celular e níveis de organização.
+Semana 2: microscopia, imagem, técnicas histológicas e interpretação de artefatos.
+Semana 3: moléculas biológicas, membranas e transporte.
+Semana 4: organelas, endomembranas, citoesqueleto e sinalização.
+Semana 5: metabolismo, mitocôndrias, expressão gênica.
+Semana 6: ciclo celular, mitose, meiose, diferenciação e apoptose.
+Semana 7: matriz extracelular, epitélios de revestimento e glandulares.
+Semana 8: tecido conjuntivo e adiposo.
+Semana 9: cartilagem, osso e sangue.
+Semana 10: músculo esquelético, cardíaco e liso.
+Semana 11: tecido nervoso, glia, sinapses e mielinização.
+Semana 12: reparação, regeneração, integração e avaliação final.
+
+A organização semanal é indicativa. As 80 horas totais devem ser distribuídas e registradas conforme o calendário formal da turma, com discriminação de atividades e controle institucional de integralização.
+
+9. ACESSIBILIDADE E DIRETRIZES ÉTICAS
+
+Materiais textuais devem oferecer estrutura semântica, linguagem clara, contraste visual e alternativas textuais para figuras; vídeos devem disponibilizar legendas ou transcrições quando possível. Atividades de identificação de imagens devem contemplar recursos acessíveis e orientações alternativas. O ensino deve observar direitos autorais, integridade acadêmica, privacidade de dados e uso responsável de tecnologias. Casos clínicos ou imagens de indivíduos devem ser desidentificados e utilizados somente com base legal e ética adequada.
+
+=== PRÓXIMA PÁGINA ===
+
+10. BIBLIOGRAFIA BÁSICA E COMPLEMENTAR
+
+ALBERTS, Bruce et al. Molecular Biology of the Cell. 7. ed. New York: W. W. Norton, 2022.
+COOPER, Geoffrey M.; HAUSMAN, Robert E. The Cell: a Molecular Approach. 8. ed. Sunderland: Sinauer Associates, 2019.
+ROSS, Michael H.; PAWLINA, Wojciech. Histology: A Text and Atlas, with Correlated Cell and Molecular Biology. 8. ed. Philadelphia: Wolters Kluwer, 2020.
+MESCHER, Anthony L. Junqueira's Basic Histology: Text and Atlas. 16. ed. New York: McGraw Hill, 2021.
+
+Referências complementares e temas para pesquisa orientada: atlas histológicos institucionais com autorização de uso; publicações revisadas por pares sobre organização da matriz extracelular, tráfego vesicular, reparação tecidual, biologia do ciclo celular e fisiologia dos tecidos; glossários de terminologia anatômica e histológica padronizada.
+
+11. GLOSSÁRIO TÉCNICO ESSENCIAL
+
+Apoptose: mecanismo regulado de morte celular, distinto de diferentes processos de lesão e necrose.
+Autofagia: sistema de degradação e reciclagem intracelular com participação de compartimentos lisossomais.
+Citoesqueleto: rede de filamentos e microtúbulos com funções estruturais, mecânicas e de transporte.
+Cromatina: complexo de DNA e proteínas associado à organização e regulação do material genético.
+Epitélio: tecido composto por células justapostas, polaridade e associação com membrana basal.
+Histologia: estudo da organização microscópica dos tecidos e suas relações funcionais.
+Homeostase: manutenção dinâmica de condições compatíveis com o funcionamento do organismo.
+Matriz extracelular: conjunto de macromoléculas entre células que contribui para suporte e sinalização.
+Morfologia: caracterização da forma e organização das estruturas observadas.
+Morfogênese: processos celulares e teciduais envolvidos na formação de estruturas biológicas.
+Senescência celular: estado de resposta celular caracterizado por alterações duradouras no ciclo e na função.
+Transdução de sinais: conversão de estímulos de receptores em respostas intracelulares.
+
+12. OBSERVAÇÕES PARA INCLUSÃO NO SIGEU
+
+Este plano foi elaborado como minuta técnica e detalhada para a implantação demonstrativa da disciplina Biologia Celular e Tecidual, carga horária proposta de 80 horas. A vinculação ao sistema e o upload em R2 não equivalem a homologação por colegiado ou comprovação de execução de aulas. Documentos conclusivos emitidos a partir de dados de testes devem ser identificados inequivocamente como demonstração e não podem substituir registros reais de frequência, avaliação e integralização curricular. Uma vez validados os conteúdos, a coordenação deverá registrar versão, data, responsável e ato de aprovação institucional, preservando o histórico de alterações.
+
+FIM DA MINUTA ACADÊMICA.
