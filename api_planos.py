@@ -105,13 +105,13 @@ ROMANOS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "X
 
 
 def sortear_estrutura_plano(numero_unidades=None):
-    """Define ANTES da IA: 6-8 unidades e 8-10 tópicos por unidade."""
+    """Define ANTES da IA: exatamente 8 unidades e 8-10 tópicos por unidade."""
     try:
         n = int(numero_unidades) if numero_unidades not in (None, "", 0, "0") else 0
     except Exception:
         n = 0
-    if not 6 <= n <= 8:
-        n = random.randint(6, 8)
+    # O template de quatro páginas reserva exatamente oito blocos de conteúdo.
+    n = 8
     return n, [random.randint(8, 10) for _ in range(n)]
 
 
@@ -200,16 +200,16 @@ def _formatar_conteudo(unidades):
 def _validar_e_normalizar(plano, numero_unidades=6, topicos_por_unidade_alvo=None):
     """Valida a resposta da IA sem prender o plano a quatro unidades.
 
-    O gerador trabalha com 6 a 8 unidades. Todas cabem na página 2,
+    O gerador trabalha com 8 unidades. Todas cabem na página 2,
     o conteúdo de cada unidade é deliberadamente compacto.
     """
     if not isinstance(plano, dict):
         raise ValueError("A IA não retornou um objeto JSON válido.")
 
     try:
-        numero_unidades = max(6, min(8, int(numero_unidades or 6)))
+        numero_unidades = 8
     except Exception:
-        numero_unidades = 6
+        numero_unidades = 8
     alvos = list(topicos_por_unidade_alvo or [])
     if len(alvos) != numero_unidades:
         alvos = [8] * numero_unidades
@@ -295,9 +295,9 @@ def gerar_prompt_simplificado(dados, correcao=""):
     ementa_base = str(dados.get("ementa") or "").strip()
     carga = str(dados.get("carga_horaria") or "80 horas").strip()
     try:
-        numero_unidades = max(6, min(8, int(dados.get("numero_unidades") or 6)))
+        numero_unidades = 8
     except Exception:
-        numero_unidades = 6
+        numero_unidades = 8
     alvos = list(dados.get("topicos_por_unidade_alvo") or [])
     if len(alvos) != numero_unidades:
         alvos = [8] * numero_unidades
