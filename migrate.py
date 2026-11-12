@@ -355,6 +355,11 @@ def main():
             raise RuntimeError("Backup posterior ao cadastro nao validado")
         print("[SIGEU STUDENT POST-UPDATE BACKUP VERIFIED] tables=%s rows=%s bytes=%s" %
               (csv["tables"], csv["rows"], full["bytes"]), flush=True)
+    # Importacao pontual autorizada: quatro capitulos de Psicologia Positiva.
+    # Sem a flag, todas as outras implantacoes continuam inalteradas.
+    if os.getenv("SIGEU_SEED_PSICOPOSITIVA", "") == "1":
+        from scripts.seed_psicologia_positiva import executar as importar_psicopositiva
+        importar_psicopositiva()
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
