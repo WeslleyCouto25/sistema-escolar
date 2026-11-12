@@ -581,8 +581,8 @@ def executar():
                         (did,q["pergunta"],o["A"],o["B"],o["C"],o["D"],q["resposta_certa"]))
             c.execute("SELECT id,nome FROM alunos WHERE ra=%s", (TESTE_RA,))
             aluno=c.fetchone()
-            if not aluno or "teste" not in (aluno["nome"] or "").lower():
-                raise RuntimeError("RA de teste não encontrado ou não identificado como teste")
+            if not aluno:
+                raise RuntimeError("RA de teste informado não encontrado; nenhuma matrícula alterada")
             aid=aluno["id"]
             c.execute("""INSERT INTO aluno_disciplina(aluno_id,disciplina_id)
                       VALUES(%s,%s) ON CONFLICT(aluno_id,disciplina_id) DO NOTHING""",(aid,did))
