@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIGEU | Acesso às disciplinas</title>
+<link rel="stylesheet" href="/static/css/style.css?v=portal-academico-2026">
+<style>
+:root{color-scheme:light}body{font-family:Tahoma,"Segoe UI",Arial,sans-serif;background:#e9ecef;color:#202428;margin:0}
+header{background:#343a40;border-bottom:4px solid #c86d20;color:white;padding:14px max(16px,calc((100vw - 1040px)/2))}
+main{max-width:1040px;margin:22px auto;background:#fff;padding:22px;border:1px solid #c9d0d5;box-sizing:border-box}
+h1{font-size:22px;margin:0 0 8px}h2{font-size:16px;margin:18px 0 12px}
+a{color:#245b7d}header a{color:#fff} .subtitle{color:#586169;margin-bottom:15px}
+table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #dce0e3;padding:13px 9px;text-align:left;vertical-align:top}
+th{background:#f1f3f4;font-size:12px}small{color:#606870;display:block;margin-top:5px}
+.control{display:flex;gap:7px;align-items:center;flex-wrap:wrap}label{font-size:12px;font-weight:700}
+input[type=date]{padding:7px;max-width:180px;border:1px solid #aeb7bd}
+button{border:0;padding:9px 12px;background:#343a40;color:#fff;cursor:pointer;font-weight:700}
+button[formaction]{background:#6c757d}.bad{color:#9d2929}.good{color:#23763d}
+.note{background:#f7f8f9;border-left:4px solid #c86d20;padding:12px;font-size:13px;margin:15px 0}
+@media(max-width:700px){main{margin:0;padding:12px}table,thead,tbody,tr,td{display:block}thead{display:none}tr{border:1px solid #c9d0d5;margin-bottom:12px;padding:9px}td{border:0;padding:6px 4px}.control{flex-direction:column;align-items:stretch}input[type=date]{max-width:none}}
+</style></head>
+<body><header><b>SIGEU EDUCACIONAL · SECRETARIA ACADÊMICA</b> &nbsp; <a href="/mew/alunos">Voltar aos alunos</a></header>
+<main><h1>Acesso administrativo às disciplinas</h1>
+<div class="subtitle"><strong>{{ aluno.nome }}</strong> · Matrícula {{ aluno.ra }}</div>
+<div class="note">O comando “Liberar” antecipa o acesso após conferência administrativa e libera o primeiro capítulo imediatamente, sem alterar a data real da matrícula. A data-limite, quando informada, é inclusiva. “Bloquear” suspende o acesso até nova liberação. A prova final e os requisitos acadêmicos permanecem independentes.</div>
+{% if mensagem %}<div class="note"><strong>{{ mensagem }}</strong></div>{% endif %}
+<table><thead><tr><th>Disciplina</th><th>Pagamento</th><th>Situação</th><th>Controle de acesso</th></tr></thead><tbody>
+{% for d in disciplinas %}
+<tr>
+<td><strong>{{ d.nome }}</strong><small>Início da matrícula: {{ d.data_inicio or "Não informado" }}</small></td>
+<td>{% if d.status_financeiro == "pago" %}<strong class="good">PAGO</strong>{% else %}<strong class="bad">PENDENTE</strong>{% endif %}</td>
+<td><strong class="{{ 'good' if d.acesso_permitido else 'bad' }}">{{ 'Liberado' if d.acesso_permitido else 'Bloqueado' }}</strong><small>{{ d.motivo }}</small>
+{% if d.controle_estado %}<small>Controle: {{ d.controle_estado }}{% if d.controle_limite %} até {{ d.controle_limite.strftime('%d/%m/%Y') }}{% endif %}</small>{% endif %}</td>
+<td>
+<form class="control" method="post" action="/mew/aluno/{{ aluno.id }}/acessos/{{ d.disciplina_id }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label for="limite-{{ d.disciplina_id }}">Liberar até (opcional)</label>
+<input id="limite-{{ d.disciplina_id }}" type="date" name="data_limite" value="{{ d.controle_limite.isoformat() if d.controle_limite and d.controle_estado == 'liberado' else '' }}">
+<button type="submit" name="acao" value="liberar" {% if d.status_financeiro != "pago" %}disabled title="Confirme o pagamento no cadastro primeiro"{% endif %}>Liberar</button>
+<button type="submit" name="acao" value="bloquear" style="background:#9c3333">Bloquear</button>
+<button type="submit" name="acao" value="automatico" style="background:#69747c">Automático</button>
+</form>
+</td></tr>
+{% endfor %}
+</tbody></table>
+<p><a href="/mew/editar-aluno/{{ aluno.id }}">Editar cadastro e confirmar pagamento</a></p></main></body></html>
