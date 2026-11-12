@@ -504,11 +504,11 @@ def build_plan(*, disciplina: str, codigo: str, hash_documento: str, carga_horar
                habilidades: str = "", pre_requisitos: str = "", enquadramento_curricular: str = "",
                metodologia_html: str = "", avaliacao_html: str = "", bibliografia_basica: str = "",
                bibliografia_complementar: str = "", unidades: list[dict] | None = None,
-               numero_unidades: int = 6) -> str:
+               numero_unidades: int = 8) -> str:
     try:
-        numero_unidades = max(6, min(8, int(numero_unidades or 6)))
+        numero_unidades = 8
     except Exception:
-        numero_unidades = 6
+        numero_unidades = 8
 
     unidades = list(unidades or [])[:numero_unidades]
     slots: list[str] = []
