@@ -4411,8 +4411,12 @@ def mew_avaliacao_final():
     cursor.execute("SELECT COUNT(*) as total FROM notas_finais WHERE LOWER(TRIM(COALESCE(status,''))) = 'reprovado'")
     total_reprovados = cursor.fetchone()["total"] or 0
 
-    # Buscar todas as disciplinas para o formulário
-    cursor.execute("SELECT * FROM disciplinas ORDER BY nome")
+    # Buscar todas as disciplinas com contagem real de questões finais
+    cursor.execute("""
+        SELECT d.*, (SELECT COUNT(*) FROM questoes_finais qf
+                     WHERE qf.disciplina_id=d.id) AS total_questoes_cadastradas
+        FROM disciplinas d ORDER BY d.nome
+    """)
     disciplinas = cursor.fetchall()
 
     # Buscar todos os alunos para o formulário
