@@ -596,6 +596,17 @@ def executar():
                 c.execute("""INSERT INTO situacao_financeira
                   (aluno_id,forma_pagamento,status,parcelas_total,parcelas_pagas,valor_total)
                   VALUES (%s,'simulacao','pago',1,1,0)""",(aid,))
+            # Liberação apenas da turma demonstrativa para testar imediatamente:
+            # não muda o início original da matrícula nem cria nota/frequência.
+            c.execute("""
+                INSERT INTO acessos_disciplina_admin
+                 (aluno_id,disciplina_id,estado,data_limite,inicio_calendario)
+                VALUES (%s,%s,'liberado',NULL,DATE '2026-01-01')
+                ON CONFLICT(aluno_id,disciplina_id) DO UPDATE SET
+                  estado='liberado',data_limite=NULL,
+                  inicio_calendario=EXCLUDED.inicio_calendario,
+                  atualizado_em=CURRENT_TIMESTAMP
+            """,(aid,did))
             # Conferência pós escrita com dados mínimos e sem alterar notas.
             c.execute("""SELECT c.id, p.questoes_json FROM capitulos c
                      JOIN provas p ON p.capitulo_id=c.id
