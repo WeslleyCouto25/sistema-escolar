@@ -50,7 +50,7 @@ import plano_ensino
 from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
 from chapter_release import chapter_is_released, released_chapters, chapter_release_date
-from payment_release import get_course_access
+from payment_release import get_course_access, effective_chapter_start
 from dashboard_grades import dashboard_grades
 from perf_monitor import install_perf_monitor, current_rss_mb
 from pdf_tools import (
@@ -1682,6 +1682,11 @@ def _proteger_avaliacoes_por_calendario():
             WHERE ad.aluno_id=%s AND ad.disciplina_id=%s
         """, (aluno_id, disciplina_id))
         row = cur.fetchone()
+        if row and row.get("data_inicio"):
+            row = dict(row)
+            row["data_inicio"] = effective_chapter_start(
+                cur, aluno_id, disciplina_id, row["data_inicio"]
+            )
     finally:
         conn.close()
     if not row or not row.get("data_inicio"):
@@ -1743,6 +1748,11 @@ def disciplina(disciplina_id):
     """, (aluno_id, disciplina_id))
 
     data_info = cursor.fetchone()
+    if data_info and data_info.get("data_inicio"):
+        data_info = dict(data_info)
+        data_info["data_inicio"] = effective_chapter_start(
+            cursor, aluno_id, disciplina_id, data_info["data_inicio"]
+        )
 
     if not data_info or not data_info['data_inicio']:
         conn.close()
@@ -2980,6 +2990,131 @@ def mew_alunos():
         page=page, per_page=per_page, total_alunos=total_alunos, total_pages=total_pages,
         csrf_token=_mew_csrf(), busca=busca
     )
+
+@app.route("/mew/aluno/<int:aluno_id>/acessos", methods=["GET"])
+def mew_acessos_disciplina(aluno_id):
+    """Controle individual por disciplina, sem reescrever datas de matrícula."""
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id,nome,ra FROM alunos WHERE id=%s", (aluno_id,))
+        aluno = cur.fetchone()
+        if not aluno:
+            return "Aluno não encontrado", 404
+        cur.execute("""
+            SELECT ad.disciplina_id, d.nome, dd.data_inicio,
+                   sf.status AS status_financeiro,
+                   ac.estado AS controle_estado, ac.data_limite AS controle_limite
+            FROM aluno_disciplina ad
+            JOIN disciplinas d ON d.id=ad.disciplina_id
+            LEFT JOIN aluno_disciplina_datas dd
+              ON dd.aluno_id=ad.aluno_id AND dd.disciplina_id=ad.disciplina_id
+            LEFT JOIN LATERAL (
+                SELECT status FROM situacao_financeira WHERE aluno_id=ad.aluno_id
+                ORDER BY id DESC LIMIT 1
+            ) sf ON TRUE
+            LEFT JOIN acessos_disciplina_admin ac
+              ON ac.aluno_id=ad.aluno_id AND ac.disciplina_id=ad.disciplina_id
+            WHERE ad.aluno_id=%s
+            ORDER BY d.nome
+        """, (aluno_id,))
+        disciplinas = [dict(x) for x in cur.fetchall()]
+        for d in disciplinas:
+            estado = get_course_access(cur, aluno_id, d["disciplina_id"])
+            d["acesso_permitido"] = estado["acesso_permitido"]
+            d["motivo"] = estado["titulo"]
+    finally:
+        conn.close()
+    return render_template(
+        "mew/acessos_disciplina.html", aluno=aluno, disciplinas=disciplinas,
+        csrf_token=_mew_csrf(), mensagem=request.args.get("mensagem", "")
+    )
+
+
+@app.route("/mew/aluno/<int:aluno_id>/acessos/<int:disciplina_id>", methods=["POST"])
+def mew_definir_acesso_disciplina(aluno_id, disciplina_id):
+    if not session.get("mew_admin"):
+        return redirect("/mew/login")
+    _mew_check_csrf()
+    from datetime import date
+    from urllib.parse import quote
+    acao = request.form.get("acao")
+    if acao not in {"liberar", "bloquear", "automatico"}:
+        return "Ação inválida", 400
+    limite = None
+    if acao == "liberar":
+        raw = (request.form.get("data_limite") or "").strip()
+        if raw:
+            try:
+                limite = date.fromisoformat(raw)
+            except ValueError:
+                return "Data-limite inválida", 400
+            if limite < datetime.now(ZoneInfo("America/Sao_Paulo")).date():
+                return "A data-limite não pode estar no passado", 400
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT dd.data_inicio,
+                  (SELECT status FROM situacao_financeira sf
+                    WHERE sf.aluno_id=ad.aluno_id ORDER BY id DESC LIMIT 1) AS status
+                FROM aluno_disciplina ad
+                LEFT JOIN aluno_disciplina_datas dd
+                  ON dd.aluno_id=ad.aluno_id AND dd.disciplina_id=ad.disciplina_id
+                WHERE ad.aluno_id=%s AND ad.disciplina_id=%s
+                FOR UPDATE OF ad
+            """, (aluno_id, disciplina_id))
+            row = cur.fetchone()
+            if not row:
+                return "Disciplina não vinculada ao aluno", 404
+            if acao == "liberar":
+                if row["status"] != "pago":
+                    return "Confirme primeiro o pagamento no cadastro do aluno", 409
+                # D+3 apenas para calendário de acesso. A data histórica da
+                # matrícula continua INALTERADA em aluno_disciplina_datas.
+                hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+                inicio_acesso = hoje - timedelta(days=3)
+                if row.get("data_inicio"):
+                    try:
+                        inicio_real = datetime.strptime(row["data_inicio"], "%d/%m/%Y").date()
+                        inicio_acesso = min(inicio_real, inicio_acesso)
+                    except (ValueError, TypeError):
+                        pass
+                cur.execute("""
+                    INSERT INTO acessos_disciplina_admin
+                      (aluno_id,disciplina_id,estado,data_limite,inicio_calendario)
+                    VALUES (%s,%s,'liberado',%s,%s)
+                    ON CONFLICT (aluno_id,disciplina_id) DO UPDATE SET
+                      estado='liberado',data_limite=EXCLUDED.data_limite,
+                      inicio_calendario=EXCLUDED.inicio_calendario,
+                      atualizado_em=CURRENT_TIMESTAMP
+                """, (aluno_id, disciplina_id, limite, inicio_acesso))
+                mensagem = "Disciplina liberada administrativamente"
+            elif acao == "bloquear":
+                cur.execute("""
+                    INSERT INTO acessos_disciplina_admin
+                      (aluno_id,disciplina_id,estado,data_limite,inicio_calendario)
+                    VALUES (%s,%s,'bloqueado',NULL,NULL)
+                    ON CONFLICT (aluno_id,disciplina_id) DO UPDATE SET
+                      estado='bloqueado',data_limite=NULL,inicio_calendario=NULL,
+                      atualizado_em=CURRENT_TIMESTAMP
+                """, (aluno_id, disciplina_id))
+                mensagem = "Acesso suspenso administrativamente"
+            else:
+                cur.execute("""
+                    DELETE FROM acessos_disciplina_admin
+                    WHERE aluno_id=%s AND disciplina_id=%s
+                """, (aluno_id, disciplina_id))
+                mensagem = "Regra de acesso automática restaurada"
+    finally:
+        conn.close()
+    return redirect(
+        "/mew/aluno/%s/acessos?mensagem=%s" % (aluno_id, quote(mensagem))
+    )
+
 
 @app.route("/mew/gerar-cobranca/<int:aluno_id>", methods=["POST"])
 def mew_gerar_cobranca_aluno(aluno_id):
