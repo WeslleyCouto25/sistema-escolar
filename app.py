@@ -1561,6 +1561,13 @@ def deletar_questao(questao_id):
     else:
         return redirect("/mew/avaliacao-final?erro=Questão+não+encontrada")
 
+def _minimo_questoes_final(cursor, disciplina_id):
+    """Conserva 30 itens nos cursos regulares; 10 na turma de demonstração."""
+    cursor.execute("SELECT nome FROM disciplinas WHERE id=%s", (disciplina_id,))
+    row = cursor.fetchone()
+    return 10 if row and row["nome"] == "Biologia Celular e Tecidual - 80H" else 30
+
+
 @app.route("/mew/verificar-questoes/<int:disciplina_id>")
 def verificar_questoes(disciplina_id):
     """Retorna quantas questões uma disciplina tem"""
@@ -1573,13 +1580,15 @@ def verificar_questoes(disciplina_id):
     cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     resultado = cursor.fetchone()
     total = resultado["total"] if resultado else 0
+    minimo = _minimo_questoes_final(cursor, disciplina_id)
 
     conn.close()
 
     return jsonify({
         "disciplina_id": disciplina_id,
         "total": total,
-        "pronta": total >= 30
+        "minimo": minimo,
+        "pronta": total >= minimo
     })
 
 @app.route("/mew/salvar-nota-final", methods=["POST"])
@@ -4193,17 +4202,19 @@ def prova_final(disciplina_id):
         </html>
         '''
 
-    # Buscar questões da prova final
+    # A turma de testes de Biologia utiliza dez questões; demais disciplinas,
+    # trinta. O cálculo da nota utiliza exatamente esse mesmo denominador.
+    minimo_final = _minimo_questoes_final(cursor, disciplina_id)
     cursor.execute("""
         SELECT * FROM questoes_finais
         WHERE disciplina_id = %s
         ORDER BY RANDOM()
-        LIMIT 30
-    """, (disciplina_id,))
+        LIMIT %s
+    """, (disciplina_id, minimo_final))
 
     questoes = cursor.fetchall()
 
-    if len(questoes) < 30:
+    if len(questoes) < minimo_final:
         conn.close()
         return '''
         <!DOCTYPE html>
@@ -4292,8 +4303,9 @@ def correcao_final(disciplina_id):
             if resposta_aluno.strip().upper() == str(questao["resposta_correta"]).strip().upper():
                 acertos += 1
 
-    # Calcular nota da prova final (0-10)
-    nota_final = round((acertos / 30) * 10, 2)
+    # Calcular nota da prova final (0-10) com denominador da turma.
+    minimo_final = _minimo_questoes_final(cursor, disciplina_id)
+    nota_final = round((acertos / minimo_final) * 10, 2)
 
     # Calcular média das unidades sem duplicar registros legado/canônico.
     media_disciplina = round(_media_notas_logicas(cursor, aluno_id, disciplina_id), 2)
@@ -4329,7 +4341,7 @@ def correcao_final(disciplina_id):
         'media_final': media_final,
         'status': status,
         'acertos': acertos,
-        'total': 30
+        'total': minimo_final
     }
 
     return redirect(f"/avaliacao-final/resultado/{disciplina_id}")
@@ -4476,9 +4488,12 @@ def liberar_prova_final_aluno():
     cursor.execute("SELECT COUNT(*) as total FROM questoes_finais WHERE disciplina_id = %s", (disciplina_id,))
     total_questoes = cursor.fetchone()["total"] or 0
 
-    if total_questoes < 30:
+    minimo_final = _minimo_questoes_final(cursor, disciplina_id)
+    if total_questoes < minimo_final:
         conn.close()
-        return redirect(f"/mew/avaliacao-final?erro=Disciplina+precisa+de+30+questões+({total_questoes}/30)")
+        return redirect(
+            f"/mew/avaliacao-final?erro=Disciplina+precisa+de+{minimo_final}+questões+({total_questoes}/{minimo_final})"
+        )
 
     # Verificar se já existe liberação para este aluno nesta disciplina
     cursor.execute("SELECT id FROM liberacao_final WHERE aluno_id = %s AND disciplina_id = %s",
