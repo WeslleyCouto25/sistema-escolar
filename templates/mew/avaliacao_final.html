@@ -411,7 +411,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             <!-- 2. GERENCIAR QUESTÕES DAS PROVAS -->
             <div class="card-section">
                 <h2><i class="fas fa-edit"></i> Gerenciar Questões das Provas</h2>
-                <p>Clique em uma disciplina para adicionar/editar as 30 questões da prova final.</p>
+                <p>Clique em uma disciplina para gerenciar a prova final (10 itens na turma demonstrativa de Biologia; 30 nas demais).</p>
 
                 <table class="table">
                     <thead>
@@ -427,25 +427,20 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <tr>
                             <td>{{ d['nome'] }}</td>
                             <td>
-                                {% set quest_count = namespace(value=0) %}
-                                {% for lib in liberacoes %}
-                                    {% if lib['disciplina_id'] == d['id'] %}
-                                        {% set quest_count.value = lib['total_questoes'] %}
-                                    {% endif %}
-                                {% endfor %}
-                                
-                                {% if quest_count.value >= 30 %}
-                                <span class="badge-success">{{ quest_count.value }}/30</span>
-                                {% elif quest_count.value >= 20 %}
-                                <span class="badge-warning">{{ quest_count.value }}/30</span>
+                                {% set quest_count = d['total_questoes_cadastradas'] %}
+                                {% set minimo = 10 if d['nome'] == 'Biologia Celular e Tecidual - 80H' else 30 %}
+                                {% if quest_count >= minimo %}
+                                <span class="badge-success">{{ quest_count }}/{{ minimo }}</span>
+                                {% elif quest_count >= minimo // 2 %}
+                                <span class="badge-warning">{{ quest_count }}/{{ minimo }}</span>
                                 {% else %}
-                                <span class="badge-danger">{{ quest_count.value }}/30</span>
+                                <span class="badge-danger">{{ quest_count }}/{{ minimo }}</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if quest_count.value >= 30 %}
+                                {% if quest_count >= minimo %}
                                 <span class="badge-success">Pronta</span>
-                                {% elif quest_count.value >= 20 %}
+                                {% elif quest_count >= minimo // 2 %}
                                 <span class="badge-warning">Parcial</span>
                                 {% else %}
                                 <span class="badge-danger">Incompleta</span>
@@ -488,10 +483,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                             <td>{{ l['disciplina_nome'] }}</td>
                             <td>{{ l['data_liberacao'] }}</td>
                             <td>
-                                {% if l['total_questoes'] >= 30 %}
-                                <span class="badge-success">{{ l['total_questoes'] }}/30</span>
+                                {% set minimo = 10 if l['disciplina_nome'] == 'Biologia Celular e Tecidual - 80H' else 30 %}
+                                {% if l['total_questoes'] >= minimo %}
+                                <span class="badge-success">{{ l['total_questoes'] }}/{{ minimo }}</span>
                                 {% else %}
-                                <span class="badge-warning">{{ l['total_questoes'] }}/30</span>
+                                <span class="badge-warning">{{ l['total_questoes'] }}/{{ minimo }}</span>
                                 {% endif %}
                             </td>
                             <td>
@@ -587,7 +583,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             });
         }
 
-        // Verifica se a disciplina tem 30 questões
+        // Verifica a quantidade necessária na API (10 ou 30 questões)
         function verificarQuestoes(disciplinaId) {
             if (!disciplinaId) return;
 
@@ -597,11 +593,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     const infoDiv = document.getElementById('questoesInfo');
                     const btnLiberar = document.getElementById('btnLiberar');
 
-                    if (data.total >= 30) {
+                    if (data.pronta) {
                         infoDiv.innerHTML = `
                             <span style="color: #28a745;">
                                 <i class="fas fa-check-circle"></i> ✅ Pronto para liberar! 
-                                (${data.total}/30 questões)
+                                (${data.total}/${data.minimo} questões)
                             </span>
                         `;
                         infoDiv.style.display = 'block';
@@ -610,8 +606,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         infoDiv.innerHTML = `
                             <span style="color: #dc3545;">
                                 <i class="fas fa-exclamation-triangle"></i> ⚠️ Não pode liberar! 
-                                Precisa de ${30 - data.total} questões adicionais.
-                                (${data.total}/30 questões)
+                                Precisa de ${data.minimo - data.total} questões adicionais.
+                                (${data.total}/${data.minimo} questões)
                             </span>
                             <div style="margin-top: 5px;">
                                 <a href="/mew/questoes-final/${disciplinaId}" class="btn btn-sm btn-warning">
