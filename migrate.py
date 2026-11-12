@@ -345,7 +345,7 @@ def main():
               (updated["alunos"], updated["titulos"],
                updated["status_financeiro"] == "pago"), flush=True)
     plans = publish_academic_plans()
-    if plans["planos"] != 2:
+    if plans["planos"] != 3:
         raise RuntimeError("Planos de ensino incompletos")
     print("[SIGEU COURSE PLANS R2 VERIFIED] count=%s" % plans["planos"], flush=True)
     if updated:
