@@ -336,6 +336,9 @@ def main():
     # ambiente Render. O mesmo deploy publica os planos institucionais no R2.
     from update_student_record import atualizar_ficha_autorizada
     from publish_academic_plans import publish_academic_plans
+    if os.getenv("SIGEU_SEED_BIOLOGIA", "") == "1":
+        from scripts.seed_biologia_teste import executar as seed_biologia
+        seed_biologia()
     updated = atualizar_ficha_autorizada()
     if updated:
         print("[SIGEU STUDENT UPDATE VERIFIED] students=%s titles=%s paid_admin=%s" %
