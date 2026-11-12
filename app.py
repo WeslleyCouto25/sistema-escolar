@@ -7690,9 +7690,7 @@ def mew_processar_plano_ensino():
     except Exception:
         return jsonify({"success": False, "message": "Selecione uma disciplina cadastrada."}), 400
 
-    ementa_sugerida = (dados_recebidos.get("ementa") or "").strip()
-    if not ementa_sugerida:
-        return jsonify({"success": False, "message": "Informe uma sugestão de ementa."}), 400
+    # A ementa das três disciplinas já está no plano-base; não é preciso redigitá-la.
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -7712,24 +7710,24 @@ def mew_processar_plano_ensino():
 
     from planos_referencia_60h import obter_conteudo_plano_referencia
     plano_referencia = obter_conteudo_plano_referencia(disc["nome"])
-    if not plano_referencia and not os.getenv("OPENAI_API_KEY"):
-        return jsonify({"success": False, "message": "OPENAI_API_KEY não configurada no Render."}), 500
+    if not plano_referencia:
+        return jsonify({
+            "success": False, "message": (
+                "Esta disciplina ainda não possui plano-base revisado no repositório. "
+                "A emissão foi interrompida sem chamar a API paga. "
+                "Solicite a inclusão do plano-base antes de emitir."
+            ),
+            "sem_chamada_ia": True
+        }), 422
 
-    # ÚNICOS DADOS DE CONTEÚDO: título real da disciplina + sugestão de ementa.
-    # Carga vem do banco. Todo o conteúdo pedagógico variável e bibliografias vêm da IA.
-    dados_ia = {
-        "disciplina": disc["nome"],
-        "ementa": ementa_sugerida,
-        "carga_horaria": f"{int(disc['carga_horaria'] or 80)} horas"
-    }
+    if int(disc["carga_horaria"] or 80) != 60:
+        return jsonify({"success": False, "message": (
+            "A disciplina cadastrada tem carga horária diferente das 60 horas do plano-base. "
+            "Ajuste o cadastro acadêmico antes de emitir."), "sem_chamada_ia": True}), 422
 
     try:
-        from api_planos import consultar_openai_para_plano
-        # Nas três disciplinas do PDF, utiliza dados revisados sem refazer as
-        # referências com IA. As demais continuam usando o gerador existente.
-        conteudo_ia = plano_referencia or consultar_openai_para_plano(dados_ia)
-        if not conteudo_ia:
-            raise ValueError("A IA retornou conteúdo vazio.")
+        # Texto proveniente do plano-base revisado, sem API paga.
+        conteudo_ia = plano_referencia
 
         disciplina = disc["nome"].upper()
         carga_horaria = f"{int(disc['carga_horaria'] or 80)} horas"
@@ -7816,7 +7814,9 @@ def mew_processar_plano_ensino():
             "carga_horaria": carga_horaria,
             "modalidade": modalidade,
             "numero_unidades": numero_unidades,
-            "bibliografia_gerada_por_ia": plano_referencia is None,
+            "bibliografia_gerada_por_ia": False,
+            "origem_conteudo": "planos_referencia_60h.py",
+            "sem_chamada_ia": True,
             "url_visualizar": f"/ver-documento/{codigo}",
             "data_emissao": data_emissao,
             "data_validade": data_validade
