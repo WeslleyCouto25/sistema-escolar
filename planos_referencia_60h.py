@@ -14,7 +14,7 @@ def obter_conteudo_plano_referencia(nome_disciplina):
     def normalizar(valor):
         texto = unicodedata.normalize("NFKD", str(valor or "")).casefold()
         texto = "".join(c for c in texto if not unicodedata.combining(c))
-        texto = re.sub(r"\\b60\\s*(?:h|horas)\\b", " ", texto)
+        texto = re.sub(r"\b60\s*(?:h|horas)\b", " ", texto)
         texto = re.sub(r"[^a-z0-9]+", " ", texto)
         return " ".join(texto.split())
 
