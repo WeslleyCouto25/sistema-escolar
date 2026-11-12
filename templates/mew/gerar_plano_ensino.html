@@ -461,7 +461,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 <i>📝</i> Configuração do Plano de Ensino
             </div>
             <div class="info-box">
-                <i>🤖</i> <strong>Gerador 100% automático:</strong> você informa somente a disciplina e uma sugestão de ementa. A IA gera objetivos, ementa expandida, conteúdo programático, habilidades, pré-requisitos e bibliografias básica e complementar. Carga horária e docente vêm do cadastro do sistema.
+                <i>📚</i> <strong>Emissão sem API paga:</strong> selecione uma das três disciplinas de 60h revisadas. Os conteúdos e referências estão no repositório, e o SiGEU registra o documento, o código e o QR Code. Para outras disciplinas é necessário incluir primeiro um plano-base.
             </div>
 
             <div class="info-box" style="background: #f0fff4; border-left-color: #28a745;">
@@ -483,16 +483,16 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 </div>
 
                 <div class="form-group">
-                    <label><i>💡</i> Sugestão de ementa *</label>
-                    <textarea class="form-control" id="ementa" name="ementa" rows="7" required
+                    <label><i>💡</i> Observações (opcional)</label>
+                    <textarea class="form-control" id="ementa" name="ementa" rows="3"
                               placeholder="Digite apenas uma orientação de ementa. Ex.: fundamentos de resistência dos materiais, tensões e deformações, flexão, torção e aplicações em engenharia."></textarea>
                     <div class="info-box" style="margin-top: 10px; background: #f1f3f4; border-left-color: #59636a;">
-                        <i>ℹ️</i> Não precisa escrever objetivos, bibliografia, pré-requisitos, conteúdo programático ou habilidades. A IA completa tudo automaticamente.
+                        <i>ℹ️</i> Para as três disciplinas de 60h, o conteúdo já está preparado no código. Nenhum texto aqui será enviado à API da OpenAI.
                     </div>
                 </div>
 
                 <div style="margin-top: 30px;">
-                    <button type="submit" class="btn btn-primary"><i>⚡</i> GERAR PLANO COMPLETO</button>
+                    <button type="submit" class="btn btn-primary"><i>⚡</i> EMITIR PLANO DO REPOSITÓRIO</button>
                     <button type="button" id="gerarTresPlanosBtn" class="btn btn-secondary"><i>📚</i> GERAR OS 3 PLANOS DE 60H COM AUTENTICAÇÃO</button>
                     <a href="/mew/planos-ensino" class="btn btn-secondary"><i>📋</i> Ver Planos Gerados</a>
                 </div>
@@ -538,8 +538,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             const disciplinaId = document.getElementById('disciplina_id').value;
             const ementa = document.getElementById('ementa').value.trim();
 
-            if (!disciplinaId || !ementa) {
-                showAlert('Selecione a disciplina e informe uma sugestão de ementa.', 'error');
+            if (!disciplinaId) {
+                showAlert('Selecione uma disciplina cadastrada.', 'error');
                 return;
             }
 
@@ -573,7 +573,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         <p><strong>🔐 Hash:</strong> ${result.hash.substring(0, 30)}...</p>
                     `;
                     document.getElementById('visualizarLink').href = result.url_visualizar;
-                    showAlert('Plano completo gerado com sucesso. Confira as referências antes do uso oficial.', 'success');
+                    showAlert('Plano-base emitido e registrado sem chamada à API paga.', 'success');
                 } else {
                     showAlert('Erro: ' + (result.message || 'Falha ao gerar plano.'), 'error');
                 }
