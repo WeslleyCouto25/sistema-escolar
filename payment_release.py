@@ -50,6 +50,18 @@ def ensure_payment_release_schema(cursor):
         BEFORE INSERT OR UPDATE OF status ON situacao_financeira
         FOR EACH ROW EXECUTE FUNCTION sigeu_carimbar_pagamento()
     """)
+    # Exceção administrativa por matrícula/disciplina: não altera datas oficiais.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS acessos_disciplina_admin (
+            aluno_id INTEGER NOT NULL REFERENCES alunos(id) ON DELETE CASCADE,
+            disciplina_id INTEGER NOT NULL REFERENCES disciplinas(id) ON DELETE CASCADE,
+            estado VARCHAR(12) NOT NULL CHECK (estado IN ('liberado', 'bloqueado')),
+            data_limite DATE,
+            inicio_calendario DATE,
+            atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (aluno_id, disciplina_id)
+        )
+    """)
     # A baixa administrativa anterior preserva a hora real da declaração,
     # evitando iniciar um novo prazo quando o sistema muda de versão.
     cursor.execute("""
@@ -125,7 +137,8 @@ def evaluate_course_access(status, confirmed_at, enrollment_date, now=None):
 
 def get_course_access(cursor, aluno_id, disciplina_id, now=None):
     cursor.execute("""
-        SELECT ad.id, d.data_inicio, sf.status, sf.pagamento_confirmado_em
+        SELECT ad.id, d.data_inicio, sf.status, sf.pagamento_confirmado_em,
+               ac.estado AS controle_estado, ac.data_limite AS controle_limite
         FROM aluno_disciplina ad
         LEFT JOIN aluno_disciplina_datas d
           ON d.aluno_id = ad.aluno_id AND d.disciplina_id = ad.disciplina_id
@@ -134,6 +147,8 @@ def get_course_access(cursor, aluno_id, disciplina_id, now=None):
             FROM situacao_financeira
             WHERE aluno_id = ad.aluno_id ORDER BY id DESC LIMIT 1
         ) sf ON TRUE
+        LEFT JOIN acessos_disciplina_admin ac
+          ON ac.aluno_id=ad.aluno_id AND ac.disciplina_id=ad.disciplina_id
         WHERE ad.aluno_id=%s AND ad.disciplina_id=%s
     """, (aluno_id, disciplina_id))
     row = cursor.fetchone()
@@ -144,7 +159,49 @@ def get_course_access(cursor, aluno_id, disciplina_id, now=None):
             "mensagem": "Esta disciplina não está vinculada à sua matrícula.",
             "prazo_horas": VALIDATION_HOURS, "aviso": NOTICE,
         }
+    now = now or datetime.now(ZONE)
+    local_today = now.astimezone(ZONE).date()
+    estado = row.get("controle_estado")
+    limite = row.get("controle_limite")
+    if estado == "bloqueado":
+        return {
+            "acesso_permitido": False, "motivo": "bloqueio_administrativo",
+            "titulo": "Acesso suspenso",
+            "mensagem": "O acesso a esta disciplina foi suspenso pela secretaria acadêmica.",
+            "prazo_horas": VALIDATION_HOURS, "aviso": NOTICE,
+        }
+    if estado == "liberado":
+        if limite is not None and local_today > limite:
+            return {
+                "acesso_permitido": False, "motivo": "liberacao_encerrada",
+                "titulo": "Período de acesso encerrado",
+                "mensagem": "O prazo autorizado para acesso a esta disciplina terminou em " +
+                            limite.strftime("%d/%m/%Y") + ".",
+                "prazo_horas": VALIDATION_HOURS, "aviso": NOTICE,
+            }
+        if row.get("status") == "pago":
+            return {
+                "acesso_permitido": True, "motivo": "liberacao_administrativa",
+                "titulo": "Disciplina disponível",
+                "mensagem": "Acesso autorizado após conferência administrativa da matrícula.",
+                "prazo_horas": VALIDATION_HOURS, "aviso": NOTICE,
+            }
     return evaluate_course_access(
         row.get("status"), row.get("pagamento_confirmado_em"),
         row.get("data_inicio"), now,
     )
+
+
+def effective_chapter_start(cursor, aluno_id, disciplina_id, matricula_inicio):
+    """Antecipação só do calendário de conteúdo; mantém matrícula original."""
+    cursor.execute("""
+        SELECT inicio_calendario, data_limite
+        FROM acessos_disciplina_admin
+        WHERE aluno_id=%s AND disciplina_id=%s AND estado='liberado'
+    """, (aluno_id, disciplina_id))
+    row = cursor.fetchone()
+    if row and row.get("inicio_calendario"):
+        today = datetime.now(ZONE).date()
+        if row.get("data_limite") is None or today <= row["data_limite"]:
+            return row["inicio_calendario"].strftime("%d/%m/%Y")
+    return matricula_inicio
