@@ -1116,6 +1116,155 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 }
 </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/student_campus_2026.css') }}?v=20261111b">
+    <!-- AJUSTE DE CORES, EXCLUSIVO DA TELA DA DISCIPLINA: sem alterar estrutura ou funcionalidades. -->
+    <style id="sigeu-course-colors-20261112">
+      body.portal07.student-page.disciplina-page {
+        --curso-marinho:#153852;--curso-escuro:#0d2a40;
+        --curso-petroleo:#256879;--curso-dourado:#bd9457;
+        --curso-texto:#263747;--curso-borda:#d7e2e8;
+        background:#f2f6f8!important;
+      }
+      body.portal07.student-page.disciplina-page header.topbar {
+        background:#153852!important;
+        background-image:linear-gradient(115deg,#0d2a40 0%,#19455f 100%)!important;
+        border-bottom:3px solid #bd9457!important;
+        box-shadow:0 2px 10px rgba(14,42,61,.16)!important;
+      }
+      body.portal07.student-page.disciplina-page .topbar .logout-btn {
+        background:rgba(255,255,255,.09)!important;
+        border-color:rgba(255,255,255,.34)!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header {
+        background:#153852!important;
+        background-image:linear-gradient(115deg,#1c5268 0%,#153852 66%,#0c2a40 100%)!important;
+        border:0!important;border-bottom:3px solid #bd9457!important;
+        color:#fff!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header::before {opacity:.055!important;}
+      /* O título ficava invisível por combinar faixa branca com texto branco. */
+      body.portal07.student-page.disciplina-page .discipline-header h1.page-title {
+        color:#fff!important;background:transparent!important;background-image:none!important;
+        border:0!important;border-left:0!important;border-radius:0!important;
+        box-shadow:none!important;text-shadow:none!important;
+        padding:0!important;margin:0 0 12px!important;
+        font-weight:750!important;line-height:1.22!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header .page-title *,
+      body.portal07.student-page.disciplina-page .discipline-header .page-subtitle {
+        color:#eef5f8!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header .back-link {
+        color:#fff!important;background:rgba(255,255,255,.10)!important;
+        border-color:rgba(255,255,255,.28)!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header .back-link:hover {
+        background:rgba(255,255,255,.19)!important;
+      }
+      body.portal07.student-page.disciplina-page .discipline-header .stat-card {
+        background:rgba(255,255,255,.10)!important;
+        background-image:none!important;
+        border-color:rgba(255,255,255,.30)!important;
+        box-shadow:none!important;
+      }
+      body.portal07.student-page.disciplina-page .stat-number {color:#fff!important;}
+      body.portal07.student-page.disciplina-page .stat-label {color:#e1edf3!important;}
+      body.portal07.student-page.disciplina-page .main-container,
+      body.portal07.student-page.disciplina-page .content-area {
+        background:#f2f6f8!important;background-image:none!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar {
+        background:#f8fafb!important;border-right:1px solid #d7e2e8!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar .user-profile {
+        background:#eff5f7!important;border:1px solid #dce7ec!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar .user-profile .name {
+        color:#173c55!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar .user-profile .ra {
+        color:#536d80!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar .menu-item.active,
+      body.portal07.student-page.disciplina-page .sidebar .section-menu-item.active {
+        color:#13556a!important;background:#e4f0f3!important;
+        border-left-color:#256879!important;
+      }
+      body.portal07.student-page.disciplina-page .sidebar .menu-item.active *,
+      body.portal07.student-page.disciplina-page .sidebar .section-menu-item.active * {
+        color:#13556a!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-tracker {
+        background:#fff!important;border-color:#d7e2e8!important;
+        box-shadow:0 2px 9px rgba(21,56,82,.05)!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-step.current .step-icon {
+        background:#256879!important;border-color:#bd9457!important;color:#fff!important;
+        box-shadow:0 0 0 3px rgba(189,148,87,.18)!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-step.completed .step-icon {
+        background:#2d6a62!important;border-color:#2d6a62!important;color:#fff!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-step.current .step-label {
+        color:#175a6d!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-step.completed .step-label {
+        color:#275c55!important;
+      }
+      body.portal07.student-page.disciplina-page .progress-line.completed {
+        background:#2d6a62!important;
+      }
+      body.portal07.student-page.disciplina-page .chapter-card {
+        background:#fff!important;border:1px solid #d7e2e8!important;
+        border-left:4px solid #256879!important;
+        box-shadow:0 2px 9px rgba(21,56,82,.06)!important;
+      }
+      body.portal07.student-page.disciplina-page .chapter-title h3,
+      body.portal07.student-page.disciplina-page .chapter-toggle {
+        color:#163c55!important;
+      }
+      body.portal07.student-page.disciplina-page .chapter-title h3 i {
+        color:#256879!important;
+      }
+      body.portal07.student-page.disciplina-page .chapter-number {
+        color:rgba(21,56,82,.08)!important;
+      }
+      body.portal07.student-page.disciplina-page .chapter-subtitle {
+        color:#526b79!important;
+      }
+      body.portal07.student-page.disciplina-page .learning-objectives {
+        background:#edf5f6!important;background-image:none!important;
+        border-color:#d4e3e6!important;border-left:4px solid #256879!important;
+      }
+      body.portal07.student-page.disciplina-page .learning-objectives h5 {
+        color:#163c55!important;
+      }
+      body.portal07.student-page.disciplina-page .content-section {
+        background:#f8fafb!important;border-color:#d7e2e8!important;
+      }
+      body.portal07.student-page.disciplina-page .content-section .section-title {
+        background:#e9f1f4!important;background-image:none!important;
+        color:#163c55!important;border:1px solid #d5e3e9!important;
+        border-left:4px solid #256879!important;
+      }
+      body.portal07.student-page.disciplina-page .content-section .section-title * {
+        color:#256879!important;
+      }
+      body.portal07.student-page.disciplina-page .resource-badge {
+        background:#eaf2f5!important;color:#25536a!important;
+        border-color:#d2e1e8!important;
+      }
+      body.portal07.student-page.disciplina-page .btn-prova-primary {
+        background:#205b70!important;border-color:#205b70!important;color:#fff!important;
+      }
+      body.portal07.student-page.disciplina-page .btn-prova-secondary {
+        border-color:#b6cbd5!important;color:#205b70!important;
+      }
+      @media(max-width:768px){
+        body.portal07.student-page.disciplina-page .discipline-header h1.page-title {
+          font-size:clamp(1.45rem,5vw,2.15rem)!important;
+        }
+      }
+    </style>
 </head>
 
 <body class="portal07 student-page disciplina-page">
