@@ -484,6 +484,16 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </div>
                     </div>
 
+                    <div class="form-group" style="margin:12px 0 18px;">
+                        <label for="status_financeiro_cadastro"><strong>Pagamento confirmado?</strong></label>
+                        <select name="status_financeiro" id="status_financeiro_cadastro" required>
+                            <option value="pendente" selected>Não — pendente</option>
+                            <option value="parcial">Pagamento parcial</option>
+                            <option value="pago">Sim — conferido pela administração</option>
+                        </select>
+                        <small>Confirme apenas após conferir o pagamento. Não altera os comprovantes do PicPay ou Mercado Pago.</small>
+                    </div>
+
                     <!-- ========= CONTRATO E COBRANÇA ========= -->
                     <h3 class="section-title">📄 Contrato e Cobrança Online</h3>
                     <div class="mp-box">
@@ -635,6 +645,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                                 {% endif %}
                             </td>
                             <td style="display:flex; gap:6px; flex-wrap: wrap;">
+                                <a href="/mew/aluno/{{ aluno.id }}/acessos" class="btn btn-sm btn-success" title="Liberar, bloquear ou definir prazo de acesso às disciplinas">
+                                    <i class="fas fa-unlock-alt"></i> Acesso
+                                </a>
                                 <a href="/mew/aluno/{{ aluno.id }}/disciplinas" class="btn btn-sm btn-info" title="Gerenciar Disciplinas">
                                     <i class="fas fa-book"></i>
                                 </a>
