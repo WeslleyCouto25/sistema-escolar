@@ -17,11 +17,12 @@ from r2_storage import get_client, bucket_name, upload_bytes
 SOURCES = (
     ("Psicologia e Cognição no Trânsito", "transito", "psicologia-cognicao-transito"),
     ("Fundamentos da Psicologia Positiva", "positiva", "fundamentos-psicologia-positiva"),
+    ("Biologia Celular e Tecidual - 80H", "biologia", "biologia-celular-tecidual-80h"),
 )
 BASE = Path(__file__).resolve().parent / "academic_plans"
 
 
-def _render_pdf(title, source):
+def _render_pdf(title, source, draft=False):
     # Cada linha deriva da transcricao do PDF original, sem modificar as
     # ementas, unidades, metodologia, avaliacoes e bibliografia fornecidas.
     blocks = []
@@ -33,6 +34,13 @@ def _render_pdf(title, source):
             f'<pre>{html.escape(cleaned)}</pre>'
             '</section>'
         )
+    subtitulo = (
+        "MINUTA ACADÊMICA DEMONSTRATIVA · pendente de homologação institucional · "
+        "sem comprovação de frequência ou conclusão"
+        if draft else
+        "FACOP/SIGEU — Grupo Educacional Unificado · 80 horas · modelo híbrido. "
+        "Versão textual integral do documento institucional enviado, com paginação adaptada."
+    )
     webpage = f"""<!doctype html><html lang="pt-BR"><head>
     <meta charset="utf-8"><style>
     @page {{size:A4; margin:17mm 14mm 16mm 14mm;
@@ -46,9 +54,7 @@ def _render_pdf(title, source):
     .sourcepage {{break-before:page}}
     .sourcepage:first-child {{break-before:auto}}
     </style></head><body><h1>{html.escape(title)}</h1>
-    <p class="sub">FACOP/SIGEU — Grupo Educacional Unificado · 80 horas · modelo híbrido.
-    Versão textual integral do documento institucional enviado, com paginação adaptada.
-    Não substitui a versão original assinada, quando houver.</p>
+    <p class="sub">{html.escape(subtitulo)}. Não substitui aprovação institucional ou versão assinada.</p>
     {''.join(blocks)}</body></html>"""
     return HTML(string=webpage).write_pdf()
 
@@ -83,7 +89,7 @@ def publish_academic_plans():
             try:
                 client.head_object(Bucket=bucket_name(), Key=key)
             except Exception:
-                pdf = _render_pdf(course, text)
+                pdf = _render_pdf(course, text, draft=(slug == "biologia"))
                 if not pdf.startswith(b"%PDF") or len(pdf) < 3000:
                     raise RuntimeError("PDF renderizado invalido")
                 digest = hashlib.sha256(pdf).hexdigest()
@@ -97,12 +103,14 @@ def publish_academic_plans():
             digest = remote.get("Metadata", {}).get("sha256") or source_hash
             cur.execute("""
                 INSERT INTO planos_ensino_r2 (disciplina_id,r2_key,sha256,formato)
-                VALUES (%s,%s,%s,'versao_textual')
+                VALUES (%s,%s,%s,%s)
                 ON CONFLICT (disciplina_id) DO UPDATE SET
                   r2_key=EXCLUDED.r2_key,
                   sha256=EXCLUDED.sha256,
+                  formato=EXCLUDED.formato,
                   atualizado_em=NOW()
-            """, (course_id, key, digest))
+            """, (course_id, key, digest,
+                  "minuta_demonstrativa" if slug == "biologia" else "versao_textual"))
             published += 1
         conn.commit()
         return {"planos": published}
