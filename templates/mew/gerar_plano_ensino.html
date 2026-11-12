@@ -593,7 +593,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 ['Fenômenos de Transporte', 'Estática e dinâmica dos fluidos, perdas de carga, calor e transferência de massa.']
             ];
             const opts = Array.from(document.getElementById('disciplina_id').options);
-            const limpar = v => (v || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase();
+            const limpar = v => (v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
             const mapa = trabalhos.map(([nome, ementa]) => {
                 const op = opts.find(o => limpar(o.dataset.nome) === limpar(nome) && Number(o.dataset.carga) === 60);
                 return {nome, ementa, id: op ? op.value : null};
