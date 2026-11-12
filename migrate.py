@@ -363,6 +363,9 @@ def main():
     if os.getenv("SIGEU_SEED_TRANSITO_QUESTOES", "") == "1":
         from scripts.seed_transito_questoes import executar as atualizar_transito
         atualizar_transito()
+    if os.getenv("SIGEU_LIBERAR_MATRICULA_HELI", "") == "1":
+        from scripts.liberar_matricula_heli import executar as liberar_heli
+        liberar_heli()
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
