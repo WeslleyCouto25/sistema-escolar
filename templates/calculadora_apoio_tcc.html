@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Calcular preço de apoio para TCC | SIGEU Educacional</title>
+  <title>Calcular preço de apoio para TCC | Instituto SIGEduc</title>
   <meta name="description" content="Calculadora de estimativa para orientação, revisão e apoio técnico em TCC por área, nível acadêmico e quantidade de páginas.">
   <meta name="keywords" content="calcular preço TCC, orçamento TCC, orientação TCC, revisão TCC, preço por página, graduação, mestrado, doutorado, especialização, ensino técnico">
   <meta name="robots" content="index,follow,max-snippet:-1"><link rel="canonical" href="https://sigeueducacional.com.br/calcular-preco-tcc">
@@ -12,7 +12,7 @@
 <body class="svc-page">
 {% include '_public_header.html' %}
 <main class="svc-main">
-  <div class="svc-breadcrumb"><a href="/">SIGEU Educacional</a> › Calculadora de apoio para TCC</div>
+  <div class="svc-breadcrumb"><a href="/">Instituto SIGEduc</a> › Calculadora de apoio para TCC</div>
   <section class="svc-hero">
     <div><div class="svc-kicker">Estimativa imediata</div><h1>Calcule uma estimativa de apoio para seu TCC</h1><p>Informe qualquer área, a quantidade de páginas e o nível acadêmico. A calculadora mostra a estimativa de orientação, revisão e suporte técnico conforme a faixa selecionada.</p></div>
     <aside class="svc-cta-box"><strong>Quer analisar seu projeto?</strong><p>Depois do cálculo, envie a estimativa e as características do trabalho para a equipe.</p><a class="svc-btn" href="https://wa.me/5521990020262" target="_blank" rel="noopener">CONTRATE AQUI</a></aside>
@@ -52,7 +52,7 @@
    if(!a){area.focus();det.textContent='Informe a área do trabalho.';return} if(!p||p<1){pag.focus();det.textContent='Informe uma quantidade válida de páginas.';return}
    const total=p*rate; const fmt=total.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); preco.textContent=fmt;
    det.textContent=a+' • '+p+' páginas • '+opt.textContent.split('—')[0].trim()+' • '+rate.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})+' por página.';
-   const msg='Olá! Fiz a estimativa de apoio acadêmico no site SIGEU. Área: '+a+'. Nível: '+opt.textContent.split('—')[0].trim()+'. Páginas: '+p+'. Estimativa: '+fmt+'. Gostaria de conversar sobre o suporte.';
+   const msg='Olá! Fiz a estimativa de apoio acadêmico no site SIGEduc. Área: '+a+'. Nível: '+opt.textContent.split('—')[0].trim()+'. Páginas: '+p+'. Estimativa: '+fmt+'. Gostaria de conversar sobre o suporte.';
    wa.href='https://wa.me/5521990020262?text='+encodeURIComponent(msg);
  }
  document.getElementById('calcular').addEventListener('click',calc);
