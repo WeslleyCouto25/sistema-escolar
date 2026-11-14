@@ -79,3 +79,33 @@ def acrescentar_sitemap_comercial_no_robots(response):
     if linha not in conteudo:
         response.set_data(conteudo.rstrip("\n") + "\n" + linha + "\n")
     return response
+
+
+# Rebranding publico das paginas legadas de Solucoes Digitais.
+# Mantem URLs, slugs, scripts e recursos estaticos; altera somente HTML textual.
+@solucoes_digitais_bp.after_app_request
+def padronizar_marca_sigeduc(response):
+    if (not request.path.startswith("/solucoes-digitais")
+            or response.status_code != 200
+            or response.direct_passthrough
+            or response.mimetype != "text/html"):
+        return response
+    html = response.get_data(as_text=True)
+    substituicoes = (
+        ("Instituto SIGEU Educacional", "Instituto SIGEduc"),
+        ("Instituto SIGEU", "Instituto SIGEduc"),
+        ("SiGEU Educacional", "Instituto SIGEduc"),
+        ("SIGEU Educacional", "Instituto SIGEduc"),
+        ("SIGEU EDUCACIONAL", "Instituto SIGEduc"),
+        ("SiGEU Educação", "Instituto SIGEduc"),
+        ("SIGEU Educação", "Instituto SIGEduc"),
+        ("SIGEU Soluções Digitais", "Instituto SIGEduc Soluções Digitais"),
+    )
+    for antigo, novo in substituicoes:
+        html = html.replace(antigo, novo)
+    import re
+    html = re.sub(r"\\bSIGEU\\b", "SIGEduc", html)
+    html = re.sub(r"\\bSiGEU\\b", "SIGEduc", html)
+    response.set_data(html)
+    response.headers.pop("ETag", None)
+    return response
