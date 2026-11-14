@@ -14490,7 +14490,7 @@ _BASE_PUBLICA = "https://sigeueducacional.com.br"
 
 _SERVICOS_PUBLICOS_SEO = {
     "projeto-arquitetura-tcc": {
-        "title": "Projeto final e TCC de Arquitetura | Mentoria técnica | SIGEU Educacional",
+        "title": "Projeto final e TCC de Arquitetura | Mentoria técnica | Instituto SIGEduc",
         "description": "Mentoria técnica para projeto final e TCC de Arquitetura e Urbanismo: metodologia, CAD/BIM, pranchas, memorial, apresentação e revisão acadêmica.",
         "keywords": "TCC arquitetura, projeto final arquitetura, projeto arquitetônico TCC, CAD TCC, BIM TCC, pranchas arquitetura, memorial descritivo, orientação TCC arquitetura",
         "breadcrumb": "Projeto final de Arquitetura", "kicker": "Arquitetura e Urbanismo",
@@ -14516,7 +14516,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "comprar-tcc": {
-        "title": "Comprar TCC? Veja apoio e orientação acadêmica para seu TCC | SIGEU",
+        "title": "Comprar TCC? Veja apoio e orientação acadêmica para seu TCC | SIGEduc",
         "description": "Procura por comprar TCC ou ajuda para fazer TCC? Conheça orientação, revisão, estruturação, metodologia, ABNT e apoio acadêmico responsável.",
         "keywords": "comprar TCC, venda de TCC, fazer TCC, ajuda TCC, orientação TCC, revisão TCC, ABNT TCC, consultoria acadêmica",
         "breadcrumb": "Apoio para TCC", "kicker": "TCC, artigo e trabalho final",
@@ -14526,7 +14526,7 @@ _SERVICOS_PUBLICOS_SEO = {
         "cta_title": "Precisa organizar seu TCC?", "cta_text": "Fale com a equipe e informe curso, tema, prazo e estágio atual do trabalho.",
         "section_title": "Apoio do início à entrega, sem substituir a autoria do estudante",
         "paragraphs": [
-            "Buscas por “comprar TCC” ou “venda de TCC” frequentemente misturam serviços muito diferentes. O atendimento do SIGEU é voltado a orientação, revisão, mentoria metodológica e suporte técnico para que o próprio estudante desenvolva seu trabalho.",
+            "Buscas por “comprar TCC” ou “venda de TCC” frequentemente misturam serviços muito diferentes. O atendimento do SIGEduc é voltado a orientação, revisão, mentoria metodológica e suporte técnico para que o próprio estudante desenvolva seu trabalho.",
             "O acompanhamento pode ser adaptado a graduação, especialização, mestrado, doutorado e ensino técnico, sempre respeitando o manual e as exigências da instituição do estudante."
         ],
         "cards": [
@@ -14542,7 +14542,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "projetos-de-extensao": {
-        "title": "Projetos de extensão universitária | Apoio e orientação | SIGEU Educacional",
+        "title": "Projetos de extensão universitária | Apoio e orientação | Instituto SIGEduc",
         "description": "Apoio para planejar projetos de extensão: diagnóstico, público, objetivos, atividades, cronograma, evidências, relatório e apresentação.",
         "keywords": "projeto de extensão, extensão universitária, atividades extensionistas, relatório de extensão, projeto integrador, curricularização da extensão",
         "breadcrumb": "Projetos de extensão", "kicker": "Extensão universitária",
@@ -14565,7 +14565,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "horas-complementares": {
-        "title": "Atividades extracurriculares e horas complementares | SIGEU Educacional",
+        "title": "Atividades extracurriculares e horas complementares | Instituto SIGEduc",
         "description": "Orientação para organizar atividades extracurriculares, horas complementares, documentação, relatórios e conferência das exigências acadêmicas.",
         "keywords": "horas complementares, atividades extracurriculares, atividades complementares faculdade, relatório horas complementares, AAC, documentação acadêmica",
         "breadcrumb": "Horas complementares", "kicker": "Atividades acadêmicas complementares",
@@ -14588,7 +14588,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "tcc-sem-inteligencia-artificial": {
-        "title": "TCC sem inteligência artificial | Orientação humana | SIGEU Educacional",
+        "title": "TCC sem inteligência artificial | Orientação humana | Instituto SIGEduc",
         "description": "Mentoria humana para TCC sem uso de inteligência artificial na produção do conteúdo: metodologia, pesquisa, revisão e acompanhamento acadêmico.",
         "keywords": "TCC sem inteligência artificial, TCC sem IA, orientação humana TCC, revisão humana, mentoria acadêmica, fazer TCC sem ChatGPT",
         "breadcrumb": "TCC sem inteligência artificial", "kicker": "Acompanhamento humano",
@@ -14611,7 +14611,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "software-app-preco-social": {
-        "title": "Precisa de software, sistema, aplicação ou app? Desenvolvimento com preço social | SIGEU",
+        "title": "Precisa de software, sistema, aplicação ou app? Desenvolvimento com preço social | SIGEduc",
         "description": "Apoio para encontrar solução de software, sistema web, aplicação, automação, API, site ou app com escopo claro e preço social.",
         "keywords": "desenvolvimento software preço social, criar aplicativo, criar sistema web, desenvolver app, software sob medida, automação, API, site, sistema acadêmico",
         "breadcrumb": "Software e aplicativos", "kicker": "Tecnologia e desenvolvimento",
@@ -14634,7 +14634,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "estagio-supervisionado": {
-        "title": "Estágio supervisionado | Organização, relatório e orientação | SIGEU Educacional",
+        "title": "Estágio supervisionado | Organização, relatório e orientação | Instituto SIGEduc",
         "description": "Apoio para organizar estágio supervisionado: plano de atividades, cronograma, registros, relatório, apresentação e documentação acadêmica.",
         "keywords": "estágio supervisionado, relatório de estágio, plano de estágio, estágio curricular, estágio obrigatório, relatório acadêmico de estágio",
         "breadcrumb": "Estágio supervisionado", "kicker": "Estágio e prática profissional",
@@ -14660,7 +14660,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "formacao-continuada": {
-        "title": "Formação continuada e capacitação profissional | SIGEU Educacional",
+        "title": "Formação continuada e capacitação profissional | Instituto SIGEduc",
         "description": "Formação continuada, capacitação e atualização profissional com planejamento de conteúdos, trilhas, oficinas, cursos e ações educacionais sob demanda.",
         "keywords": "formação continuada, capacitação profissional, atualização profissional, cursos livres, oficinas, formação de equipes, treinamento educacional",
         "breadcrumb": "Formação continuada", "kicker": "Capacitação e desenvolvimento",
@@ -14686,7 +14686,7 @@ _SERVICOS_PUBLICOS_SEO = {
         ]
     },
     "projeto-arquitetura-completo": {
-        "title": "Projeto de Arquitetura completo a partir de R$ 2.500 | SIGEU Educacional",
+        "title": "Projeto de Arquitetura completo a partir de R$ 2.500 | Instituto SIGEduc",
         "description": "Projeto de Arquitetura completo para demandas acadêmicas e projetos gerais, com escopo técnico definido e valor a partir de R$ 2.500.",
         "keywords": "projeto arquitetura completo, projeto arquitetônico 2500, projeto de arquitetura preço, projeto acadêmico arquitetura, TCC arquitetura, pranchas arquitetura, CAD BIM",
         "breadcrumb": "Projeto de Arquitetura completo", "kicker": "Arquitetura e representação técnica",
@@ -14720,12 +14720,12 @@ def _schema_servico_publico(slug, page):
     return {
         "@context": "https://schema.org",
         "@graph": [
-            {"@type":"Organization","@id":f"{_BASE_PUBLICA}/#organization","name":"Grupo Educacional Unificado / SIGEU Educacional","url":_BASE_PUBLICA,"logo":f"{_BASE_PUBLICA}/static/img/logo.png","contactPoint":{"@type":"ContactPoint","contactType":"customer service","telephone":"+55 21 99002-0262","availableLanguage":"Portuguese"}},
+            {"@type":"Organization","@id":f"{_BASE_PUBLICA}/#organization","name":"Instituto SIGEduc","alternateName":"SIGEU Educacional","url":_BASE_PUBLICA,"logo":f"{_BASE_PUBLICA}/static/img/instituto-sigeduc-marca.svg","contactPoint":{"@type":"ContactPoint","contactType":"customer service","telephone":"+55 21 99002-0262","availableLanguage":"Portuguese"}},
             {"@type":"WebPage","@id":canonical+"#webpage","url":canonical,"name":page["title"],"description":page["description"],"inLanguage":"pt-BR","isPartOf":{"@id":f"{_BASE_PUBLICA}/#website"},"about":{"@id":canonical+"#service"}},
-            {"@type":"WebSite","@id":f"{_BASE_PUBLICA}/#website","url":_BASE_PUBLICA,"name":"SIGEU Educacional","publisher":{"@id":f"{_BASE_PUBLICA}/#organization"},"inLanguage":"pt-BR"},
+            {"@type":"WebSite","@id":f"{_BASE_PUBLICA}/#website","url":_BASE_PUBLICA,"name":"Instituto SIGEduc","publisher":{"@id":f"{_BASE_PUBLICA}/#organization"},"inLanguage":"pt-BR"},
             {"@type":"Service","@id":canonical+"#service","name":page["h1"],"serviceType":page["breadcrumb"],"description":page["description"],"provider":{"@id":f"{_BASE_PUBLICA}/#organization"},"areaServed":{"@type":"Country","name":"Brasil"},"url":canonical},
             {"@type":"FAQPage","@id":canonical+"#faq","mainEntity":faqs},
-            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SIGEU Educacional","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":page["breadcrumb"],"item":canonical}]}
+            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Instituto SIGEduc","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":page["breadcrumb"],"item":canonical}]}
         ]
     }
 
@@ -14758,8 +14758,8 @@ def calcular_preco_tcc_publico():
         "@context":"https://schema.org",
         "@graph":[
             {"@type":"WebApplication","name":"Calculadora de apoio para TCC","url":f"{_BASE_PUBLICA}/calcular-preco-tcc","applicationCategory":"EducationalApplication","operatingSystem":"Web","description":"Calculadora de estimativa para orientação, revisão e apoio técnico acadêmico por nível e número de páginas."},
-            {"@type":"Organization","name":"Grupo Educacional Unificado / SIGEU Educacional","url":_BASE_PUBLICA,"telephone":"+55 21 99002-0262"},
-            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"SIGEU Educacional","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":"Calculadora de apoio para TCC","item":f"{_BASE_PUBLICA}/calcular-preco-tcc"}]}
+            {"@type":"Organization","name":"Grupo Educacional Unificado / Instituto SIGEduc","url":_BASE_PUBLICA,"telephone":"+55 21 99002-0262"},
+            {"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Instituto SIGEduc","item":_BASE_PUBLICA},{"@type":"ListItem","position":2,"name":"Calculadora de apoio para TCC","item":f"{_BASE_PUBLICA}/calcular-preco-tcc"}]}
         ]
     }
     return render_template("calculadora_apoio_tcc.html", schema=schema)
@@ -14776,7 +14776,7 @@ def sitemap_xml():
     ]
     paths.extend(f"/{slug}" for slug in SEO_PAGES if f"/{slug}" not in paths)
     urls = "".join(
-        f"<url><loc>{_BASE_PUBLICA}{path}</loc><lastmod>2026-09-11</lastmod><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
+        f"<url><loc>{_BASE_PUBLICA}{path}</loc><changefreq>{'weekly' if path != '/' else 'daily'}</changefreq><priority>{'1.0' if path == '/' else '0.7'}</priority></url>"
         for path in paths
     )
     xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
