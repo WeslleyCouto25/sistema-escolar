@@ -104,8 +104,8 @@ def padronizar_marca_sigeduc(response):
     for antigo, novo in substituicoes:
         html = html.replace(antigo, novo)
     import re
-    html = re.sub(r"\\bSIGEU\\b", "SIGEduc", html)
-    html = re.sub(r"\\bSiGEU\\b", "SIGEduc", html)
+    html = re.sub(r"\bSIGEU\b", "SIGEduc", html)
+    html = re.sub(r"\bSiGEU\b", "SIGEduc", html)
     response.set_data(html)
     response.headers.pop("ETag", None)
     return response
