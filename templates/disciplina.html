@@ -1265,7 +1265,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         }
       }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/course_editorial.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/course_editorial.css') }}?v=20261124-global2">
 </head>
 
 <body class="portal07 student-page disciplina-page">
@@ -1358,6 +1358,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </nav>
 
         <main class="content-area">
+            {% if editorial_concluida %}
+            <div class="chapter-actions"><a class="btn-prova btn-prova-secondary" href="{{ url_for('disciplina', disciplina_id=disciplina['id'], situacao=1) }}">Consultar situação acadêmica / avaliação final</a></div>
+            {% endif %}
             <!-- Progress Tracker -->
             <div class="progress-tracker">
                 {% for c in capitulos %}
@@ -1413,144 +1416,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </div>
                     </div>
 
-                    <div class="chapter-content{% if not editorial %} sigeu-legacy-content{% endif %}" id="content-{{ loop.index }}">
+                    <div class="chapter-content" id="content-{{ loop.index }}">
                         {% if editorial and cap_disponivel %}
                         {% set unit = editorial.units[cap_numero-1] %}
                         {% set study = editorial_progress[cap_numero] %}
                         {% include "student/_editorial_chapter.html" %}
-                        {% elif not editorial %}
-                        {% if c['video_url'] or c['pdf_url'] %}
-                        <div class="learning-objectives">
-                            <h5><i class="fas fa-bullseye"></i> Objetivos de Aprendizagem</h5>
-                            <ul>
-                                <li>Compreender os conceitos fundamentais e teóricos apresentados</li>
-                                <li>Aplicar o conhecimento em situações práticas contextuais</li>
-                                <li>Desenvolver habilidades de análise crítica</li>
-                                <li>Preparar-se para a avaliação do capítulo</li>
-                            </ul>
-                        </div>
-
-                        <div class="content-grid">
-                            {% if c['video_url'] %}
-                            <div class="content-section">
-                                <h4 class="section-title">
-                                    <i class="fas fa-video" style="color: #FF0000;"></i> Vídeo Aula
-                                </h4>
-                                <p style="color: var(--gray-600); margin-bottom: 15px;">Assista à explicação
-                                    detalhada dos conceitos:</p>
-
-                                {% if 'drive.google.com' in c['video_url'] %}
-                                <!-- Google Drive -->
-                                {% set drive_url = c['video_url'].replace('/view', '/preview').replace('/edit',
-                                '/preview') %}
-                                <div class="video-wrapper">
-                                    <iframe src="{{ drive_url }}" frameborder="0" allow="autoplay; encrypted-media"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                                {% elif 'youtube.com' in c['video_url'] %}
-                                <!-- YouTube -->
-                                {% if 'youtube.com/watch?v=' in c['video_url'] %}
-                                {% set video_id = c['video_url'].split('v=')[1].split('&')[0] %}
-                                <div class="video-wrapper">
-                                    <iframe src="https://www.youtube.com/embed/{{ video_id }}" frameborder="0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                                {% elif 'youtube.com/embed/' in c['video_url'] %}
-                                <div class="video-wrapper">
-                                    <iframe src="{{ c['video_url'] }}" frameborder="0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                        allowfullscreen>
-                                    </iframe>
-                                </div>
-                                {% endif %}
-                                {% elif c['video_url'] and (
-                                '.mp4' in c['video_url'] or
-                                '.webm' in c['video_url'] or
-                                '.mov' in c['video_url']
-                                ) %}
-                                <div class="video-wrapper">
-                                    <video class="secure-video" controls controlsList="nodownload" preload="metadata"
-                                        style="width:100%; height:100%; border-radius:12px;">
-                                        <source src="{{ c['video_url'] }}" type="video/mp4">
-                                        Seu navegador não suporta vídeo HTML5.
-                                    </video>
-                                </div>
-                                {% else %}
-                                <div class="video-unavailable">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    <h3>Vídeo indisponível</h3>
-                                    <p>O vídeo desta aula não pôde ser carregado.</p>
-                                </div>
-
-                                {% endif %}
-
-
-                                <div style="margin-top: 15px;">
-                                    <span class="resource-badge">
-                                        <i class="fas fa-clock"></i> Duração: 4H/aula
-                                    </span>
-                                    <span class="resource-badge">
-                                        <i class="fas fa-graduation-cap"></i> Nível: Intermediário
-                                    </span>
-                                </div>
-                            </div>
-                            {% endif %}
-
-                            {% if c['pdf_url'] %}
-                            <div class="content-section">
-                                <h4 class="section-title">
-                                    <i class="fas fa-file-pdf" style="color: #FF6B6B;"></i> Material Didático-Pedagógico
-                                </h4>
-                                <p style="color: var(--gray-600); margin-bottom: 15px;">Estude o material teórico
-                                    para aprofundar seu conhecimento:</p>
-
-                                <div class="pdf-wrapper">
-                                    <iframe src="{{ c['pdf_url'] }}#toolbar=0" width="100%" height="600px">
-                                        <p>Seu navegador não suporta visualização de PDFs.
-                                            <a href="{{ c['pdf_url'] }}" target="_blank" class="btn btn-primary">
-                                                <i class="fas fa-download"></i> Baixar PDF
-                                            </a>
-                                        </p>
-                                    </iframe>
-                                </div>
-
-                                <div style="margin-top: 15px;">
-                                    <span class="resource-badge">
-                                        <i class="fas fa-file-alt"></i> Formato: PDF
-                                    </span>
-                                    <span class="resource-badge">
-                                        <i class="fas fa-book-open"></i> Material Disciplinar | Horas: 20H/leitura
-                                    </span>
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-
-                        <div class="chapter-actions">
-                            {% if c['prova_id'] %}
-                            <a class="btn-prova btn-prova-primary"
-                                href="/instrucoes/{{ disciplina['id'] }}/{{ loop.index }}">
-                                <i class="fas fa-clipboard-check"></i> Iniciar Prova (Capítulo {{ loop.index }})
-                            </a>
-                            <a href="#chapter-{{ loop.index + 1 if not loop.last else '1' }}"
-                                class="btn-prova btn-prova-secondary">
-                                <i class="fas fa-arrow-right"></i> {% if loop.last %}Revisar{% else %}Próximo Capítulo{%
-                                endif %}
-                            </a>
-                            {% else %}
-                            <div
-                                style="text-align: center; width: 100%; padding: 20px; background: var(--gray-50); border-radius: var(--radius-md);">
-                                <i class="fas fa-info-circle"
-                                    style="color: var(--gray-500); font-size: 1.5rem; margin-bottom: 10px;"></i>
-                                <p style="color: var(--gray-600); margin: 0;">Prova disponível em breve para este
-                                    capítulo.</p>
-                            </div>
-                            {% endif %}
-                        </div>
                         {% endif %}
                     </div>
                 </div>
@@ -1644,7 +1514,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         // Open first chapter by default if it's not blocked
         document.addEventListener('DOMContentLoaded', function () {
             // Check if first chapter is not blocked
-            const firstChapterCard = document.querySelector('.chapter-card:not(.blocked-chapter)');
+            const preferred = document.querySelector('#chapter-{{ editorial_current or 1 }} .chapter-card:not(.blocked-chapter)');
+            const firstChapterCard = preferred || document.querySelector('.chapter-card:not(.blocked-chapter)');
             if (firstChapterCard) {
                 const chapterNumber = firstChapterCard.closest('.chapter-container').id.replace('chapter-', '');
                 toggleChapter(chapterNumber);
@@ -1724,7 +1595,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         });
     </script>
 <script defer src="{{ url_for('static', filename='js/student_campus_2026.js') }}?v=20261111a"></script>
-<script defer src="{{ url_for('static', filename='js/course_editorial.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/course_editorial.js') }}?v=20261124-global2"></script>
 </body>
 
 </html>
