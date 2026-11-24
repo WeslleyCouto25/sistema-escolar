@@ -67,7 +67,7 @@ class GlobalEditorialTests(unittest.TestCase):
         self.env.parse(fragment)
         self.assertIn('include "student/_editorial_chapter.html"',fragment)
         self.assertNotIn("<footer",fragment)
-        self.assertNotIn("<nav class=\"sidebar\"",fragment)
+        self.assertNotIn('<nav class="sidebar"',fragment)
         self.assertNotIn("sigeu-legacy-content",text)
         self.assertNotIn('elif not editorial',text)
 
