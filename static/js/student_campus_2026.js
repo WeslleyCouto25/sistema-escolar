@@ -98,7 +98,7 @@
           const destination = href;
           closeModal();
           if (window.SigeuDashboardCourse) window.SigeuDashboardCourse.open(destination);
-          else showCourseAccess(destination, courseId);
+          else window.alert('Não foi possível abrir o painel da disciplina. Atualize o Dashboard.');
         }, {once:true});
       } else {
         proceed.hidden = true;
