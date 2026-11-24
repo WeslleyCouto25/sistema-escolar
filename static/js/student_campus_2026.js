@@ -97,7 +97,8 @@
         proceed.addEventListener("click", () => {
           const destination = href;
           closeModal();
-          window.location.assign(destination);
+          if (window.SigeuDashboardCourse) window.SigeuDashboardCourse.open(destination);
+          else window.alert('Não foi possível abrir o painel da disciplina. Atualize o Dashboard.');
         }, {once:true});
       } else {
         proceed.hidden = true;

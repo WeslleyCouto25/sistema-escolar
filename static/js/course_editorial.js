@@ -1,8 +1,21 @@
 /* Somente o componente editorial da disciplina; não interfere na navegação do portal. */
 (() => {
   'use strict';
-  const articles = [...document.querySelectorAll('.sigeu-editorial')];
+  let dispose = null;
+  function mount(root = document) {
+  if (dispose) dispose();
+  const articles = [...root.querySelectorAll('.sigeu-editorial')];
   if (!articles.length) return;
+  const lifetime = new AbortController();
+  const cleanups = [];
+  const signal = lifetime.signal;
+  dispose = () => {
+    lifetime.abort();
+    cleanups.forEach(fn => fn());
+    articles.forEach(a => a.querySelectorAll('video').forEach(v => v.pause()));
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    dispose = null;
+  };
   const states = new Map();
   const fmt = s => String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
   const feedback = (block, message) => {
@@ -52,10 +65,11 @@
   function requestEvent(article, payload) {
     const state = states.get(article);
     const job = async () => {
+      if (signal.aborted) throw new Error('Percurso fechado.');
       const response = await fetch(article.dataset.endpoint, {
         method:'POST', credentials:'same-origin', cache:'no-store',
         headers:{'Content-Type':'application/json','X-Editorial-Token':article.dataset.token,'Accept':'application/json'},
-        body:JSON.stringify(payload)
+        body:JSON.stringify(payload), signal
       });
       if (!response.ok) throw new Error('Não foi possível registrar o progresso. Atualize a página ou entre em contato com o suporte.');
       const data = await response.json();
@@ -134,8 +148,10 @@
       draw();feedback(block,'✓ ' + pairs.size + ' de ' + left.length + ' associações corretas.');
       if (pairs.size === left.length) complete(article,block);
     }));
-    if ('ResizeObserver' in window) new ResizeObserver(draw).observe(graph);
-    window.addEventListener('resize',draw,{passive:true});
+    if ('ResizeObserver' in window) {
+      const resize = new ResizeObserver(draw); resize.observe(graph); cleanups.push(() => resize.disconnect());
+    }
+    window.addEventListener('resize',draw,{passive:true,signal});
   }
   function bindDeck(block) {
     const deck=block.querySelector('[data-deck]');
@@ -147,7 +163,8 @@
     deck.querySelector('.se-prev').onclick=()=>{stop();show(index-1);};
     deck.querySelector('.se-next').onclick=()=>{stop();show(index+1);};
     play.onclick=()=>{if(timer){stop();return;}play.textContent='Pausar';timer=setInterval(()=>{if(!deck.getClientRects().length || document.hidden){stop();return;}if(index===frames.length-1){stop();return;}show(index+1);},6500);};
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();},{signal});
+    cleanups.push(stop);
   }
   function bindLab(block) {
     const inputs=[...block.querySelectorAll('.se-lab-input')];
@@ -214,7 +231,7 @@
     video.addEventListener('play',()=>{lastInteraction=Date.now();});
   }
   let lastInteraction=Date.now(), activeArticle=null;
-  ['pointerdown','keydown','scroll','touchstart'].forEach(name=>document.addEventListener(name,()=>{lastInteraction=Date.now();},{passive:true}));
+  ['pointerdown','keydown','scroll','touchstart'].forEach(name=>document.addEventListener(name,()=>{lastInteraction=Date.now();},{passive:true,signal}));
   articles.forEach(article=>{
     let done=[];try{done=JSON.parse(article.dataset.done||'[]');}catch(_){}
     states.set(article,{done:new Set(done),seconds:Number(article.dataset.seconds)||0,pending:new Set(),queue:Promise.resolve()});
@@ -232,7 +249,7 @@
     renderProgress(article);
   });
   function currentArticle(){
-    if(document.hidden)return null;
+    if(document.hidden || signal.aborted)return null;
     const visible=articles.filter(a=>{const r=a.getBoundingClientRect();return a.getClientRects().length && r.bottom>100 && r.top<window.innerHeight-40;});
     if(!visible.length)return null;
     const middle=window.innerHeight*.45;
@@ -249,11 +266,16 @@
     activeArticle=article;
     requestEvent(article,{event}).catch(()=>{activeArticle=null;});
   }
-  document.addEventListener('visibilitychange',()=>{activeArticle=null;if(!document.hidden)tick();});
-  window.addEventListener('pagehide',()=>{activeArticle=null;if('speechSynthesis' in window)speechSynthesis.cancel();});
-  setInterval(tick,15000);tick();
+  document.addEventListener('visibilitychange',()=>{activeArticle=null;if(!document.hidden)tick();},{signal});
+  window.addEventListener('pagehide',()=>{activeArticle=null;if('speechSynthesis' in window)speechSynthesis.cancel();},{signal});
+  const interval=setInterval(tick,15000);cleanups.push(()=>clearInterval(interval));tick();
   if('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches){
     const observer=new IntersectionObserver(entries=>entries.forEach(entry=>entry.target.classList.toggle('is-visible',entry.isIntersecting)),{threshold:0.01});
     articles.forEach(a=>a.querySelectorAll('.se-block').forEach(block=>{block.classList.add('se-reveal');observer.observe(block);}));
+    cleanups.push(()=>observer.disconnect());
   }
+  }
+  window.SigeuEditorial = {mount, unmount:()=>{if(dispose)dispose();}};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>mount(document),{once:true});
+  else mount(document);
 })();

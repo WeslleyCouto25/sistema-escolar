@@ -9,6 +9,9 @@ on:
       - 'templates/**'
       - 'static/css/course_editorial.css'
       - 'static/js/course_editorial.js'
+      - 'static/js/dashboard_course.js'
+      - 'static/js/student_campus_2026.js'
+      - 'static/css/dashboard_course.css'
       - 'tests/test_course_editorial*.py'
       - '.github/workflows/course-editorial.yml'
 jobs:
@@ -23,3 +26,5 @@ jobs:
       - run: python -m py_compile app.py migrate.py course_editorial.py course_editorial_global.py course_editorial_smoke.py
       - run: python -m unittest discover -s tests -p 'test_course_editorial*.py' -v
       - run: node --check static/js/course_editorial.js
+      - run: node --check static/js/dashboard_course.js
+      - run: node --check static/js/student_campus_2026.js

@@ -1932,8 +1932,10 @@ def disciplina(disciplina_id):
         app.logger.info("SIGEU EDITORIAL disciplina=%s modo=%s capitulos=%s liberados=%s", disciplina_id, editorial["mode"], len(capitulos), len(editorial_open))
     conn.close()
 
-    return render_template(
-        "disciplina.html",
+    # O fragmento usa a mesma rota e todos os guardas de matrícula e pagamento.
+    embedded = request.args.get("embedded") == "1"
+    response = app.make_response(render_template(
+        "student/_course_view.html" if embedded else "disciplina.html",
         disciplina=disciplina,
         capitulos=capitulos,
         capitulos_liberados=capitulos_liberados,
@@ -1946,7 +1948,11 @@ def disciplina(disciplina_id):
         editorial_token=editorial_token,
         editorial_emphasis=course_editorial.emphasis,
         editorial_concluida=concluida
-    )
+    ))
+    response.headers["Cache-Control"] = "private, no-store"
+    if embedded:
+        response.headers["X-SIGEU-Course-Fragment"] = "1"
+    return response
 
 @app.route("/disciplina/<int:disciplina_id>/plano-ensino")
 def plano_ensino_privado(disciplina_id):

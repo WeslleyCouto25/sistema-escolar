@@ -1358,85 +1358,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </nav>
 
         <main class="content-area">
-            {% if editorial_concluida %}
-            <div class="chapter-actions"><a class="btn-prova btn-prova-secondary" href="{{ url_for('disciplina', disciplina_id=disciplina['id'], situacao=1) }}">Consultar situação acadêmica / avaliação final</a></div>
-            {% endif %}
-            <!-- Progress Tracker -->
-            <div class="progress-tracker">
-                {% for c in capitulos %}
-                <div class="progress-step {% if editorial %}{% if loop.index in editorial_graded %}completed{% elif loop.index == editorial_current %}current{% endif %}{% else %}{% if loop.index == 1 %}current{% else %}{% if loop.previtem %}completed{% endif %}{% endif %}{% endif %}"
-                    id="step-{{ loop.index }}">
-                    <div class="step-icon">
-                        {% if editorial %}
-                        {% if loop.index in editorial_graded %}<i class="fas fa-check"></i>{% elif loop.index == editorial_current %}<i class="fas fa-play"></i>{% elif loop.index not in editorial_open %}<i class="fas fa-lock"></i>{% else %}{{ loop.index }}{% endif %}
-                        {% elif loop.index == 1 %}
-                        <i class="fas fa-play"></i>
-                        {% elif loop.previtem %}
-                        <i class="fas fa-check"></i>
-                        {% else %}
-                        {{ loop.index }}
-                        {% endif %}
-                    </div>
-                    <div class="step-label">Capítulo {{ loop.index }}</div>
-                    {% if not loop.last %}
-                    <div class="progress-line {% if editorial %}{% if loop.index in editorial_graded %}completed{% endif %}{% elif loop.previtem %}completed{% endif %}"></div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Chapters Content -->
-            {% set dias_liberacao = [3, 6, 9, 12] %}
-            {% set capitulos_liberados = capitulos_liberados|default(0) %}
-
-            {% if capitulos %}
-            {% for c in capitulos %}
-            {% set cap_numero = loop.index %}
-            {% set cap_disponivel = cap_numero <= capitulos_liberados and (not editorial or cap_numero in editorial_open) %}
-            <div class="chapter-container" id="chapter-{{ loop.index }}">
-                <div class="chapter-card {% if not cap_disponivel %}blocked-chapter{% endif %}">
-                    {% if not cap_disponivel %}
-                    <div class="blocked-overlay">
-                        <i class="fas fa-lock"></i>
-                        {% if editorial and cap_numero <= capitulos_liberados %}<p>Realize a prova da unidade anterior para liberar este capítulo.</p>{% else %}<p>Disponível em {{ dias_liberacao[loop.index0] }} dias após o início da disciplina</p>{% endif %}
-                    </div>
-                    {% endif %}
-
-                    <div class="chapter-number">{{ loop.index }}</div>
-
-                    <div class="chapter-header"
-                        onclick="{% if cap_disponivel %}toggleChapter({{ loop.index }}){% endif %}">
-                        <div class="chapter-title">
-                            <h3><i class="fas fa-bookmark" style="color: var(--secondary); margin-right: 10px;"></i>
-                                Capítulo {{ loop.index }}: {{ c['titulo'] }}</h3>
-                            <p class="chapter-subtitle">Clique para expandir e acessar os materiais deste capítulo</p>
-                        </div>
-                        <div class="chapter-toggle" id="toggle-{{ loop.index }}">
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                    </div>
-
-                    <div class="chapter-content" id="content-{{ loop.index }}">
-                        {% if editorial and cap_disponivel %}
-                        {% set unit = editorial.units[cap_numero-1] %}
-                        {% set study = editorial_progress[cap_numero] %}
-                        {% include "student/_editorial_chapter.html" %}
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <div class="empty-state">
-                <i class="fas fa-book-open"></i>
-                <h3>Nenhum capítulo disponível</h3>
-                <p>Esta disciplina ainda não possui conteúdo publicado. Entre em contato com o administrador para mais
-                    informações.</p>
-                <a href="/dashboard" class="btn btn-primary">
-                    <i class="fas fa-arrow-left"></i> Voltar ao Dashboard
-                </a>
-            </div>
-            {% endif %}
+            {% include "student/_course_view.html" %}
 
             <!-- Footer -->
             <footer>
@@ -1501,6 +1423,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
             content.classList.toggle('show');
             toggle.classList.toggle('rotated');
+            content.closest('.chapter-card').querySelector('[data-course-chapter]').setAttribute('aria-expanded', String(content.classList.contains('show')));
 
             // Update progress tracker
             if (content.classList.contains('show')) {
@@ -1513,6 +1436,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
         // Open first chapter by default if it's not blocked
         document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('[data-course-chapter]').forEach(header => {
+                const activate = () => { if (header.getAttribute('aria-disabled') !== 'true') toggleChapter(header.dataset.courseChapter); };
+                header.addEventListener('click', activate);
+                header.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); } });
+            });
             // Check if first chapter is not blocked
             const preferred = document.querySelector('#chapter-{{ editorial_current or 1 }} .chapter-card:not(.blocked-chapter)');
             const firstChapterCard = preferred || document.querySelector('.chapter-card:not(.blocked-chapter)');

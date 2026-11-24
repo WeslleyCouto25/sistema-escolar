@@ -1,5 +1,5 @@
 /* Área interna da disciplina. Nenhum seletor modifica topbar, sidebar, hero ou rodapé. */
-body.portal07.student-page.disciplina-page .sigeu-editorial {
+body.portal07.student-page .sigeu-editorial {
  --se-ink:var(--curso-texto,#263747);--se-deep:var(--curso-marinho,#153852);
  --se-accent:var(--curso-petroleo,#256879);--se-gold:var(--curso-dourado,#bd9457);
  --se-line:var(--curso-borda,#d7e2e8);--se-ok:#2d6a62;
@@ -11,7 +11,7 @@ body.portal07.student-page.disciplina-page .sigeu-editorial {
 .sigeu-editorial .se-column{max-width:900px;margin-inline:auto;padding:clamp(16px,3.8vw,46px);width:100%;min-width:0}
 .sigeu-editorial .se-unit-header{padding:24px 0 28px;border-bottom:2px solid var(--se-accent);margin:0 0 22px;background:linear-gradient(120deg,#edf5f6 0%,#fff 75%);position:relative}
 .sigeu-editorial .se-kicker{color:var(--se-accent);font-size:11px;line-height:1.45;letter-spacing:.09em;font-weight:750;text-transform:uppercase}
-body.portal07.student-page.disciplina-page .sigeu-editorial h2,body.portal07.student-page.disciplina-page .sigeu-editorial h3,body.portal07.student-page.disciplina-page .sigeu-editorial h4 {
+body.portal07.student-page .sigeu-editorial h2,body.portal07.student-page .sigeu-editorial h3,body.portal07.student-page .sigeu-editorial h4 {
  color:var(--se-deep)!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;letter-spacing:-.018em;line-height:1.25;
 }
 .sigeu-editorial h2{font-size:clamp(24px,3vw,34px);margin:12px 0 10px!important;font-weight:750}
@@ -50,7 +50,7 @@ body.portal07.student-page.disciplina-page .sigeu-editorial h2,body.portal07.stu
 .sigeu-editorial .se-frame{aspect-ratio:16/9;min-height:170px;background:#153852;color:#fff;position:relative;overflow:hidden;display:grid;align-items:center;padding:7%;border-bottom:4px solid var(--se-gold)}
 .sigeu-editorial .se-frame-number{position:absolute;left:7%;top:7%;font-size:10px;letter-spacing:.13em;color:#d4e7ec}
 .sigeu-editorial .se-frame-content{max-width:72%;position:relative;z-index:1}
-body.portal07.student-page.disciplina-page .sigeu-editorial .se-frame h4{font-size:clamp(17px,3vw,30px);color:#fff!important;margin:0 0 13px!important}
+body.portal07.student-page .sigeu-editorial .se-frame h4{font-size:clamp(17px,3vw,30px);color:#fff!important;margin:0 0 13px!important}
 .sigeu-editorial .se-frame p{color:#e2eef2;font-size:clamp(12px,1.6vw,17px);line-height:1.5;margin:0}
 .sigeu-editorial .se-frame-art{position:absolute;right:3%;bottom:9%;width:27%;color:#9ac6ce;opacity:.65}
 .sigeu-editorial .se-deck-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 0}
