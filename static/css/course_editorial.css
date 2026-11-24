@@ -121,3 +121,10 @@ body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content
 body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .learning-objectives{max-width:900px;margin:20px auto}
 body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .content-section{width:100%;min-width:0;max-width:900px;border-radius:2px!important}
 body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .video-wrapper,body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .pdf-wrapper{border-radius:0!important}
+
+/* Reprodutores e revisão do material existente no padrão universal. */
+.sigeu-editorial .se-external-video{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:0!important;background:#102739}
+.sigeu-editorial .se-study-check-row{display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px}
+.sigeu-editorial .se-study-check{width:18px;height:18px;accent-color:var(--se-accent);flex-shrink:0}
+.sigeu-editorial .se-existing_video .se-mark{margin-top:12px}
+.sigeu-editorial .se-pending_content,.sigeu-editorial .se-pending_complement{border-left:2px solid var(--se-line);padding-left:14px}
