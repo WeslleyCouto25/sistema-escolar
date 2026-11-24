@@ -10,7 +10,8 @@
             <p>{{ unit.subtitle }}</p>
         </header>
         <div class="se-studybar" aria-label="Acompanhamento do estudo">
-            <div><b class="se-completed-count">0</b> / {{ unit.blocks|selectattr('required')|list|length }} recursos obrigatórios</div>
+            {% set tracked = unit.blocks|selectattr('required')|list + unit.blocks|selectattr('track','defined')|selectattr('track')|rejectattr('required')|list %}
+            <div><b class="se-completed-count">0</b> / {{ tracked|length }} recursos acompanhados</div>
             <div>Tempo registrado <b class="se-time">00:00</b> / 10:00</div>
             <div class="se-meter" role="progressbar" aria-label="Recursos concluídos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
             <small>O tempo contabilizado tem limite de dez minutos. A leitura pode continuar livremente.</small>
@@ -22,9 +23,9 @@
         </nav>
         {% for block in unit.blocks %}
         {% set bid = 'se-' ~ unit.number ~ '-' ~ block.id %}
-        <section id="{{ bid }}" class="se-block se-{{ block.type }}" data-resource="{{ block.id }}" data-kind="{{ block.type }}" data-required="{{ '1' if block.required else '0' }}">
+        <section id="{{ bid }}" class="se-block se-{{ block.type }}" data-resource="{{ block.id }}" data-kind="{{ block.type }}" data-required="{{ '1' if block.required else '0' }}" data-track="{{ '1' if block.required or block.get('track',false) else '0' }}">
             <div class="se-section-heading">
-                <div class="se-kicker">{{ '%02d'|format(loop.index) }} / {{ {'reading':'Leitura acadêmica','video':'Videoaula principal','slides':'Apresentação complementar','optional_video':'Videoaula complementar','book':'Biblioteca','audio':'Áudio','references':'Bibliografia','diagram':'Figura técnica','graph':'Atividade de associação','lab':'Laboratório','diary':'Simulação','matrix':'Atlas conceitual','classify':'Classificação','quiz':'Exercícios','scenario':'Estudo de caso','order':'Sequenciamento','reflection':'Reflexão'}.get(block.type, 'Recurso') }}</div>
+                <div class="se-kicker">{{ '%02d'|format(loop.index) }} / {{ {'reading':'Leitura acadêmica','source_reading':'Leitura da apostila','existing_video':'Videoaula principal','existing_book':'Biblioteca','pending_content':'Material acadêmico','pending_complement':'Complemento','study_check':'Revisão','video':'Videoaula principal','slides':'Apresentação complementar','optional_video':'Videoaula complementar','book':'Biblioteca','audio':'Áudio','references':'Bibliografia','diagram':'Figura técnica','graph':'Atividade de associação','lab':'Laboratório','diary':'Simulação','matrix':'Atlas conceitual','classify':'Classificação','quiz':'Exercícios','scenario':'Estudo de caso','order':'Sequenciamento','reflection':'Reflexão'}.get(block.type, 'Recurso') }}</div>
                 <span class="se-state" aria-live="polite">{{ 'Obrigatório' if block.required else 'Opcional' }}</span>
             </div>
             <h3>{{ block.title }}</h3>
@@ -34,6 +35,39 @@
                 <p class="se-body">{% for segment, strong in editorial_emphasis(paragraph.body) %}{% if strong %}<strong>{{ segment }}</strong>{% else %}{{ segment }}{% endif %}{% endfor %}</p>
                 {% endfor %}
                 <button type="button" class="se-button se-mark">Concluir leitura <span aria-hidden="true">✓</span></button>
+            {% elif block.type == 'source_reading' %}
+                {% for paragraph in block.paragraphs %}
+                <p class="se-body">{% for segment, strong in editorial_emphasis(paragraph) %}{% if strong %}<strong>{{ segment }}</strong>{% else %}{{ segment }}{% endif %}{% endfor %}</p>
+                {% endfor %}
+                <p class="se-caption">Fonte: {{ block.source }}</p>
+                <button type="button" class="se-button se-mark">Concluir leitura ✓</button>
+            {% elif block.type == 'existing_video' %}
+                {% if block.url and block.media_kind == 'file' %}
+                <video controls preload="metadata" playsinline><source src="{{ block.url }}">Seu navegador não suporta a reprodução deste vídeo.</video>
+                <a class="se-media-link" href="{{ block.url }}" target="_blank" rel="noopener noreferrer">Abrir vídeo em outra aba</a>
+                <button type="button" class="se-button se-mark">Registrar visualização ✓</button>
+                {% elif block.url and block.media_kind == 'iframe' %}
+                <iframe class="se-external-video" src="{{ block.url }}" title="{{ block.title }}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                <a class="se-media-link" href="{{ block.url }}" target="_blank" rel="noopener noreferrer">Abrir vídeo em outra aba</a>
+                <button type="button" class="se-button se-mark">Registrar visualização ✓</button>
+                {% elif block.url %}
+                <a class="se-button" href="{{ block.url }}" target="_blank" rel="noopener noreferrer">Abrir videoaula cadastrada</a>
+                <button type="button" class="se-button se-mark">Registrar visualização ✓</button>
+                {% else %}
+                <p class="se-caption">A videoaula ainda não está cadastrada. Consulte os demais materiais; a ausência deste vídeo não impede a avaliação.</p>
+                {% endif %}
+            {% elif block.type == 'existing_book' %}
+                {% if block.url %}
+                <div class="se-library"><i class="fas fa-file-pdf" aria-hidden="true"></i><div><b>Material didático da unidade</b><p>Arquivo cadastrado no SIGEU.</p></div><a class="se-button" href="{{ block.url }}" target="_blank" rel="noopener noreferrer">Abrir PDF / material</a></div>
+                {% else %}<p class="se-caption">Material ainda não cadastrado.</p>{% endif %}
+            {% elif block.type == 'pending_content' %}
+                <p class="se-caption">O material de leitura expandida desta unidade ainda não foi publicado. Utilize o material didático e a videoaula cadastrados.</p>
+            {% elif block.type == 'pending_complement' %}
+                <p class="se-caption">Espaço reservado para videoaula ou apresentação complementar. Este recurso é opcional.</p>
+            {% elif block.type == 'study_check' %}
+                <p class="se-caption">Revisão individual com base no material da unidade.</p>
+                {% for prompt in block.prompts %}<label class="se-study-check-row"><input type="checkbox" class="se-study-check"> {{ prompt }}</label>{% endfor %}
+                <button type="button" class="se-button se-check-study">Registrar revisão</button><p class="se-feedback" role="status"></p>
             {% elif block.type == 'video' %}
                 <p class="se-caption">Assista à videoaula principal. A conclusão é registrada após assistir a pelo menos 90% do vídeo; os conteúdos complementares não bloqueiam a prova.</p>
                 <video class="se-main-video" controls preload="metadata" playsinline controlsList="nodownload" data-required-video="1">
@@ -138,7 +172,8 @@
                 <a class="se-button" href="{{ url_for('resultado_prova', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}">Consultar resultado</a>
             {% elif c.prova_id %}
                 <p class="se-proof-status" aria-live="polite">Conclua os recursos obrigatórios para liberar a prova.</p>
-                <a class="se-button se-proof-link" href="{{ url_for('instrucoes_prova', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}" aria-disabled="true" hidden>Iniciar prova do capítulo {{ unit.number }} →</a>
+                {% set has_required = unit.blocks|selectattr('required')|list|length > 0 %}
+                <a class="se-button se-proof-link" href="{{ url_for('instrucoes_prova', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}" aria-disabled="{{ 'true' if has_required else 'false' }}" {% if has_required %}hidden{% endif %}>Iniciar prova do capítulo {{ unit.number }} →</a>
             {% else %}<p>A prova ainda não foi cadastrada.</p>{% endif %}
             <p class="se-caption">A unidade seguinte exige a prova anterior realizada e a liberação do calendário acadêmico. Os dois complementos são opcionais.</p>
         </div>
