@@ -1,0 +1,24 @@
+name: Conteúdo editorial SIGEU
+on:
+  pull_request:
+    paths:
+      - 'course_editorial.py'
+      - 'course_content/**'
+      - 'app.py'
+      - 'templates/**'
+      - 'static/css/course_editorial.css'
+      - 'static/js/course_editorial.js'
+      - 'tests/test_course_editorial.py'
+      - '.github/workflows/course-editorial.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install Jinja2
+      - run: python -m py_compile app.py course_editorial.py
+      - run: python -m unittest discover -s tests -p test_course_editorial.py -v
+      - run: node --check static/js/course_editorial.js
