@@ -1091,6 +1091,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 }
 </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/student_campus_2026.css') }}?v=20261111b">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/course_editorial.css') }}?v=20261124-dashboard1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard_course.css') }}?v=20261124-dashboard1">
 </head>
 
 <body class="portal07 student-page dashboard-page">
@@ -1121,7 +1123,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     <i class="fas fa-user-graduate"></i>
                 </div>
                 <div class="profile-text">
-                    <div class="name">{{ aluno_nome }}</div>
+                    <div class="name" title="{{ aluno_nome }}">{{ aluno_nome }}</div>
                     <div class="ra">RA: {{ aluno_ra }}</div>
                 </div>
             </div>
@@ -1200,6 +1202,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         </nav>
 
         <main class="content-area">
+            <div id="sigeu-course-panel" hidden aria-live="off"></div>
             <!-- SEÇÃO: DASHBOARD -->
             <div class="content-section active" id="dashboard-section">
                 <section class="sigeu-campus-hero" aria-labelledby="sigeu-hero-heading">
@@ -1898,7 +1901,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
 
     // Função principal de navegação
     window.showSection = function(sectionId) {
-        const sections = document.querySelectorAll('.content-section');
+        if (window.SigeuDashboardCourse) window.SigeuDashboardCourse.close();
+        const sections = document.querySelectorAll('main.content-area > .content-section');
         const menuItems = document.querySelectorAll('.section-menu-item');
         
         sections.forEach(section => section.classList.remove('active'));
@@ -2126,7 +2130,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                 e.preventDefault();
                 const disciplinaId = href.split('/')[2];
                 verificarAntesDeAcessar(disciplinaId, function () {
-                    window.location.href = href;
+                    if (window.SigeuDashboardCourse) window.SigeuDashboardCourse.open(href);
                 });
             }
         }
@@ -2196,7 +2200,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
   document.addEventListener('DOMContentLoaded',async()=>{try{const r=await fetch('/api/avisos-academicos',{headers:{'X-Requested-With':'XMLHttpRequest'}});if(!r.ok)return;const d=await r.json();fila=Array.isArray(d.avisos)?d.avisos:[];mostrarProximo()}catch(e){console.warn('Avisos acadêmicos indisponíveis',e)}});
 })();
 </script>
-<script defer src="{{ url_for('static', filename='js/student_campus_2026.js') }}?v=20261111a"></script>
+<script defer src="{{ url_for('static', filename='js/student_campus_2026.js') }}?v=20261124-dashboard1"></script>
+<script defer src="{{ url_for('static', filename='js/course_editorial.js') }}?v=20261124-dashboard1"></script>
+<script defer src="{{ url_for('static', filename='js/dashboard_course.js') }}?v=20261124-dashboard1"></script>
 </body>
 
 </html>
