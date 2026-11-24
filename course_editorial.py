@@ -88,8 +88,8 @@ def read_progress(cur, aluno_id, disciplina_id, chapters, version):
 
 def validate_completion(unit, resource, fraction=None):
     block = next((b for b in unit["blocks"] if b["id"] == resource), None)
-    if not block or not block["required"]:
-        raise ValueError("Recurso inválido ou opcional.")
+    if not block or not (block["required"] or block.get("track", False)):
+        raise ValueError("Recurso não acompanhado.")
     if block["type"] == "video":
         if not isinstance(fraction, (int, float)) or isinstance(fraction, bool) or not VIDEO_FRACTION <= fraction <= 1:
             raise ValueError("Assista a pelo menos 90% da videoaula principal.")
