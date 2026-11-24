@@ -97,7 +97,8 @@
         proceed.addEventListener("click", () => {
           const destination = href;
           closeModal();
-          window.location.assign(destination);
+          if (window.SigeuDashboardCourse) window.SigeuDashboardCourse.open(destination);
+          else showCourseAccess(destination, courseId);
         }, {once:true});
       } else {
         proceed.hidden = true;
