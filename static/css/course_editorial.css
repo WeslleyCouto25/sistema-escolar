@@ -1,0 +1,123 @@
+/* Área interna da disciplina. Nenhum seletor modifica topbar, sidebar, hero ou rodapé. */
+body.portal07.student-page.disciplina-page .sigeu-editorial {
+ --se-ink:var(--curso-texto,#263747);--se-deep:var(--curso-marinho,#153852);
+ --se-accent:var(--curso-petroleo,#256879);--se-gold:var(--curso-dourado,#bd9457);
+ --se-line:var(--curso-borda,#d7e2e8);--se-ok:#2d6a62;
+ background:#fff;color:var(--se-ink);font-family:inherit;font-size:14px;line-height:1.7;
+ border-top:1px solid var(--se-line);min-width:0;
+}
+.sigeu-editorial *{box-sizing:border-box;min-width:0}
+.sigeu-editorial [hidden]{display:none!important}
+.sigeu-editorial .se-column{max-width:900px;margin-inline:auto;padding:clamp(16px,3.8vw,46px);width:100%;min-width:0}
+.sigeu-editorial .se-unit-header{padding:24px 0 28px;border-bottom:2px solid var(--se-accent);margin:0 0 22px;background:linear-gradient(120deg,#edf5f6 0%,#fff 75%);position:relative}
+.sigeu-editorial .se-kicker{color:var(--se-accent);font-size:11px;line-height:1.45;letter-spacing:.09em;font-weight:750;text-transform:uppercase}
+body.portal07.student-page.disciplina-page .sigeu-editorial h2,body.portal07.student-page.disciplina-page .sigeu-editorial h3,body.portal07.student-page.disciplina-page .sigeu-editorial h4 {
+ color:var(--se-deep)!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important;letter-spacing:-.018em;line-height:1.25;
+}
+.sigeu-editorial h2{font-size:clamp(24px,3vw,34px);margin:12px 0 10px!important;font-weight:750}
+.sigeu-editorial h3{font-size:clamp(18px,2vw,22px);margin:10px 0 16px!important;font-weight:720}
+.sigeu-editorial h4{font-size:16px;margin:23px 0 9px!important;font-weight:700}
+.sigeu-editorial p{margin:0 0 12px;color:var(--se-ink)}
+.sigeu-editorial p.se-body{font-size:14px;line-height:1.83;text-align:justify;text-justify:inter-word;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word;word-break:normal;margin:0 0 22px;letter-spacing:normal}
+.sigeu-editorial p.se-body strong{font-weight:720;color:var(--se-deep)}
+.sigeu-editorial .se-studybar{display:grid;grid-template-columns:1fr auto;gap:8px 14px;background:#f7fafb;border:1px solid var(--se-line);padding:14px 16px;color:var(--se-deep);font-size:12px}
+.sigeu-editorial .se-studybar small,.sigeu-editorial .se-meter{grid-column:1/-1}
+.sigeu-editorial .se-meter{height:4px;background:#e1e8eb;overflow:hidden}
+.sigeu-editorial .se-meter span{display:block;height:100%;width:0;background:var(--se-ok);transition:width .2s linear}
+.sigeu-editorial .se-index{margin:18px 0 35px;border-bottom:1px solid var(--se-line)}
+.sigeu-editorial .se-index summary,.sigeu-editorial details summary{cursor:pointer;font-weight:650;color:var(--se-deep);padding:10px 0}
+.sigeu-editorial .se-index ol{padding-left:22px;margin:0 0 12px}
+.sigeu-editorial .se-index li{margin:5px 0;font-size:13px}
+.sigeu-editorial .se-index a{color:var(--se-accent);text-decoration:underline;text-underline-offset:3px}
+.sigeu-editorial .se-index small{color:#647986}
+.sigeu-editorial .se-block{margin:0 0 36px;padding:26px 0 12px;border-top:1px solid var(--se-line);scroll-margin-top:90px}
+.sigeu-editorial .se-section-heading{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.sigeu-editorial .se-state{font-size:11px;white-space:nowrap;color:#546c79}
+.sigeu-editorial .se-state.se-done,.sigeu-editorial .se-done{color:var(--se-ok);font-weight:750}
+.sigeu-editorial .se-caption{font-size:12px;line-height:1.6;color:#536d80;margin:10px 0 14px}
+.sigeu-editorial video,.sigeu-editorial .se-deck{display:block;width:100%;aspect-ratio:16/9;background:#102739;border:0;border-radius:0!important;object-fit:contain}
+.sigeu-editorial .se-video-status,.sigeu-editorial .se-media-link{font-size:12px;margin:10px 0;display:block}
+.sigeu-editorial .se-media-link{color:var(--se-accent)}
+.sigeu-editorial .se-button,.sigeu-editorial .se-question button,.sigeu-editorial .se-node,.sigeu-editorial .se-order-list button{
+ font-family:inherit;font-size:13px;font-weight:650;line-height:1.4;padding:10px 14px;min-height:42px;border:1px solid var(--se-line)!important;border-radius:2px!important;background:#fff!important;color:var(--se-deep)!important;box-shadow:none!important;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;max-width:100%;white-space:normal;text-align:left;overflow-wrap:anywhere;
+}
+.sigeu-editorial .se-button:hover,.sigeu-editorial .se-node:hover,.sigeu-editorial .se-question button:hover{border-color:var(--se-accent)!important;background:#edf5f6!important}
+.sigeu-editorial button:focus-visible,.sigeu-editorial a:focus-visible,.sigeu-editorial select:focus-visible{outline:2px solid var(--se-gold);outline-offset:3px}
+.sigeu-editorial button:disabled{cursor:default;opacity:.7}
+.sigeu-editorial .se-mark,.sigeu-editorial .se-proof-link{background:var(--se-accent)!important;color:white!important;border-color:var(--se-accent)!important}
+.sigeu-editorial .se-mark.se-done{background:#e9f3ef!important;color:var(--se-ok)!important}
+.sigeu-editorial .se-deck{aspect-ratio:auto;background:#fff}
+.sigeu-editorial .se-frame{aspect-ratio:16/9;min-height:170px;background:#153852;color:#fff;position:relative;overflow:hidden;display:grid;align-items:center;padding:7%;border-bottom:4px solid var(--se-gold)}
+.sigeu-editorial .se-frame-number{position:absolute;left:7%;top:7%;font-size:10px;letter-spacing:.13em;color:#d4e7ec}
+.sigeu-editorial .se-frame-content{max-width:72%;position:relative;z-index:1}
+body.portal07.student-page.disciplina-page .sigeu-editorial .se-frame h4{font-size:clamp(17px,3vw,30px);color:#fff!important;margin:0 0 13px!important}
+.sigeu-editorial .se-frame p{color:#e2eef2;font-size:clamp(12px,1.6vw,17px);line-height:1.5;margin:0}
+.sigeu-editorial .se-frame-art{position:absolute;right:3%;bottom:9%;width:27%;color:#9ac6ce;opacity:.65}
+.sigeu-editorial .se-deck-controls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:8px 0}
+.sigeu-editorial .se-deck-count{margin-left:auto;font-size:12px;color:#536d80}
+.sigeu-editorial .se-library{display:flex;align-items:center;gap:14px;border:1px solid var(--se-line);background:#f7fafb;padding:18px}
+.sigeu-editorial .se-library i{font-size:30px;color:var(--se-accent)}
+.sigeu-editorial .se-library div{flex:1}
+.sigeu-editorial .se-library p{font-size:12px;margin:5px 0 0}
+.sigeu-editorial .se-audio{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sigeu-editorial .se-audio-status{font-size:12px;color:#536d80}
+.sigeu-editorial .se-diagram{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;gap:1px;background:var(--se-line);border:1px solid var(--se-line)}
+.sigeu-editorial .se-diagram>div{background:#edf5f6;padding:17px 14px;display:flex;flex-direction:column;gap:8px}
+.sigeu-editorial .se-diagram-no{color:var(--se-accent);font-size:28px;line-height:1;font-weight:750}
+.sigeu-editorial .se-diagram p{font-size:12px;margin:0}
+.sigeu-editorial .se-diagram figcaption{grid-column:1/-1;background:#fff;padding:10px;font-size:11px;color:#536d80}
+.sigeu-editorial .se-graph{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(32px,9vw,100px);position:relative;margin:20px 0}
+.sigeu-editorial .se-graph-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.sigeu-editorial .se-graph-col{display:grid;gap:10px;align-content:stretch;z-index:1}
+.sigeu-editorial .se-node{min-height:48px;text-align:center;justify-content:center;padding:10px 8px}
+.sigeu-editorial .se-node.is-selected{border-color:var(--se-gold)!important;background:#f4ebd9!important}
+.sigeu-editorial .se-node.is-correct,.sigeu-editorial .se-question button.is-correct,.sigeu-editorial .se-graded-select.is-correct{background:#e6f2ec!important;border-color:#2d6a62!important;color:#21594e!important}
+.sigeu-editorial .se-question button.is-wrong,.sigeu-editorial .se-graded-select.is-wrong{border-color:#a34a3d!important;background:#fff3ed!important;color:#803b30!important}
+.sigeu-editorial .se-feedback{min-height:1.5em;font-size:12px;color:var(--se-accent);margin:8px 0}
+.sigeu-editorial .se-question{padding:16px 0;border-bottom:1px solid var(--se-line)}
+.sigeu-editorial .se-question button{display:flex;width:100%;margin:6px 0;text-align:left;justify-content:flex-start}
+.sigeu-editorial .se-lab-grid{display:grid;gap:10px}
+.sigeu-editorial .se-lab-grid label{display:grid;grid-template-columns:88px 1fr 28px;align-items:center;gap:10px;font-size:13px}
+.sigeu-editorial .se-lab-input{width:100%;accent-color:var(--se-accent)}
+.sigeu-editorial .se-bars{display:flex;gap:8px;height:150px;align-items:flex-end;border-bottom:1px solid var(--se-line);padding:8px;margin:12px 0 24px;background:repeating-linear-gradient(to top,#fff 0,#fff 29px,#dbe5ea 30px)}
+.sigeu-editorial .se-bars>div{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative}
+.sigeu-editorial .se-bars>div span{display:block;width:75%;background:var(--se-accent)}
+.sigeu-editorial .se-bars small{position:absolute;top:100%;font-size:12px}
+.sigeu-editorial .se-formula{border-left:3px solid var(--se-gold);padding:14px;background:#f5f8f9;text-align:center;margin:22px 0}
+.sigeu-editorial math{font-size:1.35em;max-width:100%;overflow:auto}
+.sigeu-editorial .se-select-row{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--se-line);font-size:13px;font-weight:600}
+.sigeu-editorial select,.sigeu-editorial textarea{width:100%;max-width:100%;font-size:14px!important;padding:10px!important;border:1px solid var(--se-line)!important;border-radius:2px!important;background:#fff!important;color:var(--se-deep)!important}
+.sigeu-editorial .se-check-selects,.sigeu-editorial .se-check-order{margin-top:14px}
+.sigeu-editorial .se-matrix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--se-line);border:1px solid var(--se-line)}
+.sigeu-editorial .se-matrix details{background:#f7fafb;padding:10px 14px}
+.sigeu-editorial .se-matrix small{display:block;font-size:11px;color:#536d80}
+.sigeu-editorial .se-matrix ul,.sigeu-editorial .se-refs{padding:6px 0 6px 20px}
+.sigeu-editorial .se-refs li{font-size:12px;margin:8px 0;overflow-wrap:anywhere}
+.sigeu-editorial .se-order-list{padding:0;list-style:none;margin:0}
+.sigeu-editorial .se-order-list li{display:flex;align-items:center;gap:5px;padding:8px 0;border-bottom:1px solid var(--se-line)}
+.sigeu-editorial .se-order-list li span{flex:1}
+.sigeu-editorial .se-order-list button{padding:8px;min-width:42px}
+.sigeu-editorial .se-proof{padding:24px 0;border-top:2px solid var(--se-accent);margin-top:36px}
+.sigeu-editorial .se-reveal{opacity:.72;transform:translateY(6px);transition:opacity .4s ease,transform .4s ease}
+.sigeu-editorial .se-reveal.is-visible{opacity:1;transform:none}
+@media(max-width:640px){
+ .sigeu-editorial .se-column{padding:14px 16px}
+ .sigeu-editorial .se-block{margin-bottom:24px;padding-top:18px}
+ .sigeu-editorial p.se-body{font-size:14px;line-height:1.8}
+ .sigeu-editorial .se-studybar{grid-template-columns:1fr}
+ .sigeu-editorial .se-diagram{grid-template-columns:1fr}
+ .sigeu-editorial .se-library{flex-wrap:wrap;padding:12px}
+ .sigeu-editorial .se-library .se-button{width:100%}
+ .sigeu-editorial .se-frame-content{max-width:80%}
+ .sigeu-editorial .se-frame-art{opacity:.35}
+ .sigeu-editorial .se-node{font-size:11px;padding:7px 4px}
+ .sigeu-editorial .se-graph{gap:30px}
+ .sigeu-editorial .se-matrix{grid-template-columns:1fr}
+ .sigeu-editorial .se-section-heading{flex-wrap:wrap;gap:4px}
+}
+@media(prefers-reduced-motion:reduce){.sigeu-editorial .se-reveal,.sigeu-editorial .se-meter span{transition:none!important;opacity:1;transform:none}}
+/* O conteúdo legado mantém seus recursos e rotas; somente a grade interna é linearizada. */
+body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .content-grid{display:grid!important;grid-template-columns:minmax(0,1fr)!important;max-width:900px;margin:0 auto}
+body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .learning-objectives{max-width:900px;margin:20px auto}
+body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .content-section{width:100%;min-width:0;max-width:900px;border-radius:2px!important}
+body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .video-wrapper,body.portal07.student-page.disciplina-page .chapter-content.sigeu-legacy-content .pdf-wrapper{border-radius:0!important}

@@ -1,0 +1,13 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>{{ course.name }}</title><style>
+@page{size:A4;margin:25mm;@bottom-right{content:counter(page);font-size:9pt;color:#536d80}}
+body{font:11pt/1.5 "DejaVu Serif",serif;color:#263747}
+.cover{page-break-after:always;padding-top:55mm;border-top:5px solid #256879}.cover small{letter-spacing:.1em;color:#256879}
+h1,h2,h3{font-family:"DejaVu Sans",sans-serif;color:#153852;break-after:avoid}
+h1{font-size:28pt}h2{font-size:20pt;border-bottom:2px solid #bd9457;padding-bottom:12pt}
+h3{font-size:12pt;margin-top:16pt}p{text-align:justify;hyphens:auto;orphans:3;widows:3}
+.unit{page-break-before:always}.refs{page-break-before:always}.refs li{margin-bottom:8pt;overflow-wrap:break-word}
+</style></head><body>
+<section class="cover"><small>SIGEU EDUCACIONAL · MATERIAL ACADÊMICO</small><h1>{{ course.name }}</h1><p>Livro da disciplina · 4 unidades</p><p>Edição 2026 · fundamentação conceitual, aplicações e análise crítica.</p><p>Casos e dados pedagógicos são hipotéticos. Não constituem orientação clínica individual.</p></section>
+<section><h2>Sumário</h2><ol>{% for unit in course.units %}<li>{{ unit.title }}<ol>{% for p in unit.paragraphs %}<li>{{ p.title }}</li>{% endfor %}</ol></li>{% endfor %}</ol></section>
+{% for unit in course.units %}<section class="unit"><h2>Unidade {{ unit.number }} · {{ unit.title }}</h2>{% for p in unit.paragraphs %}<h3>{{ p.title }}</h3><p>{{ p.body }}</p>{% endfor %}</section>{% endfor %}
+<section class="refs"><h2>Referências</h2><ul>{% for ref in course.references %}<li>{{ ref }}</li>{% endfor %}</ul></section></body></html>

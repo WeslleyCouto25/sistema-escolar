@@ -46,6 +46,8 @@ from dotenv import load_dotenv
 from openpyxl import Workbook, load_workbook
 
 import plano_ensino
+import course_editorial
+from functools import lru_cache
 
 from db_pool import get_db_connection, pool_stats
 from schema_alunos import garantir_campos_dados_pessoais
@@ -535,6 +537,9 @@ def init_db():
             pdf_url TEXT
         )
     """)
+
+    # Progresso editorial: tabela adicional, não modifica notas ou matrículas.
+    cursor.execute(course_editorial.SCHEMA_SQL)
 
     # Tabela de provas
     cursor.execute("""
@@ -1644,7 +1649,7 @@ def mew_salvar_nota_final():
 @app.before_request
 def _proteger_pagamento_disciplina():
     """Proteção do lado do servidor: não basta ocultar botões no navegador."""
-    if request.endpoint not in ("disciplina", "prova", "instrucoes_prova", "plano_ensino_privado"):
+    if request.endpoint not in ("disciplina", "prova", "instrucoes_prova", "plano_ensino_privado", "editorial_study", "editorial_book"):
         return None
     if request.endpoint == "plano_ensino_privado" and session.get("mew_admin"):
         return None
@@ -1713,6 +1718,114 @@ def _proteger_avaliacoes_por_calendario():
             mensagem=f"Capítulo {numero} disponível a partir de {available_on}."
         ), 403
     return None
+
+
+def _editorial_course_from_db(cur, disciplina_id):
+    cur.execute("SELECT nome FROM disciplinas WHERE id=%s", (disciplina_id,))
+    row = cur.fetchone()
+    return course_editorial.get_course(row["nome"]) if row else None
+
+
+@app.before_request
+def _proteger_avaliacoes_editoriais():
+    # O calendário e o pagamento já são verificados pelos dois guardas anteriores.
+    if request.endpoint not in ("instrucoes_prova", "prova"):
+        return None
+    aluno_id = session.get("aluno_id")
+    args = request.view_args or {}
+    disciplina_id, numero = args.get("disciplina_id"), args.get("capitulo_numero")
+    if not aluno_id or not isinstance(numero, int) or numero not in (1, 2, 3, 4):
+        return None
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        catalog = _editorial_course_from_db(cur, disciplina_id)
+        if not catalog:
+            return None
+        chapters = _capitulos_ordenados(cur, disciplina_id)
+        if len(chapters) != 4:
+            return render_template("acesso_bloqueado.html", mensagem="Conteúdo em revisão pela secretaria."), 403
+        grades = _notas_logicas_disciplina(cur, aluno_id, disciplina_id, chapters)
+        if grades[numero - 1]["nota"] is not None:
+            return None
+        if any(g["nota"] is None for g in grades[:numero - 1]):
+            return render_template("acesso_bloqueado.html", mensagem="Realize primeiro a prova da unidade anterior."), 403
+        progress = course_editorial.read_progress(cur, aluno_id, disciplina_id, chapters, catalog["version"])
+        if not course_editorial.ready(catalog["units"][numero - 1], progress[numero]):
+            return render_template("acesso_bloqueado.html", mensagem="Conclua os recursos obrigatórios da unidade antes da prova."), 403
+    finally:
+        conn.close()
+    return None
+
+
+@app.route("/disciplina/<int:disciplina_id>/estudo/<int:capitulo_numero>", methods=["POST"])
+def editorial_study(disciplina_id, capitulo_numero):
+    aluno_id = session.get("aluno_id")
+    token = session.get("editorial_token")
+    supplied = request.headers.get("X-Editorial-Token", "")
+    if not aluno_id or not token or not secrets.compare_digest(token, supplied):
+        return jsonify({"erro": "Sessão inválida."}), 403
+    if capitulo_numero not in (1, 2, 3, 4) or not request.is_json:
+        return jsonify({"erro": "Requisição inválida."}), 400
+    if request.content_length and request.content_length > 4096:
+        return jsonify({"erro": "Requisição muito extensa."}), 413
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        catalog = _editorial_course_from_db(cur, disciplina_id)
+        if not catalog:
+            return jsonify({"erro": "Disciplina sem conteúdo editorial."}), 404
+        chapters = _capitulos_ordenados(cur, disciplina_id)
+        if len(chapters) != 4:
+            return jsonify({"erro": "Capítulos em revisão."}), 409
+        cur.execute("SELECT data_inicio FROM aluno_disciplina_datas WHERE aluno_id=%s AND disciplina_id=%s", (aluno_id, disciplina_id))
+        row = cur.fetchone()
+        if not row or not row.get("data_inicio"):
+            return jsonify({"erro": "Matrícula indisponível."}), 403
+        start = effective_chapter_start(cur, aluno_id, disciplina_id, row["data_inicio"])
+        try:
+            calendar = released_chapters(start)
+        except (ValueError, TypeError):
+            return jsonify({"erro": "Calendário inválido."}), 403
+        grades = _notas_logicas_disciplina(cur, aluno_id, disciplina_id, chapters)
+        if capitulo_numero not in course_editorial.open_units(calendar, grades):
+            return jsonify({"erro": "Unidade ainda bloqueada."}), 403
+        payload = request.get_json(silent=True)
+        progress = course_editorial.save_event(cur, aluno_id, disciplina_id, chapters[capitulo_numero - 1]["id"],
+                                              catalog["version"], catalog["units"][capitulo_numero - 1], payload)
+        conn.commit()
+        return jsonify(progress)
+    except ValueError as exc:
+        conn.rollback()
+        return jsonify({"erro": str(exc)}), 400
+    finally:
+        conn.close()
+
+
+@lru_cache(maxsize=4)
+def _editorial_book_pdf(name, version):
+    course = course_editorial.get_course(name)
+    if not course or course["version"] != version:
+        raise ValueError("Versão de conteúdo indisponível.")
+    book_html = render_template("student/editorial_book.html", course=course)
+    return render_html_to_pdf_bytes(book_html)
+
+
+@app.route("/disciplina/<int:disciplina_id>/livro-editorial")
+def editorial_book(disciplina_id):
+    # A proteção de pagamento/matrícula existente também cobre esta rota.
+    conn = get_db_connection()
+    try:
+        course = _editorial_course_from_db(conn.cursor(), disciplina_id)
+    finally:
+        conn.close()
+    if not course:
+        return render_template("acesso_bloqueado.html", mensagem="Livro ainda não cadastrado."), 404
+    response = send_file(BytesIO(_editorial_book_pdf(course["name"], course["version"])),
+                         mimetype="application/pdf", download_name=course["slug"] + ".pdf",
+                         as_attachment=False, max_age=0)
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @app.route("/disciplina/<int:disciplina_id>")
@@ -1792,6 +1905,24 @@ def disciplina(disciplina_id):
         (disciplina_id,),
     )
     plano_disponivel = cursor.fetchone() is not None
+    editorial = course_editorial.get_course(disciplina["nome"]) if disciplina else None
+    editorial_open, editorial_graded, editorial_progress = [], [], {}
+    editorial_current = None
+    editorial_token = None
+    if editorial and len(capitulos) == 4:
+        # Exibição do vídeo atualizado sem alterar o histórico ou as provas existentes.
+        capitulos = [dict(c) for c in capitulos]
+        for c, unit in zip(capitulos, editorial["units"]):
+            c["video_url"] = unit["video"]
+            c["pdf_url"] = url_for("editorial_book", disciplina_id=disciplina_id)
+        grades = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id, capitulos)
+        editorial_graded = [g["ordem"] for g in grades if g["nota"] is not None]
+        editorial_open = course_editorial.open_units(capitulos_liberados, grades)
+        editorial_current = next((n for n in editorial_open if n not in editorial_graded), None)
+        editorial_progress = course_editorial.read_progress(cursor, aluno_id, disciplina_id, capitulos, editorial["version"])
+        editorial_token = session.setdefault("editorial_token", secrets.token_urlsafe(32))
+    else:
+        editorial = None
     conn.close()
 
     return render_template(
@@ -1799,7 +1930,14 @@ def disciplina(disciplina_id):
         disciplina=disciplina,
         capitulos=capitulos,
         capitulos_liberados=capitulos_liberados,
-        plano_disponivel=plano_disponivel
+        plano_disponivel=plano_disponivel,
+        editorial=editorial,
+        editorial_open=editorial_open,
+        editorial_graded=editorial_graded,
+        editorial_current=editorial_current,
+        editorial_progress=editorial_progress,
+        editorial_token=editorial_token,
+        editorial_emphasis=course_editorial.emphasis
     )
 
 @app.route("/disciplina/<int:disciplina_id>/plano-ensino")

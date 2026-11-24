@@ -1,0 +1,146 @@
+{# Apenas a área interna de um capítulo. Cabeçalho, menu e rodapé permanecem no template existente. #}
+<article class="sigeu-editorial" lang="pt-BR" data-unit="{{ unit.number }}"
+         data-endpoint="{{ url_for('editorial_study', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}"
+         data-token="{{ editorial_token }}" data-seconds="{{ study.segundos }}"
+         data-done='{{ study.recursos|tojson }}' data-graded="{{ '1' if unit.number in editorial_graded else '0' }}">
+    <div class="se-column">
+        <header class="se-unit-header">
+            <div class="se-kicker">{{ editorial.name }} / Unidade {{ '%02d'|format(unit.number) }}</div>
+            <h2>{{ unit.title }}</h2>
+            <p>{{ unit.subtitle }}</p>
+        </header>
+        <div class="se-studybar" aria-label="Acompanhamento do estudo">
+            <div><b class="se-completed-count">0</b> / {{ unit.blocks|selectattr('required')|list|length }} recursos obrigatórios</div>
+            <div>Tempo registrado <b class="se-time">00:00</b> / 10:00</div>
+            <div class="se-meter" role="progressbar" aria-label="Recursos concluídos" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+            <small>O tempo contabilizado tem limite de dez minutos. A leitura pode continuar livremente.</small>
+        </div>
+        <nav class="se-index" aria-label="Percurso da unidade">
+            <details><summary>Percurso de aprendizagem · {{ unit.blocks|length }} recursos</summary>
+                <ol>{% for block in unit.blocks %}<li><a href="#se-{{ unit.number }}-{{ block.id }}">{{ block.title }}</a> <span data-index-status="{{ block.id }}"></span>{% if not block.required %} <small>Opcional</small>{% endif %}</li>{% endfor %}</ol>
+            </details>
+        </nav>
+        {% for block in unit.blocks %}
+        {% set bid = 'se-' ~ unit.number ~ '-' ~ block.id %}
+        <section id="{{ bid }}" class="se-block se-{{ block.type }}" data-resource="{{ block.id }}" data-kind="{{ block.type }}" data-required="{{ '1' if block.required else '0' }}">
+            <div class="se-section-heading">
+                <div class="se-kicker">{{ '%02d'|format(loop.index) }} / {{ {'reading':'Leitura acadêmica','video':'Videoaula principal','slides':'Apresentação complementar','optional_video':'Videoaula complementar','book':'Biblioteca','audio':'Áudio','references':'Bibliografia','diagram':'Figura técnica','graph':'Atividade de associação','lab':'Laboratório','diary':'Simulação','matrix':'Atlas conceitual','classify':'Classificação','quiz':'Exercícios','scenario':'Estudo de caso','order':'Sequenciamento','reflection':'Reflexão'}.get(block.type, 'Recurso') }}</div>
+                <span class="se-state" aria-live="polite">{{ 'Obrigatório' if block.required else 'Opcional' }}</span>
+            </div>
+            <h3>{{ block.title }}</h3>
+            {% if block.type == 'reading' %}
+                {% for paragraph in unit.paragraphs[block.start:block.end] %}
+                <h4>{{ paragraph.title }}</h4>
+                <p class="se-body">{% for segment, strong in editorial_emphasis(paragraph.body) %}{% if strong %}<strong>{{ segment }}</strong>{% else %}{{ segment }}{% endif %}{% endfor %}</p>
+                {% endfor %}
+                <button type="button" class="se-button se-mark">Concluir leitura <span aria-hidden="true">✓</span></button>
+            {% elif block.type == 'video' %}
+                <p class="se-caption">Assista à videoaula principal. A conclusão é registrada após assistir a pelo menos 90% do vídeo; os conteúdos complementares não bloqueiam a prova.</p>
+                <video class="se-main-video" controls preload="metadata" playsinline controlsList="nodownload" data-required-video="1">
+                    <source src="{{ unit.video }}" type="video/mp4">
+                    Seu navegador não suporta a reprodução deste vídeo.
+                </video>
+                <div class="se-video-status" role="status">Aguardando reprodução.</div>
+                <a href="{{ unit.video }}" target="_blank" rel="noopener noreferrer" class="se-media-link">Abrir vídeo em outra aba (a visualização externa não registra conclusão)</a>
+            {% elif block.type == 'optional_video' and block.get('url') %}
+                <video controls preload="none" playsinline><source src="{{ block.url }}" type="video/mp4"></video>
+            {% elif block.type in ('slides','optional_video') %}
+                <div class="se-deck" aria-label="{{ block.title }}" data-deck>
+                    {% for frame in block.frames %}
+                    <div class="se-frame" {% if not loop.first %}hidden{% endif %}>
+                        <span class="se-frame-number">SIGEU / {{ '%02d'|format(loop.index) }}</span>
+                        <div class="se-frame-content"><h4>{{ frame[0] }}</h4><p>{{ frame[1] }}</p></div>
+                        <svg class="se-frame-art" viewBox="0 0 180 145" aria-hidden="true"><path d="M10 125 L10 20 L170 20 M20 120 L55 85 L90 102 L128 48 L170 20" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="55" cy="85" r="5" fill="currentColor"/><circle cx="128" cy="48" r="5" fill="currentColor"/><path d="M20 132 H170 M20 140 H115" stroke="currentColor" opacity=".5"/></svg>
+                    </div>
+                    {% endfor %}
+                    <div class="se-deck-controls">
+                        <button type="button" class="se-button se-prev" aria-label="Slide anterior">←</button>
+                        <button type="button" class="se-button se-play">Reproduzir</button>
+                        <button type="button" class="se-button se-next" aria-label="Próximo slide">→</button>
+                        <span class="se-deck-count" aria-live="polite">1 / {{ block.frames|length }}</span>
+                    </div>
+                </div>
+                <p class="se-caption">Apresentação complementar em quadros. Avance manualmente ou utilize a reprodução automática.</p>
+            {% elif block.type == 'book' %}
+                <div class="se-library">
+                    <i class="fas fa-file-pdf" aria-hidden="true"></i>
+                    <div><b>{{ editorial.name }}</b><p>Livro integral · quatro unidades · referências bibliográficas</p></div>
+                    <a class="se-button" href="{{ url_for('editorial_book', disciplina_id=disciplina['id']) }}" target="_blank" rel="noopener noreferrer">Abrir PDF</a>
+                </div>
+            {% elif block.type == 'audio' %}
+                <div class="se-audio" data-text="{{ unit.audio_summary }}">
+                    <button type="button" class="se-button se-speak">▶ Ouvir síntese</button>
+                    <button type="button" class="se-button se-stop-speech">Parar</button>
+                    <span role="status" class="se-audio-status">Leitura sintetizada pelo navegador, se disponível.</span>
+                </div>
+                <details><summary>Transcrição da síntese</summary><p>{{ unit.audio_summary }}</p></details>
+            {% elif block.type == 'diagram' %}
+                <figure class="se-diagram">
+                    {% for label in block.labels %}
+                    <div><span class="se-diagram-no">{{ loop.index }}</span><b>{{ label }}</b><p>{{ block.descriptions[loop.index0] }}</p></div>
+                    {% endfor %}
+                    <figcaption>Esquema didático elaborado para esta unidade, com base em Seligman e Csikszentmihalyi (2000).</figcaption>
+                </figure>
+            {% elif block.type == 'graph' %}
+                <p class="se-caption">Selecione um conceito na coluna esquerda e sua definição na direita. As associações corretas serão ligadas por linhas verdes.</p>
+                <div class="se-graph" data-graph>
+                    <svg class="se-graph-lines" aria-hidden="true"></svg>
+                    <div class="se-graph-col">{% for pair in block.pairs %}<button type="button" class="se-node" data-left="{{ loop.index0 }}">{{ pair[0] }}</button>{% endfor %}</div>
+                    <div class="se-graph-col">{% for pair in block.pairs|reverse %}<button type="button" class="se-node" data-right="{{ loop.revindex0 }}">{{ pair[1] }}</button>{% endfor %}</div>
+                </div>
+                <p class="se-feedback" role="status">Selecione o primeiro conceito.</p>
+            {% elif block.type == 'lab' %}
+                <p class="se-caption">Dados fictícios em escala de 0 a 10. Altere os cinco registros e observe como média e amplitude respondem.</p>
+                <div class="se-lab-grid">{% for v in block['values'] %}<label>Registro {{ loop.index }} <input type="range" min="0" max="10" step="1" value="{{ v }}" class="se-lab-input"><output>{{ v }}</output></label>{% endfor %}</div>
+                <div class="se-bars" aria-label="Gráfico dos registros">{% for v in block['values'] %}<div><span style="height:{{ v*10 }}%"></span><small>{{ v }}</small></div>{% endfor %}</div>
+                <div class="se-formula" aria-label="Média aritmética">
+                    <math display="block"><mrow><mover><mi>x</mi><mo>¯</mo></mover><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>x</mi><mi>i</mi></msub></mrow><mi>n</mi></mfrac></mrow></math>
+                    <div>Média: <b class="se-mean"></b> · Amplitude: <b class="se-range"></b></div>
+                </div>
+                <div class="se-question" data-answer="1"><p><b>O que a média, sozinha, não revela?</b></p><button type="button" data-choice="0">A soma dividida pelo número de registros</button><button type="button" data-choice="1">A distribuição e a heterogeneidade dos registros</button><button type="button" data-choice="2">O valor do cálculo aritmético</button><p class="se-feedback" role="status" data-explanation="A média pode ser igual em distribuições muito distintas."></p></div>
+            {% elif block.type == 'diary' %}
+                <p class="se-caption">Associe situações fictícias às descrições afetivas. Não é necessário registrar experiências pessoais.</p>
+                {% for item in block.situations %}
+                <label class="se-select-row">{{ item[0] }}<select class="se-graded-select" data-answer="{{ loop.index0 }}"><option value="">Selecione a descrição</option>{% for option in block.situations|reverse %}<option value="{{ loop.revindex0 }}">{{ option[1] }}</option>{% endfor %}</select></label>
+                {% endfor %}
+                <button type="button" class="se-button se-check-selects">Conferir associações</button><p class="se-feedback" role="status"></p>
+            {% elif block.type == 'matrix' %}
+                <div class="se-matrix">{% for group in block.groups %}<details><summary>{{ group[0] }} <small>{{ group[1]|length }} forças</small></summary><ul>{% for strength in group[1] %}<li>{{ strength }}</li>{% endfor %}</ul></details>{% endfor %}</div>
+                <p class="se-caption">Classificação VIA, Peterson e Seligman (2004). Abra cada virtude para consultar as forças correspondentes.</p>
+            {% elif block.type == 'classify' %}
+                <p class="se-caption">Associe as manifestações hipotéticas às categorias de virtude.</p>
+                {% for item in block['items'] %}
+                <label class="se-select-row">{{ item[0] }}<select class="se-graded-select" data-answer="{{ item[1] }}"><option value="">Escolha uma virtude</option>{% for category in block.categories %}<option value="{{ loop.index0 }}">{{ category }}</option>{% endfor %}</select></label>
+                {% endfor %}
+                <button type="button" class="se-button se-check-selects">Conferir classificação</button><p class="se-feedback" role="status"></p>
+            {% elif block.type in ('quiz','scenario') %}
+                <p class="se-caption">Atividade formativa com devolutiva imediata. A prova oficial é realizada separadamente.</p>
+                {% for question in (block.questions if block.type == 'quiz' else block.cases) %}
+                <div class="se-question" data-answer="{{ question.answer }}"><p><b>{{ loop.index }}. {{ question.prompt }}</b></p>
+                    {% for option in question.options %}<button type="button" data-choice="{{ loop.index0 }}">{{ option }}</button>{% endfor %}
+                    <p class="se-feedback" role="status" data-explanation="{{ question.feedback }}"></p>
+                </div>
+                {% endfor %}
+            {% elif block.type == 'order' %}
+                <p class="se-caption">Use as setas para colocar as etapas em ordem lógica. Depois, confira o resultado.</p>
+                <ol class="se-order-list">{% for step in block.steps|reverse %}<li data-position="{{ loop.revindex0 }}"><span>{{ step }}</span><button type="button" data-move="-1" aria-label="Mover para cima">↑</button><button type="button" data-move="1" aria-label="Mover para baixo">↓</button></li>{% endfor %}</ol>
+                <button type="button" class="se-button se-check-order">Conferir sequência</button><p class="se-feedback" role="status"></p>
+            {% elif block.type == 'reflection' %}
+                <p>{{ block.prompt }}</p><textarea rows="5" aria-label="Rascunho da reflexão" placeholder="Rascunho opcional, mantido somente nesta página."></textarea><p class="se-caption">Não envie informações pessoais. O rascunho não é encaminhado ao servidor.</p>
+            {% elif block.type == 'references' %}
+                <details><summary>Consultar bibliografia da disciplina ({{ editorial.references|length }} obras)</summary><ul class="se-refs">{% for ref in editorial.references %}<li>{{ ref }}</li>{% endfor %}</ul></details>
+            {% endif %}
+        </section>
+        {% endfor %}
+        <div class="se-proof">
+            {% if unit.number in editorial_graded %}
+                <span class="se-done">✓ Prova realizada</span>
+                <a class="se-button" href="{{ url_for('resultado_prova', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}">Consultar resultado</a>
+            {% elif c.prova_id %}
+                <p class="se-proof-status" aria-live="polite">Conclua os recursos obrigatórios para liberar a prova.</p>
+                <a class="se-button se-proof-link" href="{{ url_for('instrucoes_prova', disciplina_id=disciplina['id'], capitulo_numero=unit.number) }}" aria-disabled="true" hidden>Iniciar prova do capítulo {{ unit.number }} →</a>
+            {% else %}<p>A prova ainda não foi cadastrada.</p>{% endif %}
+            <p class="se-caption">A unidade seguinte exige a prova anterior realizada e a liberação do calendário acadêmico. Os dois complementos são opcionais.</p>
+        </div>
+    </div>
+</article>
