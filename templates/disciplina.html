@@ -1265,6 +1265,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         }
       }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/course_editorial.css') }}">
 </head>
 
 <body class="portal07 student-page disciplina-page">
@@ -1360,10 +1361,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             <!-- Progress Tracker -->
             <div class="progress-tracker">
                 {% for c in capitulos %}
-                <div class="progress-step {% if loop.index == 1 %}current{% else %}{% if loop.previtem %}completed{% endif %}{% endif %}"
+                <div class="progress-step {% if editorial %}{% if loop.index in editorial_graded %}completed{% elif loop.index == editorial_current %}current{% endif %}{% else %}{% if loop.index == 1 %}current{% else %}{% if loop.previtem %}completed{% endif %}{% endif %}{% endif %}"
                     id="step-{{ loop.index }}">
                     <div class="step-icon">
-                        {% if loop.index == 1 %}
+                        {% if editorial %}
+                        {% if loop.index in editorial_graded %}<i class="fas fa-check"></i>{% elif loop.index == editorial_current %}<i class="fas fa-play"></i>{% elif loop.index not in editorial_open %}<i class="fas fa-lock"></i>{% else %}{{ loop.index }}{% endif %}
+                        {% elif loop.index == 1 %}
                         <i class="fas fa-play"></i>
                         {% elif loop.previtem %}
                         <i class="fas fa-check"></i>
@@ -1373,7 +1376,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                     </div>
                     <div class="step-label">Capítulo {{ loop.index }}</div>
                     {% if not loop.last %}
-                    <div class="progress-line {% if loop.previtem %}completed{% endif %}"></div>
+                    <div class="progress-line {% if editorial %}{% if loop.index in editorial_graded %}completed{% endif %}{% elif loop.previtem %}completed{% endif %}"></div>
                     {% endif %}
                 </div>
                 {% endfor %}
@@ -1386,19 +1389,20 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             {% if capitulos %}
             {% for c in capitulos %}
             {% set cap_numero = loop.index %}
+            {% set cap_disponivel = cap_numero <= capitulos_liberados and (not editorial or cap_numero in editorial_open) %}
             <div class="chapter-container" id="chapter-{{ loop.index }}">
-                <div class="chapter-card {% if cap_numero > capitulos_liberados %}blocked-chapter{% endif %}">
-                    {% if cap_numero > capitulos_liberados %}
+                <div class="chapter-card {% if not cap_disponivel %}blocked-chapter{% endif %}">
+                    {% if not cap_disponivel %}
                     <div class="blocked-overlay">
                         <i class="fas fa-lock"></i>
-                        <p>Disponível em {{ dias_liberacao[loop.index0] }} dias após o início da disciplina</p>
+                        {% if editorial and cap_numero <= capitulos_liberados %}<p>Realize a prova da unidade anterior para liberar este capítulo.</p>{% else %}<p>Disponível em {{ dias_liberacao[loop.index0] }} dias após o início da disciplina</p>{% endif %}
                     </div>
                     {% endif %}
 
                     <div class="chapter-number">{{ loop.index }}</div>
 
                     <div class="chapter-header"
-                        onclick="{% if cap_numero <= capitulos_liberados %}toggleChapter({{ loop.index }}){% endif %}">
+                        onclick="{% if cap_disponivel %}toggleChapter({{ loop.index }}){% endif %}">
                         <div class="chapter-title">
                             <h3><i class="fas fa-bookmark" style="color: var(--secondary); margin-right: 10px;"></i>
                                 Capítulo {{ loop.index }}: {{ c['titulo'] }}</h3>
@@ -1409,7 +1413,12 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                         </div>
                     </div>
 
-                    <div class="chapter-content" id="content-{{ loop.index }}">
+                    <div class="chapter-content{% if not editorial %} sigeu-legacy-content{% endif %}" id="content-{{ loop.index }}">
+                        {% if editorial and cap_disponivel %}
+                        {% set unit = editorial.units[cap_numero-1] %}
+                        {% set study = editorial_progress[cap_numero] %}
+                        {% include "student/_editorial_chapter.html" %}
+                        {% elif not editorial %}
                         {% if c['video_url'] or c['pdf_url'] %}
                         <div class="learning-objectives">
                             <h5><i class="fas fa-bullseye"></i> Objetivos de Aprendizagem</h5>
@@ -1542,6 +1551,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
                             </div>
                             {% endif %}
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -1714,6 +1724,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
         });
     </script>
 <script defer src="{{ url_for('static', filename='js/student_campus_2026.js') }}?v=20261111a"></script>
+<script defer src="{{ url_for('static', filename='js/course_editorial.js') }}"></script>
 </body>
 
 </html>
