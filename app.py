@@ -47,6 +47,7 @@ from openpyxl import Workbook, load_workbook
 
 import plano_ensino
 import course_editorial
+import course_editorial_global
 from functools import lru_cache
 
 from db_pool import get_db_connection, pool_stats
@@ -1720,10 +1721,24 @@ def _proteger_avaliacoes_por_calendario():
     return None
 
 
-def _editorial_course_from_db(cur, disciplina_id):
+def _editorial_chapters(cur, disciplina_id):
+    # Uma prova duplicada não pode multiplicar capítulos na interface.
+    cur.execute("""
+        SELECT c.id, c.titulo, c.video_url, c.pdf_url,
+               (SELECT MIN(p.id) FROM provas p WHERE p.capitulo_id=c.id) AS prova_id
+        FROM capitulos c WHERE c.disciplina_id=%s ORDER BY c.id
+    """, (disciplina_id,))
+    return [dict(row) for row in cur.fetchall()]
+
+
+def _editorial_course_from_db(cur, disciplina_id, chapters=None):
     cur.execute("SELECT nome FROM disciplinas WHERE id=%s", (disciplina_id,))
     row = cur.fetchone()
-    return course_editorial.get_course(row["nome"]) if row else None
+    if not row:
+        return None
+    if chapters is None:
+        chapters = _editorial_chapters(cur, disciplina_id)
+    return course_editorial_global.resolve_course(row["nome"], chapters)
 
 
 @app.before_request
@@ -1739,12 +1754,12 @@ def _proteger_avaliacoes_editoriais():
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        catalog = _editorial_course_from_db(cur, disciplina_id)
+        chapters = _editorial_chapters(cur, disciplina_id)
+        catalog = _editorial_course_from_db(cur, disciplina_id, chapters)
         if not catalog:
             return None
-        chapters = _capitulos_ordenados(cur, disciplina_id)
-        if len(chapters) != 4:
-            return render_template("acesso_bloqueado.html", mensagem="Conteúdo em revisão pela secretaria."), 403
+        if numero > len(chapters):
+            return render_template("acesso_bloqueado.html", mensagem="Capítulo inexistente."), 404
         grades = _notas_logicas_disciplina(cur, aluno_id, disciplina_id, chapters)
         if grades[numero - 1]["nota"] is not None:
             return None
@@ -1772,12 +1787,10 @@ def editorial_study(disciplina_id, capitulo_numero):
     conn = get_db_connection()
     try:
         cur = conn.cursor()
-        catalog = _editorial_course_from_db(cur, disciplina_id)
-        if not catalog:
-            return jsonify({"erro": "Disciplina sem conteúdo editorial."}), 404
-        chapters = _capitulos_ordenados(cur, disciplina_id)
-        if len(chapters) != 4:
-            return jsonify({"erro": "Capítulos em revisão."}), 409
+        chapters = _editorial_chapters(cur, disciplina_id)
+        catalog = _editorial_course_from_db(cur, disciplina_id, chapters)
+        if not catalog or capitulo_numero > len(chapters):
+            return jsonify({"erro": "Capítulo inexistente."}), 404
         cur.execute("SELECT data_inicio FROM aluno_disciplina_datas WHERE aluno_id=%s AND disciplina_id=%s", (aluno_id, disciplina_id))
         row = cur.fetchone()
         if not row or not row.get("data_inicio"):
@@ -1788,7 +1801,7 @@ def editorial_study(disciplina_id, capitulo_numero):
         except (ValueError, TypeError):
             return jsonify({"erro": "Calendário inválido."}), 403
         grades = _notas_logicas_disciplina(cur, aluno_id, disciplina_id, chapters)
-        if capitulo_numero not in course_editorial.open_units(calendar, grades):
+        if capitulo_numero not in course_editorial.open_units(calendar, grades, total=len(chapters)):
             return jsonify({"erro": "Unidade ainda bloqueada."}), 403
         payload = request.get_json(silent=True)
         progress = course_editorial.save_event(cur, aluno_id, disciplina_id, chapters[capitulo_numero - 1]["id"],
@@ -1819,8 +1832,8 @@ def editorial_book(disciplina_id):
         course = _editorial_course_from_db(conn.cursor(), disciplina_id)
     finally:
         conn.close()
-    if not course:
-        return render_template("acesso_bloqueado.html", mensagem="Livro ainda não cadastrado."), 404
+    if not course or course.get("mode") != "full":
+        return render_template("acesso_bloqueado.html", mensagem="Consulte o livro cadastrado diretamente na unidade."), 404
     response = send_file(BytesIO(_editorial_book_pdf(course["name"], course["version"])),
                          mimetype="application/pdf", download_name=course["slug"] + ".pdf",
                          as_attachment=False, max_age=0)
@@ -1837,13 +1850,13 @@ def disciplina(disciplina_id):
     # VERIFICAR SE DISCIPLINA ESTÁ CONCLUÍDA
     concluida, status = verificar_disciplina_concluida(aluno_id, disciplina_id)
 
-    if concluida and status == "concluida_com_final":
+    if concluida and status == "concluida_com_final" and request.args.get("situacao") == "1":
         return render_template("disciplina_concluida.html",
                              mensagem="✅ Disciplina Concluída!",
                              detalhes="Esta disciplina já foi totalmente concluída, incluindo a avaliação final.",
                              disciplina_id=disciplina_id)
 
-    if concluida and status == "aguardando_final":
+    if concluida and status == "aguardando_final" and request.args.get("situacao") == "1":
         # Calcular data de liberação da prova final
         data_liberacao = calcular_data_liberacao_final(aluno_id, disciplina_id)
 
@@ -1892,37 +1905,31 @@ def disciplina(disciplina_id):
     cursor.execute("SELECT * FROM disciplinas WHERE id = %s", (disciplina_id,))
     disciplina = cursor.fetchone()
 
-    cursor.execute("""
-        SELECT c.id, c.titulo, c.video_url, c.pdf_url, p.id AS prova_id
-        FROM capitulos c
-        LEFT JOIN provas p ON p.capitulo_id = c.id
-        WHERE c.disciplina_id = %s
-        ORDER BY c.id
-    """, (disciplina_id,))
-    capitulos = cursor.fetchall()
+    capitulos = _editorial_chapters(cursor, disciplina_id)
     cursor.execute(
         "SELECT r2_key FROM planos_ensino_r2 WHERE disciplina_id=%s",
         (disciplina_id,),
     )
     plano_disponivel = cursor.fetchone() is not None
-    editorial = course_editorial.get_course(disciplina["nome"]) if disciplina else None
+    editorial = course_editorial_global.resolve_course(disciplina["nome"], capitulos) if disciplina else None
     editorial_open, editorial_graded, editorial_progress = [], [], {}
     editorial_current = None
     editorial_token = None
-    if editorial and len(capitulos) == 4:
-        # Exibição do vídeo atualizado sem alterar o histórico ou as provas existentes.
-        capitulos = [dict(c) for c in capitulos]
-        for c, unit in zip(capitulos, editorial["units"]):
-            c["video_url"] = unit["video"]
-            c["pdf_url"] = url_for("editorial_book", disciplina_id=disciplina_id)
+    if editorial and capitulos:
+        if editorial["mode"] == "full":
+            # Materiais autorais versionados têm precedência sobre URLs legadas.
+            for c, unit in zip(capitulos, editorial["units"]):
+                c["video_url"] = unit["video"]
+                c["pdf_url"] = url_for("editorial_book", disciplina_id=disciplina_id)
         grades = _notas_logicas_disciplina(cursor, aluno_id, disciplina_id, capitulos)
         editorial_graded = [g["ordem"] for g in grades if g["nota"] is not None]
-        editorial_open = course_editorial.open_units(capitulos_liberados, grades)
+        if concluida:
+            capitulos_liberados = max(capitulos_liberados, len(capitulos))
+        editorial_open = course_editorial.open_units(capitulos_liberados, grades, total=len(capitulos))
         editorial_current = next((n for n in editorial_open if n not in editorial_graded), None)
         editorial_progress = course_editorial.read_progress(cursor, aluno_id, disciplina_id, capitulos, editorial["version"])
         editorial_token = session.setdefault("editorial_token", secrets.token_urlsafe(32))
-    else:
-        editorial = None
+        app.logger.info("SIGEU EDITORIAL disciplina=%s modo=%s capitulos=%s liberados=%s", disciplina_id, editorial["mode"], len(capitulos), len(editorial_open))
     conn.close()
 
     return render_template(
@@ -1937,7 +1944,8 @@ def disciplina(disciplina_id):
         editorial_current=editorial_current,
         editorial_progress=editorial_progress,
         editorial_token=editorial_token,
-        editorial_emphasis=course_editorial.emphasis
+        editorial_emphasis=course_editorial.emphasis,
+        editorial_concluida=concluida
     )
 
 @app.route("/disciplina/<int:disciplina_id>/plano-ensino")

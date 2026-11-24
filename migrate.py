@@ -369,6 +369,8 @@ def main():
     if os.getenv("SIGEU_LIBERAR_MATRICULA_HELI", "") == "1":
         from scripts.liberar_matricula_heli import executar as liberar_heli
         liberar_heli()
+    from course_editorial_smoke import smoke_editorial
+    smoke_editorial()
     print("[MIGRATE] Banco conferido. DDL fora das requisições HTTP.", flush=True)
     # Teste funcional real, somente leitura, no banco conectado ao deploy.
     # Testa a sessao administrativa e renderizacao completa sem expor alunos no log.
