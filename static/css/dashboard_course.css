@@ -1,0 +1,86 @@
+/* Apenas o painel de aprendizagem e a correção de largura do nome.
+   O cabeçalho, a navegação lateral, a paleta e o rodapé do Dashboard não mudam. */
+body.portal07.student-page.dashboard-page .sidebar .user-profile .profile-text{
+ flex:1 1 0!important;min-width:0!important;max-width:100%!important;width:auto!important;
+}
+body.portal07.student-page.dashboard-page .sidebar .user-profile .profile-img{flex:0 0 auto!important}
+body.portal07.student-page.dashboard-page .sidebar .profile-text .name{
+ display:block!important;max-width:100%!important;min-width:0!important;
+ white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important;
+ font-size:clamp(11px,.8vw,13px)!important;line-height:1.35!important;
+ text-overflow:clip!important;overflow:hidden!important;
+}
+body.portal07.student-page.dashboard-page .sidebar .profile-text .ra{white-space:normal!important;overflow-wrap:anywhere!important}
+#sigeu-course-panel[hidden]{display:none!important}
+#sigeu-course-panel{width:100%;min-width:0;max-width:100%;scroll-margin-top:100px}
+#sigeu-course-panel .sigeu-course-view{
+ --course-ink:#153852;--course-accent:#256879;--course-border:#d7e2e8;--course-ok:#2d6a62;
+ width:100%;min-width:0;max-width:100%;
+}
+#sigeu-course-panel .sigeu-course-heading{
+ display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+ padding:0 0 20px;margin:0 0 18px;border-bottom:1px solid #d7e2e8;
+}
+#sigeu-course-panel .sigeu-course-heading h1{font-size:clamp(21px,2.1vw,30px)!important;line-height:1.25;margin:6px 0 0!important;color:var(--course-ink)!important;overflow-wrap:anywhere}
+#sigeu-course-panel .sigeu-course-kicker{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#536d80!important;margin:0}
+#sigeu-course-panel .sigeu-course-tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;max-width:48%}
+#sigeu-course-panel .sigeu-course-tools a,#sigeu-course-panel .sigeu-course-back{
+ display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #cddce5;border-radius:2px!important;
+ color:#153852!important;background:#fff!important;box-shadow:none!important;font:inherit;font-size:13px;cursor:pointer;text-decoration:none;
+}
+#sigeu-course-panel .progress-tracker{
+ display:flex;align-items:flex-start;justify-content:space-between;gap:0;
+ padding:20px 16px;margin:0 0 24px;background:#fff;border:1px solid var(--course-border);border-radius:2px;
+}
+#sigeu-course-panel .progress-step{flex:1 1 0;min-width:0;position:relative;display:flex;align-items:center;flex-direction:column;text-align:center;gap:8px}
+#sigeu-course-panel .step-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#f2f5f7;border:1px solid #c9d8e1;color:#647986;z-index:1;font-size:15px}
+#sigeu-course-panel .progress-step.current .step-icon{background:var(--course-accent)!important;border-color:#bd9457!important;color:#fff!important;box-shadow:0 0 0 3px #eae4d9}
+#sigeu-course-panel .progress-step.completed .step-icon{background:var(--course-ok)!important;color:white!important;border-color:var(--course-ok)!important}
+#sigeu-course-panel .step-label{font-size:12px;color:var(--course-ink);font-weight:650}
+#sigeu-course-panel .progress-line{position:absolute;top:19px;left:50%;width:100%;height:2px;background:#d7e2e8!important}
+#sigeu-course-panel .progress-line.completed{background:var(--course-ok)!important}
+#sigeu-course-panel .progress-step[role=button]{cursor:pointer}
+#sigeu-course-panel .chapter-container{min-width:0;margin:0 0 18px}
+#sigeu-course-panel .chapter-card{
+ position:relative;overflow:hidden;padding:0!important;margin:0!important;background:#fff!important;
+ border:1px solid var(--course-border)!important;border-left:3px solid var(--course-accent)!important;
+ border-radius:2px!important;box-shadow:none!important;transform:none!important;
+}
+#sigeu-course-panel .chapter-header{
+ position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:18px!important;
+ cursor:pointer;background:#fff!important;border-bottom:1px solid var(--course-border)!important;
+}
+#sigeu-course-panel .chapter-title{min-width:0}
+#sigeu-course-panel .chapter-title h3{font-size:clamp(15px,1.4vw,19px)!important;line-height:1.4;margin:0 0 6px!important;color:var(--course-ink)!important;overflow-wrap:anywhere}
+#sigeu-course-panel .chapter-subtitle{font-size:12px!important;color:#536d80!important;margin:0!important}
+#sigeu-course-panel .chapter-number{display:none}
+#sigeu-course-panel .chapter-toggle{color:var(--course-accent);transition:transform .2s ease;flex:0 0 auto}
+#sigeu-course-panel .chapter-toggle.rotated{transform:rotate(180deg)}
+#sigeu-course-panel .chapter-content{display:none;padding:0!important;background:#fff!important}
+#sigeu-course-panel .chapter-content.show{display:block!important}
+#sigeu-course-panel .blocked-chapter{border-left-color:#9aa9b2!important}
+#sigeu-course-panel .blocked-chapter .chapter-header{cursor:default}
+#sigeu-course-panel .blocked-overlay{
+ display:flex;align-items:center;gap:10px;padding:12px 18px;background:#f3f6f8;
+ border-bottom:1px solid var(--course-border);color:#536d80;font-size:12px;
+}
+#sigeu-course-panel .blocked-overlay p{margin:0;color:#536d80!important}
+#sigeu-course-panel .chapter-actions{margin:0 0 18px}
+#sigeu-course-panel .sigeu-course-message{padding:24px;background:#fff;border:1px solid #d7e2e8}
+#sigeu-course-panel .sigeu-course-message p{margin:0 0 14px}
+#sigeu-course-panel .sigeu-editorial .se-column{padding:clamp(14px,3vw,42px)}
+#sigeu-course-panel .sigeu-editorial .se-body{text-align:justify!important;hyphens:auto!important;-webkit-hyphens:auto!important}
+#sigeu-course-panel .sigeu-editorial .se-frame p{color:#e2eef2!important}
+#sigeu-course-panel .sigeu-editorial .se-frame h4{color:#fff!important}
+#sigeu-course-panel .sigeu-editorial .se-state.se-done{color:#2d6a62!important}
+@media(max-width:640px){
+ #sigeu-course-panel .sigeu-course-heading{flex-direction:column;gap:10px}
+ #sigeu-course-panel .sigeu-course-tools{max-width:100%;justify-content:flex-start}
+ #sigeu-course-panel .progress-tracker{padding:15px 4px}
+ #sigeu-course-panel .step-icon{width:32px;height:32px;font-size:13px}
+ #sigeu-course-panel .progress-line{top:15px}
+ #sigeu-course-panel .step-label{font-size:10px}
+ #sigeu-course-panel .chapter-header{padding:13px 10px!important}
+ #sigeu-course-panel .sigeu-editorial .se-column{padding:14px 12px}
+}
+@media(prefers-reduced-motion:reduce){#sigeu-course-panel .chapter-toggle{transition:none}}
