@@ -91,8 +91,8 @@
                 <p class="se-feedback" role="status">Selecione o primeiro conceito.</p>
             {% elif block.type == 'lab' %}
                 <p class="se-caption">Dados fictícios em escala de 0 a 10. Altere os cinco registros e observe como média e amplitude respondem.</p>
-                <div class="se-lab-grid">{% for v in block.values %}<label>Registro {{ loop.index }} <input type="range" min="0" max="10" step="1" value="{{ v }}" class="se-lab-input"><output>{{ v }}</output></label>{% endfor %}</div>
-                <div class="se-bars" aria-label="Gráfico dos registros">{% for v in block.values %}<div><span style="height:{{ v*10 }}%"></span><small>{{ v }}</small></div>{% endfor %}</div>
+                <div class="se-lab-grid">{% for v in block['values'] %}<label>Registro {{ loop.index }} <input type="range" min="0" max="10" step="1" value="{{ v }}" class="se-lab-input"><output>{{ v }}</output></label>{% endfor %}</div>
+                <div class="se-bars" aria-label="Gráfico dos registros">{% for v in block['values'] %}<div><span style="height:{{ v*10 }}%"></span><small>{{ v }}</small></div>{% endfor %}</div>
                 <div class="se-formula" aria-label="Média aritmética">
                     <math display="block"><mrow><mover><mi>x</mi><mo>¯</mo></mover><mo>=</mo><mfrac><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mi>x</mi><mi>i</mi></msub></mrow><mi>n</mi></mfrac></mrow></math>
                     <div>Média: <b class="se-mean"></b> · Amplitude: <b class="se-range"></b></div>
