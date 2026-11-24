@@ -16,17 +16,18 @@
   function renderProgress(article) {
     const state = states.get(article);
     const required = [...article.querySelectorAll('.se-block[data-required="1"]')];
-    const done = required.filter(block => state.done.has(block.dataset.resource)).length;
+    const tracked = [...article.querySelectorAll('.se-block[data-track="1"]')];
+    const done = tracked.filter(block => state.done.has(block.dataset.resource)).length;
     article.querySelector('.se-completed-count').textContent = done;
     article.querySelector('.se-time').textContent = fmt(state.seconds);
-    const percent = required.length ? Math.round(100 * done / required.length) : 0;
+    const percent = tracked.length ? Math.round(100 * done / tracked.length) : 0;
     const meter = article.querySelector('.se-meter');
     meter.setAttribute('aria-valuenow', String(percent));
     meter.firstElementChild.style.width = percent + '%';
-    required.forEach(block => {
+    tracked.forEach(block => {
       const complete = state.done.has(block.dataset.resource);
       const label = block.querySelector('.se-state');
-      label.textContent = complete ? '✓ Concluído' : 'Obrigatório';
+      label.textContent = complete ? '✓ Concluído' : (block.dataset.required === '1' ? 'Obrigatório' : 'Opcional');
       label.classList.toggle('se-done', complete);
       const indexLabel = article.querySelector('[data-index-status="' + block.dataset.resource + '"]');
       if (indexLabel) { indexLabel.textContent = complete ? '✓' : ''; indexLabel.classList.toggle('se-done',complete); }
@@ -34,7 +35,7 @@
       if (button) {
         button.disabled = complete;
         button.classList.toggle('se-done',complete);
-        button.textContent = complete ? '✓ Leitura concluída' : 'Concluir leitura ✓';
+        button.textContent = complete ? '✓ Concluído' : (block.dataset.kind === 'existing_video' ? 'Registrar visualização ✓' : 'Concluir leitura ✓');
       }
       if (complete && block.dataset.kind === 'video') {
         block.querySelector('.se-video-status').textContent = '✓ Videoaula principal concluída.';
@@ -42,7 +43,7 @@
     });
     const proof = article.querySelector('.se-proof-link');
     if (proof) {
-      const ready = done === required.length && required.length > 0;
+      const ready = required.every(block => state.done.has(block.dataset.resource));
       proof.hidden = !ready;
       proof.setAttribute('aria-disabled',String(!ready));
       article.querySelector('.se-proof-status').textContent = ready ? '✓ Recursos concluídos. A prova está liberada.' : 'Conclua os recursos obrigatórios para liberar a prova.';
@@ -221,6 +222,12 @@
       const mark=block.querySelector('.se-mark');if(mark)mark.onclick=()=>complete(article,block);
       bindQuestions(article,block);bindGraph(article,block);bindDeck(block);bindLab(block);
       bindSelects(article,block);bindOrder(article,block);bindAudio(block);bindVideo(article,block);
+      const review=block.querySelector('.se-check-study');
+      if(review)review.onclick=()=>{
+        const checks=[...block.querySelectorAll('.se-study-check')];
+        if(checks.every(x=>x.checked)){feedback(block,'✓ Revisão registrada.');complete(article,block);}
+        else feedback(block,'Conclua os itens de revisão antes de registrar.');
+      };
     });
     renderProgress(article);
   });
