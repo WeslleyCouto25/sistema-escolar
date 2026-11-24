@@ -62,7 +62,12 @@ class GlobalEditorialTests(unittest.TestCase):
     def test_template_no_old_content_branch(self):
         text=Path("templates/disciplina.html").read_text(encoding="utf-8")
         self.env.parse(text)
-        self.assertIn('include "student/_editorial_chapter.html"',text)
+        self.assertIn('include "student/_course_view.html"',text)
+        fragment=Path("templates/student/_course_view.html").read_text(encoding="utf-8")
+        self.env.parse(fragment)
+        self.assertIn('include "student/_editorial_chapter.html"',fragment)
+        self.assertNotIn("<footer",fragment)
+        self.assertNotIn("<nav class=\"sidebar\"",fragment)
         self.assertNotIn("sigeu-legacy-content",text)
         self.assertNotIn('elif not editorial',text)
 
