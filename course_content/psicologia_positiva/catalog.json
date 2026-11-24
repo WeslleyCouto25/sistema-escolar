@@ -1,0 +1,849 @@
+{
+  "name": "Fundamentos da Psicologia Positiva",
+  "slug": "psicologia_positiva",
+  "aliases": [
+    "Fundamentos da Psicologia Positiva",
+    "Psicologia Positiva"
+  ],
+  "version": "20261124-1",
+  "references": [
+    "BOLIER, Linda et al. Positive psychology interventions: a meta-analysis of randomized controlled studies. BMC Public Health, v. 13, art. 119, 2013. https://doi.org/10.1186/1471-2458-13-119",
+    "BRYANT, Fred B.; VEROFF, Joseph. Savoring: a new model of positive experience. Mahwah: Lawrence Erlbaum Associates, 2007.",
+    "CSIKSZENTMIHALYI, Mihaly. Flow: the psychology of optimal experience. New York: Harper & Row, 1990.",
+    "DECI, Edward L.; RYAN, Richard M. The what and why of goal pursuits: human needs and the self-determination of behavior. Psychological Inquiry, v. 11, n. 4, p. 227–268, 2000. https://doi.org/10.1207/S15327965PLI1104_01",
+    "DIENER, Ed. Subjective well-being. Psychological Bulletin, v. 95, n. 3, p. 542–575, 1984. https://doi.org/10.1037/0033-2909.95.3.542",
+    "DIENER, Ed. Subjective well-being: the science of happiness and a proposal for a national index. American Psychologist, v. 55, n. 1, p. 34–43, 2000. https://doi.org/10.1037/0003-066X.55.1.34",
+    "DIENER, Ed et al. The Satisfaction With Life Scale. Journal of Personality Assessment, v. 49, n. 1, p. 71–75, 1985. https://doi.org/10.1207/s15327752jpa4901_13",
+    "EMMONS, Robert A.; MCCULLOUGH, Michael E. Counting blessings versus burdens: an experimental investigation of gratitude and subjective well-being in daily life. Journal of Personality and Social Psychology, v. 84, n. 2, p. 377–389, 2003. https://doi.org/10.1037/0022-3514.84.2.377",
+    "FREDRICKSON, Barbara L. The role of positive emotions in positive psychology: the broaden-and-build theory of positive emotions. American Psychologist, v. 56, n. 3, p. 218–226, 2001. https://doi.org/10.1037/0003-066X.56.3.218",
+    "LAZARUS, Richard S.; FOLKMAN, Susan. Stress, appraisal, and coping. New York: Springer, 1984.",
+    "MARTELA, Frank; STEGER, Michael F. The three meanings of meaning in life: distinguishing coherence, purpose, and significance. The Journal of Positive Psychology, v. 11, n. 5, p. 531–545, 2016. https://doi.org/10.1080/17439760.2015.1137623",
+    "MASTEN, Ann S. Ordinary magic: resilience processes in development. American Psychologist, v. 56, n. 3, p. 227–238, 2001. https://doi.org/10.1037/0003-066X.56.3.227",
+    "NIEMIEC, Ryan M. Six functions of character strengths for thriving at times of adversity and opportunity: a theoretical perspective. Applied Research in Quality of Life, v. 15, p. 551–572, 2020. Publicação online: 2019. https://doi.org/10.1007/s11482-018-9692-2",
+    "PETERSON, Christopher; SELIGMAN, Martin E. P. Character strengths and virtues: a handbook and classification. New York: Oxford University Press, 2004.",
+    "RYFF, Carol D. Happiness is everything, or is it? Explorations on the meaning of psychological well-being. Journal of Personality and Social Psychology, v. 57, n. 6, p. 1069–1081, 1989. https://doi.org/10.1037/0022-3514.57.6.1069",
+    "SCHEIER, Michael F.; CARVER, Charles S. Optimism, coping, and health: assessment and implications of generalized outcome expectancies. Health Psychology, v. 4, n. 3, p. 219–247, 1985. https://doi.org/10.1037/0278-6133.4.3.219",
+    "SELIGMAN, Martin E. P. Flourish: a visionary new understanding of happiness and well-being. New York: Free Press, 2011.",
+    "SELIGMAN, Martin E. P.; CSIKSZENTMIHALYI, Mihaly. Positive psychology: an introduction. American Psychologist, v. 55, n. 1, p. 5–14, 2000. https://doi.org/10.1037/0003-066X.55.1.5",
+    "SNYDER, Charles R. et al. The will and the ways: development and validation of an individual-differences measure of hope. Journal of Personality and Social Psychology, v. 60, n. 4, p. 570–585, 1991. https://doi.org/10.1037/0022-3514.60.4.570",
+    "TEDESCHI, Richard G.; CALHOUN, Lawrence G. Posttraumatic growth: conceptual foundations and empirical evidence. Psychological Inquiry, v. 15, n. 1, p. 1–18, 2004. https://doi.org/10.1207/S15327965PLI1501_01",
+    "WATSON, David; CLARK, Lee Anna; TELLEGEN, Auke. Development and validation of brief measures of positive and negative affect: the PANAS scales. Journal of Personality and Social Psychology, v. 54, n. 6, p. 1063–1070, 1988. https://doi.org/10.1037/0022-3514.54.6.1063"
+  ],
+  "units": [
+    {
+      "title": "Introdução à Psicologia Positiva",
+      "subtitle": "Origem, objeto, modelos de bem-estar e avaliação científica",
+      "accent": "#256879",
+      "video": "https://pub-1371be77f091443ba1bcf8b5247fbc21.r2.dev/PsicoPositiva/AULA_01_PSICOLOGIA_POSITIVA_M6_EDITORIAL.mp4",
+      "audio_summary": "A Psicologia Positiva examina condições de funcionamento humano. Bem-estar subjetivo e psicológico são conceitos relacionados, mas distintos. O modelo PERMA organiza emoções positivas, engajamento, relacionamentos, sentido e realização. A análise precisa considerar evidências e condições institucionais.",
+      "blocks": [
+        {
+          "type": "reading",
+          "id": "leitura-1",
+          "title": "A constituição do campo científico",
+          "start": 0,
+          "end": 3,
+          "required": true
+        },
+        {
+          "type": "video",
+          "id": "video-principal",
+          "title": "Videoaula 01 · Introdução à Psicologia Positiva",
+          "required": true
+        },
+        {
+          "type": "reading",
+          "id": "leitura-4",
+          "title": "Níveis de análise e perspectivas de bem-estar",
+          "start": 3,
+          "end": 6,
+          "required": true
+        },
+        {
+          "type": "diagram",
+          "id": "mapa-niveis",
+          "title": "Figura 1. O bem-estar em três níveis",
+          "required": false,
+          "labels": [
+            "Indivíduo",
+            "Relações",
+            "Instituições"
+          ],
+          "descriptions": [
+            "Emoções, capacidades e autorregulação",
+            "Apoio, reciprocidade e pertencimento",
+            "Normas, recursos e oportunidades"
+          ]
+        },
+        {
+          "type": "slides",
+          "id": "slides-1",
+          "title": "Perspectivas do bem-estar",
+          "required": false,
+          "frames": [
+            [
+              "Dois enfoques",
+              "Hedônico: afetos e satisfação. Eudaimônico: funcionamento, autonomia e propósito."
+            ],
+            [
+              "Uma situação, duas leituras",
+              "Uma atividade difícil pode ter pouco prazer imediato e elevado significado."
+            ],
+            [
+              "Implicação para pesquisa",
+              "Defina o construto antes de escolher a medida. Não trate indicadores distintos como equivalentes."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-7",
+          "title": "O modelo PERMA",
+          "start": 6,
+          "end": 7,
+          "required": true
+        },
+        {
+          "type": "graph",
+          "id": "grafo-perma",
+          "title": "Grafo de associação: dimensões do PERMA",
+          "required": true,
+          "pairs": [
+            [
+              "P · Emoções positivas",
+              "Experiências afetivas agradáveis"
+            ],
+            [
+              "E · Engajamento",
+              "Envolvimento com uma atividade"
+            ],
+            [
+              "R · Relacionamentos",
+              "Vínculos e reciprocidade"
+            ],
+            [
+              "M · Sentido",
+              "Direção e significância"
+            ],
+            [
+              "A · Realização",
+              "Progresso e objetivos"
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-8",
+          "title": "Engajamento, relações, sentido e realização",
+          "start": 7,
+          "end": 11,
+          "required": true
+        },
+        {
+          "type": "book",
+          "id": "livro",
+          "title": "Livro da disciplina · PDF",
+          "required": false
+        },
+        {
+          "type": "reading",
+          "id": "leitura-12",
+          "title": "Motivação e operacionalização",
+          "start": 11,
+          "end": 13,
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-2",
+          "title": "Da teoria à investigação",
+          "required": false,
+          "frames": [
+            [
+              "Questão",
+              "Qual dimensão do bem-estar será investigada?"
+            ],
+            [
+              "Indicador",
+              "Escolha uma medida apropriada à população e ao objetivo."
+            ],
+            [
+              "Interpretação",
+              "Associação não demonstra causalidade. Examine desenho, contexto e limitações."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-14",
+          "title": "Evidências e responsabilidade ética",
+          "start": 13,
+          "end": 15,
+          "required": true
+        },
+        {
+          "type": "quiz",
+          "id": "revisao-1",
+          "title": "Verificação conceitual",
+          "required": true,
+          "questions": [
+            {
+              "prompt": "Uma estudante sente ansiedade antes da prova e avalia positivamente a vida. O que isso demonstra?",
+              "options": [
+                "Incompatibilidade entre medidas",
+                "Coexistência de experiências afetivas e satisfação",
+                "Ausência de bem-estar"
+              ],
+              "answer": 1,
+              "feedback": "Satisfação global e estados afetivos são dimensões diferentes."
+            },
+            {
+              "prompt": "A instituição pretende ampliar pertencimento. Qual medida é mais coerente?",
+              "options": [
+                "Número de cliques apenas",
+                "Renda dos docentes",
+                "Indicadores de pertencimento e acesso a recursos"
+              ],
+              "answer": 2,
+              "feedback": "A medida deve corresponder ao construto e ao contexto."
+            },
+            {
+              "prompt": "Qual alternativa evita positividade compulsória?",
+              "options": [
+                "Oferecer apoio e respeitar emoções difíceis",
+                "Exigir gratidão em público",
+                "Substituir acompanhamento por entusiasmo"
+              ],
+              "answer": 0,
+              "feedback": "Promoção de bem-estar não implica negar sofrimento."
+            }
+          ]
+        },
+        {
+          "type": "audio",
+          "id": "audio",
+          "title": "Síntese em áudio · escuta opcional",
+          "required": false
+        },
+        {
+          "type": "references",
+          "id": "referencias",
+          "title": "Referências e leituras",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Emoções positivas e bem-estar subjetivo",
+      "subtitle": "Afetos, satisfação, ampliação de repertórios e avaliação de intervenções",
+      "accent": "#256879",
+      "video": "https://pub-1371be77f091443ba1bcf8b5247fbc21.r2.dev/PsicoPositiva/AULA_02_PSICOLOGIA_POSITIVA_M6_EDITORIAL.mp4",
+      "audio_summary": "Diener distingue satisfação com a vida e dimensões afetivas. Fredrickson propõe ampliação de repertórios e construção de recursos. Emoções desagradáveis podem ter funções adaptativas. A avaliação exige medidas adequadas e desenhos capazes de distinguir associação e causalidade.",
+      "blocks": [
+        {
+          "type": "video",
+          "id": "video-principal",
+          "title": "Videoaula 02 · Emoções e bem-estar",
+          "required": true
+        },
+        {
+          "type": "reading",
+          "id": "leitura-1",
+          "title": "Experiência emocional e medidas de bem-estar",
+          "start": 0,
+          "end": 4,
+          "required": true
+        },
+        {
+          "type": "lab",
+          "id": "laboratorio-afetos",
+          "title": "Laboratório de dados · média e dispersão",
+          "required": true,
+          "values": [
+            2,
+            4,
+            6,
+            8,
+            10
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-5",
+          "title": "Ampliação, construção e funções emocionais",
+          "start": 4,
+          "end": 7,
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-1",
+          "title": "Teoria broaden-and-build",
+          "required": false,
+          "frames": [
+            [
+              "Ampliação",
+              "Experiências positivas podem ampliar possibilidades percebidas."
+            ],
+            [
+              "Construção",
+              "A prática continuada pode contribuir para recursos pessoais e sociais."
+            ],
+            [
+              "Limites",
+              "O mecanismo depende da tarefa, das condições e das evidências."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-8",
+          "title": "Gratidão e apreciação da experiência",
+          "start": 7,
+          "end": 9,
+          "required": true
+        },
+        {
+          "type": "diary",
+          "id": "diario",
+          "title": "Diário afetivo simulado",
+          "required": true,
+          "situations": [
+            [
+              "Início de um estágio",
+              "Interesse e preocupação"
+            ],
+            [
+              "Conclusão de uma tarefa",
+              "Satisfação e cansaço"
+            ],
+            [
+              "Conflito em equipe",
+              "Indignação e vontade de dialogar"
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-10",
+          "title": "Expectativas, esperança e registro cotidiano",
+          "start": 9,
+          "end": 12,
+          "required": true
+        },
+        {
+          "type": "audio",
+          "id": "audio",
+          "title": "Síntese em áudio · escuta opcional",
+          "required": false
+        },
+        {
+          "type": "reading",
+          "id": "leitura-13",
+          "title": "Leitura de dados e causalidade",
+          "start": 12,
+          "end": 14,
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-2",
+          "title": "Como ler uma intervenção",
+          "required": false,
+          "frames": [
+            [
+              "Antes e depois",
+              "Mudança observada não demonstra, sozinha, um efeito causal."
+            ],
+            [
+              "Comparação",
+              "Investigue diferenças iniciais, grupo de comparação e abandono."
+            ],
+            [
+              "Resultado",
+              "Considere magnitude, incerteza, efeitos adversos e aplicabilidade."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-15",
+          "title": "Evidências, diversidade e responsabilidade",
+          "start": 14,
+          "end": 16,
+          "required": true
+        },
+        {
+          "type": "quiz",
+          "id": "revisao-2",
+          "title": "Interpretação de resultados",
+          "required": true,
+          "questions": [
+            {
+              "prompt": "Dois grupos têm a mesma média e dispersões diferentes. O que é correto?",
+              "options": [
+                "As distribuições podem ser muito diferentes",
+                "As necessidades são necessariamente idênticas",
+                "A média demonstra causalidade"
+              ],
+              "answer": 0,
+              "feedback": "A média não descreve a heterogeneidade."
+            },
+            {
+              "prompt": "Afeto positivo alto significa afeto negativo zero?",
+              "options": [
+                "Sim",
+                "Não, podem coexistir",
+                "Somente em jovens"
+              ],
+              "answer": 1,
+              "feedback": "As dimensões não são equivalentes."
+            },
+            {
+              "prompt": "Uma oficina recebe avaliações positivas. Qual conclusão é defensável?",
+              "options": [
+                "A oficina curou transtornos",
+                "O efeito causal está provado",
+                "Os participantes avaliaram favoravelmente a oficina"
+              ],
+              "answer": 2,
+              "feedback": "Aceitação é diferente de eficácia."
+            }
+          ]
+        },
+        {
+          "type": "book",
+          "id": "livro",
+          "title": "Livro da disciplina · PDF",
+          "required": false
+        },
+        {
+          "type": "references",
+          "id": "referencias",
+          "title": "Referências e leituras",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Forças de caráter e virtudes humanas",
+      "subtitle": "Classificação VIA, interpretação contextual e desenvolvimento",
+      "accent": "#256879",
+      "video": "https://pub-1371be77f091443ba1bcf8b5247fbc21.r2.dev/PsicoPositiva/AULA_03_PSICOLOGIA_POSITIVA_M6_EDITORIAL.mp4",
+      "audio_summary": "A classificação VIA organiza vinte e quatro forças em seis virtudes: sabedoria, coragem, humanidade, justiça, temperança e transcendência. As forças se manifestam em contextos específicos, não são diagnósticos, e podem ser utilizadas em excesso ou de maneira insuficiente.",
+      "blocks": [
+        {
+          "type": "reading",
+          "id": "leitura-1",
+          "title": "A classificação e sua lógica",
+          "start": 0,
+          "end": 2,
+          "required": true
+        },
+        {
+          "type": "matrix",
+          "id": "matriz-via",
+          "title": "Atlas das seis virtudes e das 24 forças",
+          "required": false,
+          "groups": [
+            [
+              "Sabedoria",
+              [
+                "Criatividade",
+                "Curiosidade",
+                "Julgamento",
+                "Amor pelo aprendizado",
+                "Perspectiva"
+              ]
+            ],
+            [
+              "Coragem",
+              [
+                "Bravura",
+                "Perseverança",
+                "Honestidade",
+                "Vitalidade"
+              ]
+            ],
+            [
+              "Humanidade",
+              [
+                "Amor",
+                "Bondade",
+                "Inteligência social"
+              ]
+            ],
+            [
+              "Justiça",
+              [
+                "Trabalho em equipe",
+                "Equidade",
+                "Liderança"
+              ]
+            ],
+            [
+              "Temperança",
+              [
+                "Perdão",
+                "Humildade",
+                "Prudência",
+                "Autorregulação"
+              ]
+            ],
+            [
+              "Transcendência",
+              [
+                "Apreciação da beleza e excelência",
+                "Gratidão",
+                "Esperança",
+                "Humor",
+                "Espiritualidade"
+              ]
+            ]
+          ]
+        },
+        {
+          "type": "video",
+          "id": "video-principal",
+          "title": "Videoaula 03 · Forças de caráter",
+          "required": true
+        },
+        {
+          "type": "reading",
+          "id": "leitura-3",
+          "title": "Sabedoria e coragem",
+          "start": 2,
+          "end": 6,
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-1",
+          "title": "As forças na ação intelectual",
+          "required": false,
+          "frames": [
+            [
+              "Curiosidade e criatividade",
+              "Explorar perguntas e produzir alternativas pertinentes."
+            ],
+            [
+              "Julgamento",
+              "Examinar evidências, inclusive quando contradizem expectativas."
+            ],
+            [
+              "Coragem",
+              "Enfrentar obstáculos considerando segurança e objetivos."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-7",
+          "title": "Humanidade e justiça",
+          "start": 6,
+          "end": 8,
+          "required": true
+        },
+        {
+          "type": "classify",
+          "id": "classificacao-via",
+          "title": "Classifique as situações nas virtudes",
+          "required": true,
+          "categories": [
+            "Sabedoria",
+            "Coragem",
+            "Humanidade",
+            "Justiça",
+            "Temperança",
+            "Transcendência"
+          ],
+          "items": [
+            [
+              "Revisar uma hipótese diante de evidências",
+              0
+            ],
+            [
+              "Comunicar um problema apesar do receio",
+              1
+            ],
+            [
+              "Oferecer apoio respeitando a autonomia",
+              2
+            ],
+            [
+              "Distribuir tarefas segundo critérios equitativos",
+              3
+            ],
+            [
+              "Considerar consequências antes de decidir",
+              4
+            ],
+            [
+              "Reconhecer uma contribuição recebida",
+              5
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-9",
+          "title": "Temperança e transcendência",
+          "start": 8,
+          "end": 12,
+          "required": true
+        },
+        {
+          "type": "book",
+          "id": "livro",
+          "title": "Livro da disciplina · PDF",
+          "required": false
+        },
+        {
+          "type": "reading",
+          "id": "leitura-13",
+          "title": "Inventários, competências e uso contextual",
+          "start": 12,
+          "end": 15,
+          "required": true
+        },
+        {
+          "type": "scenario",
+          "id": "contexto-forcas",
+          "title": "Oficina de decisões · dosagem das forças",
+          "required": true,
+          "cases": [
+            {
+              "prompt": "Uma estratégia de estudo não funciona e gera exaustão. Como aplicar perseverança?",
+              "options": [
+                "Insistir sem mudanças",
+                "Revisar o caminho e preservar a meta quando apropriado",
+                "Abandonar toda meta"
+              ],
+              "answer": 1,
+              "feedback": "Persistir não significa manter um procedimento prejudicial."
+            },
+            {
+              "prompt": "Uma colega pede ajuda durante um prazo crítico. Qual resposta respeita bondade e limites?",
+              "options": [
+                "Assumir todas as tarefas",
+                "Ignorar o pedido",
+                "Negociar um apoio possível sem assumir responsabilidades indevidas"
+              ],
+              "answer": 2,
+              "feedback": "A bondade precisa considerar recursos e autonomia."
+            }
+          ]
+        },
+        {
+          "type": "slides",
+          "id": "slides-2",
+          "title": "Força, habilidade e contexto",
+          "required": false,
+          "frames": [
+            [
+              "Força",
+              "Disposição valorizada, não diagnóstico."
+            ],
+            [
+              "Habilidade",
+              "Capacidade de realizar uma atividade específica."
+            ],
+            [
+              "Oportunidade",
+              "Condições reais para mobilizar recursos e competências."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-16",
+          "title": "Desenvolvimento e avaliação ética",
+          "start": 15,
+          "end": 17,
+          "required": true
+        },
+        {
+          "type": "audio",
+          "id": "audio",
+          "title": "Síntese em áudio · escuta opcional",
+          "required": false
+        },
+        {
+          "type": "references",
+          "id": "referencias",
+          "title": "Referências e leituras",
+          "required": false
+        }
+      ]
+    },
+    {
+      "title": "Resiliência, sentido de vida e aplicações",
+      "subtitle": "Adaptação situada, proteção, projetos e intervenções responsáveis",
+      "accent": "#256879",
+      "video": "https://pub-1371be77f091443ba1bcf8b5247fbc21.r2.dev/PsicoPositiva/AULA_04_PSICOLOGIA_POSITIVA_M6.mp4",
+      "audio_summary": "Resiliência descreve adaptação diante de adversidades e depende de sistemas de proteção. Sentido envolve coerência, propósito e significância. Programas em educação, saúde e trabalho devem considerar acesso, autonomia, evidências e efeitos indesejados.",
+      "blocks": [
+        {
+          "type": "reading",
+          "id": "leitura-1",
+          "title": "Adversidades e fatores de proteção",
+          "start": 0,
+          "end": 3,
+          "required": true
+        },
+        {
+          "type": "scenario",
+          "id": "decisao-apoio",
+          "title": "Caso inicial · permanência acadêmica",
+          "required": true,
+          "cases": [
+            {
+              "prompt": "Uma estudante trabalha à noite e não consegue frequentar atividades de apoio. Qual ação deve ser priorizada?",
+              "options": [
+                "Exigir mais motivação",
+                "Oferecer horários acessíveis e analisar barreiras",
+                "Considerar a ausência falta de resiliência"
+              ],
+              "answer": 1,
+              "feedback": "A adaptação depende das condições de acesso."
+            },
+            {
+              "prompt": "Ela mantém boas notas, mas relata sofrimento. Qual interpretação é adequada?",
+              "options": [
+                "As notas comprovam adaptação integral",
+                "O sofrimento é irrelevante",
+                "Domínios podem apresentar trajetórias diferentes"
+              ],
+              "answer": 2,
+              "feedback": "Um resultado favorável não descreve todo o funcionamento."
+            }
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-4",
+          "title": "Trajetórias e perspectiva ecológica",
+          "start": 3,
+          "end": 5,
+          "required": true
+        },
+        {
+          "type": "video",
+          "id": "video-principal",
+          "title": "Videoaula 04 · Resiliência e aplicações",
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-1",
+          "title": "Sistemas de proteção",
+          "required": false,
+          "frames": [
+            [
+              "Adversidade",
+              "Identifique condições relevantes e o domínio afetado."
+            ],
+            [
+              "Recursos",
+              "Considere apoio, serviços e oportunidades concretas."
+            ],
+            [
+              "Adaptação",
+              "Observe resultados em diferentes períodos e dimensões."
+            ]
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-6",
+          "title": "Sentido, projetos e enfrentamento",
+          "start": 5,
+          "end": 9,
+          "required": true
+        },
+        {
+          "type": "book",
+          "id": "livro",
+          "title": "Livro da disciplina · PDF",
+          "required": false
+        },
+        {
+          "type": "reading",
+          "id": "leitura-10",
+          "title": "Educação, trabalho, saúde e comunidade",
+          "start": 9,
+          "end": 13,
+          "required": true
+        },
+        {
+          "type": "order",
+          "id": "teoria-mudanca",
+          "title": "Ordene a teoria de mudança",
+          "required": true,
+          "steps": [
+            "Identificar o problema e o público",
+            "Definir objetivos e recursos",
+            "Desenvolver e implementar as atividades",
+            "Avaliar resultados e efeitos indesejados",
+            "Revisar a intervenção"
+          ]
+        },
+        {
+          "type": "reading",
+          "id": "leitura-14",
+          "title": "Planejamento, resultados e acompanhamento",
+          "start": 13,
+          "end": 16,
+          "required": true
+        },
+        {
+          "type": "slides",
+          "id": "slides-2",
+          "title": "Da proposta à avaliação",
+          "required": false,
+          "frames": [
+            [
+              "Problema e objetivos",
+              "Identifique necessidades e indicadores específicos."
+            ],
+            [
+              "Implementação",
+              "Observe acesso, fidelidade e dificuldades."
+            ],
+            [
+              "Decisão",
+              "Utilize os resultados para manter, adaptar ou interromper o programa."
+            ]
+          ]
+        },
+        {
+          "type": "reflection",
+          "id": "reflexao",
+          "title": "Caderno de aplicação · caso hipotético",
+          "required": false,
+          "prompt": "Proponha uma ação institucional de apoio a estudantes trabalhadores. Identifique um objetivo, dois recursos, uma barreira, um indicador de avaliação e uma precaução ética. Não insira dados pessoais."
+        },
+        {
+          "type": "reading",
+          "id": "leitura-17",
+          "title": "Ética e integração do percurso",
+          "start": 16,
+          "end": 18,
+          "required": true
+        },
+        {
+          "type": "audio",
+          "id": "audio",
+          "title": "Síntese em áudio · escuta opcional",
+          "required": false
+        },
+        {
+          "type": "references",
+          "id": "referencias",
+          "title": "Referências e leituras",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
