@@ -11050,6 +11050,7 @@ def _plano_html_atende_padrao_visual_atual(conteudo_html):
     8 a 10 tópicos nas faixas de extensão definidas pelo gerador atual.
     Planos legados/curtos nunca devem furar o validador só por já estarem no banco.
     """
+    from html import unescape as _html_unescape
     html = str(conteudo_html or "")
     if not html:
         return False
@@ -11300,6 +11301,47 @@ def _aprovar_solicitacao_integrada_direto(solicitacao_id):
         conn.close()
 
 
+def _copiar_pdf_integrado_existente(doc, destino):
+    """Reutiliza os bytes da via já emitida quando o arquivo e SHA estão registrados."""
+    if not doc:
+        return False
+    raw = doc.get("metadados")
+    try:
+        meta = raw if isinstance(raw, dict) else json.loads(raw or "{}")
+    except (ValueError, TypeError):
+        meta = {}
+    if not isinstance(meta, dict):
+        return False
+    if meta.get("substituido_por"):
+        raise ValueError("Documento substituído; selecione a via vigente.")
+    key = meta.get("r2_nova_via")
+    digest = str(meta.get("sha256_pdf") or "").lower()
+    if not key and not digest:
+        return False
+    if not isinstance(key, str) or not key or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("Registro do PDF emitido incompleto: " + str(doc.get("codigo") or ""))
+    from r2_storage import get_client, bucket_name
+    response = get_client().get_object(Bucket=bucket_name(), Key=key)
+    body = response["Body"]
+    h = hashlib.sha256()
+    tamanho = 0
+    try:
+        with open(destino, "wb") as fh:
+            for chunk in iter(lambda: body.read(1024 * 1024), b""):
+                tamanho += len(chunk)
+                if tamanho > 50 * 1024 * 1024:
+                    raise ValueError("PDF emitido excede o limite de tamanho.")
+                h.update(chunk)
+                fh.write(chunk)
+    finally:
+        body.close()
+    with open(destino, "rb") as fh:
+        cabecalho = fh.read(5)
+    if cabecalho != b"%PDF-" or h.hexdigest() != digest:
+        raise ValueError("Integridade do PDF emitido não confirmada: " + str(doc.get("codigo") or ""))
+    return True
+
+
 def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_regenerar=None):
     """Monta pacote iniciado pelo MEW usando existentes e gerando somente o necessário.
 
@@ -11365,7 +11407,7 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
             existentes = {"historico": None, "declaracao_conclusao": {}, "plano_ensino": {}}
             if selecao["historico"]:
                 cur.execute("""
-                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao
+                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao,metadados
                     FROM documentos_autenticados
                     WHERE aluno_id=%s AND COALESCE(tipo,tipo_documento)='historico'
                           AND NULLIF(conteudo_html,'') IS NOT NULL
@@ -11376,7 +11418,7 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
 
             for did in sorted(selecao["conclusao"]):
                 cur.execute("""
-                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao
+                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao,metadados
                     FROM documentos_autenticados
                     WHERE aluno_id=%s AND disciplina_id=%s
                           AND COALESCE(tipo,tipo_documento)='declaracao_conclusao'
@@ -11388,7 +11430,7 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
 
             for did in sorted(selecao["plano_ensino"]):
                 cur.execute("""
-                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao
+                    SELECT id,codigo,conteudo_html,hash_documento,data_geracao,metadados
                     FROM documentos_autenticados
                     WHERE disciplina_id=%s AND COALESCE(tipo,tipo_documento)='plano_ensino'
                           AND NULLIF(conteudo_html,'') IS NOT NULL
@@ -11412,11 +11454,8 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
         planos_preparados = {}
         for did in sorted(selecao["plano_ensino"]):
             atual = existentes["plano_ensino"].get(did)
-            plano_fora_padrao = bool(atual and not _plano_html_atende_padrao_visual_atual(atual.get("conteudo_html")))
-            precisa_gerar = (atual is None) or plano_fora_padrao or (f"plano_ensino:{did}" in regenerar_canon)
+            precisa_gerar = (atual is None) or (f"plano_ensino:{did}" in regenerar_canon)
             if precisa_gerar:
-                # Mesmo se o administrador marcou apenas "incluir", plano legado/curto
-                # é regenerado automaticamente para nunca furar a regra visual vigente.
                 planos_preparados[did] = _preparar_plano_regenerado_integrado(did, base_url)
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -11473,6 +11512,11 @@ def _gerar_previa_admin_integrada(solicitacao_id, itens_incluir=None, itens_rege
             tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
             tmp.close()
             temporarios.append(tmp.name)
+            if not spec.get("alterar"):
+                atual = (existentes["historico"] if spec["tipo"] == "historico"
+                         else existentes[spec["tipo"]].get(spec["disciplina_id"]))
+                if _copiar_pdf_integrado_existente(atual, tmp.name):
+                    continue
             render_html_to_pdf_file(spec["html"], tmp.name, base_url)
         merged = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         merged.close()
