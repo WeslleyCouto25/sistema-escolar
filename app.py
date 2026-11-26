@@ -4907,7 +4907,8 @@ def _normalizar_identificador_validacao(valor):
             if u.scheme.lower() not in ("http", "https") or u.username or u.password:
                 return None
             if u.hostname not in ("sigeueducacional.com.br", "www.sigeueducacional.com.br",
-                                  "sistema-escolar-0bad.onrender.com"):
+                                  "sistema-escolar-0bad.onrender.com",
+                                  "campusvirtualfacop.com.br", "www.campusvirtualfacop.com.br"):
                 return None
             if u.port not in (None, 80, 443):
                 return None
@@ -4933,7 +4934,7 @@ def _buscar_identificador_validacao(valor):
         cursor.execute("""
             SELECT id, codigo, codigo_autenticacao, aluno_nome, aluno_ra,
                    COALESCE(tipo,tipo_documento) AS tipo,
-                   data_geracao, data_emissao, data_validade, hash_documento
+                   data_geracao, data_emissao, data_validade, hash_documento, metadados
             FROM documentos_autenticados
             WHERE UPPER(codigo) = UPPER(%s)
                OR UPPER(codigo_autenticacao) = UPPER(%s)
@@ -4953,6 +4954,21 @@ def _buscar_identificador_validacao(valor):
         conn.close()
 
 
+def _status_acervo_validacao(doc):
+    raw = doc.get("metadados")
+    try:
+        m = raw if isinstance(raw, dict) else json.loads(raw or "{}")
+    except (ValueError, TypeError):
+        m = {}
+    if not isinstance(m, dict):
+        m = {}
+    if doc.get("tipo") == "acervo_original":
+        return "acervo_original", m.get("substituido_por")
+    if m.get("substituido_por"):
+        return "substituido", m.get("substituido_por")
+    return None, None
+
+
 def _validade_documento_registrado(doc):
     data = str(doc.get("data_validade") or "").strip()
     if not data:
@@ -4970,6 +4986,20 @@ def ver_resultado_validacao(codigo):
         if not doc:
             return render_template("resultado_validacao.html", valido=False,
                                    codigo=codigo, mensagem="Documento não encontrado no sistema.")
+        situacao, sucessor = _status_acervo_validacao(doc)
+        if situacao:
+            from markupsafe import escape
+            titulo = "Documento localizado no acervo" if situacao == "acervo_original" else "Documento substituído"
+            mensagem = ("O código e o hash constam do acervo importado. A emissão histórica depende de comprovação institucional; consulte a via atual." if situacao == "acervo_original" else
+                        "Este registro foi preservado e possui uma via posterior. Consulte o documento atual.")
+            link = ""
+            if sucessor and re.fullmatch(r"[A-Za-z0-9_-]{1,180}", str(sucessor)):
+                link = '<p><a href="' + str(escape(url_for("ver_resultado_validacao", codigo=sucessor))) + '">Consultar via atual</a></p>'
+            return ("<!doctype html><html lang='pt-BR'><meta charset='utf-8'><title>Consulta ao acervo SIGEU</title>"
+                    "<main style='max-width:760px;margin:50px auto;font:16px Arial;padding:20px'>"
+                    "<h1>" + titulo + "</h1><p>" + mensagem + "</p><p>Código: " + str(escape(doc["codigo"])) +
+                    "</p><p>Hash registrado: " + str(escape(doc.get("hash_documento") or "")) +
+                    "</p>" + link + "<p><a href='/validar-documento'>Outra consulta</a></p></main></html>")
         validade = _validade_documento_registrado(doc)
         if validade is None:
             return render_template("resultado_validacao.html", valido=False,
@@ -5020,6 +5050,12 @@ def api_validar_qrcode():
             if not hash_valido:
                 return jsonify({"success": False, "valido": False, "hash_valido": False,
                                 "message": "Hash não corresponde ao documento registrado."})
+        situacao, sucessor = _status_acervo_validacao(doc)
+        if situacao:
+            return jsonify({"success": True, "valido": False, "situacao": situacao,
+                            "codigo": doc["codigo"], "substituido_por": sucessor,
+                            "hash_valido": True if hash_recebido is not None else None,
+                            "mensagem": "Registro localizado; consulte a via atual."})
         validade = _validade_documento_registrado(doc)
         valido = validade is True
         campos = ("codigo", "aluno_nome", "aluno_ra", "tipo", "data_emissao", "data_validade")
