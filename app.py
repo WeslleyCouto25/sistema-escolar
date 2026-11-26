@@ -4893,177 +4893,145 @@ def situacao_academica():
 # ==========================
 # ADICIONE ESTA FUNÇÃO PARA VERIFICAR DISPONIBILIDADE
 # ==========================
-@app.route("/validar-documento/<codigo>")
-def ver_resultado_validacao(codigo):
-    """Mostra o resultado da validação de um documento específico"""
+def _normalizar_identificador_validacao(valor):
+    """Aceita identificador, hash registrado ou URL oficial de QR; nunca acessa a URL."""
+    from urllib.parse import urlsplit, unquote
+    if not isinstance(valor, str):
+        return None
+    valor = valor.strip()
+    if not valor or len(valor) > 1024:
+        return None
+    if "://" in valor:
+        try:
+            u = urlsplit(valor)
+            if u.scheme.lower() not in ("http", "https") or u.username or u.password:
+                return None
+            if u.hostname not in ("sigeueducacional.com.br", "www.sigeueducacional.com.br",
+                                  "sistema-escolar-0bad.onrender.com"):
+                return None
+            if u.port not in (None, 80, 443):
+                return None
+            partes = u.path.strip("/").split("/")
+            if len(partes) != 2 or partes[0] not in ("validar-documento", "ver-documento"):
+                return None
+            valor = unquote(partes[1])
+        except ValueError:
+            return None
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,180}", valor):
+        return None
+    return valor
+
+
+def _buscar_identificador_validacao(valor):
+    """Somente leitura. Nunca registra, altera ou autentica documentos novos."""
+    token = _normalizar_identificador_validacao(valor)
+    if not token:
+        return None
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Buscar documento pelo código
         cursor.execute("""
-            SELECT codigo, aluno_nome, aluno_ra, tipo, data_geracao, data_validade, hash_documento
+            SELECT id, codigo, codigo_autenticacao, aluno_nome, aluno_ra,
+                   COALESCE(tipo,tipo_documento) AS tipo,
+                   data_geracao, data_emissao, data_validade, hash_documento
             FROM documentos_autenticados
-            WHERE codigo = %s
-        """, (codigo.upper(),))
-
-        documento = cursor.fetchone()
+            WHERE UPPER(codigo) = UPPER(%s)
+               OR UPPER(codigo_autenticacao) = UPPER(%s)
+               OR (LENGTH(%s)=64 AND LOWER(hash_documento)=LOWER(%s))
+            LIMIT 2
+        """, (token, token, token, token))
+        rows = cursor.fetchall()
+        # Não escolhe arbitrariamente quando há identificadores ambíguos.
+        if len(rows) != 1:
+            return None
+        doc = dict(rows[0])
+        doc["codigo"] = doc.get("codigo") or doc.get("codigo_autenticacao")
+        if not doc["codigo"]:
+            return None
+        return doc
+    finally:
         conn.close()
 
-        if documento:
-            doc_dict = dict(documento)
 
-            # Verificar validade
-            from datetime import datetime
-            hoje = datetime.now()
+def _validade_documento_registrado(doc):
+    data = str(doc.get("data_validade") or "").strip()
+    if not data:
+        return None
+    try:
+        return datetime.now().date() <= datetime.strptime(data, "%d/%m/%Y").date()
+    except ValueError:
+        return None
 
-            if doc_dict.get('data_validade'):
-                try:
-                    data_validade = datetime.strptime(doc_dict['data_validade'], "%d/%m/%Y")
-                    status = "válido" if hoje <= data_validade else "expirado"
-                except:
-                    status = "válido"
-            else:
-                status = "válido"
 
-            return render_template(
-                "resultado_validacao_completo.html",
-                valido=True,
-                codigo=codigo.upper(),
-                documento=doc_dict,
-                status=status
-            )
-        else:
-            return render_template(
-                "resultado_validacao.html",
-                valido=False,
-                codigo=codigo.upper(),
-                mensagem="Documento não encontrado no sistema."
-            )
+@app.route("/validar-documento/<codigo>")
+def ver_resultado_validacao(codigo):
+    try:
+        doc = _buscar_identificador_validacao(codigo)
+        if not doc:
+            return render_template("resultado_validacao.html", valido=False,
+                                   codigo=codigo, mensagem="Documento não encontrado no sistema.")
+        validade = _validade_documento_registrado(doc)
+        if validade is None:
+            return render_template("resultado_validacao.html", valido=False,
+                                   codigo=doc["codigo"], mensagem="Validade não confirmada. Consulte a secretaria.")
+        return render_template("resultado_validacao_completo.html", valido=True,
+                               codigo=doc["codigo"], documento=doc,
+                               status="válido" if validade else "expirado")
+    except Exception:
+        app.logger.exception("Falha na consulta de validação")
+        return render_template("resultado_validacao.html", valido=False,
+                               codigo=codigo, mensagem="Erro ao validar documento.")
 
-    except Exception as e:
-        print(f"Erro na validação: {e}")
-        return render_template(
-            "resultado_validacao.html",
-            valido=False,
-            codigo=codigo,
-            mensagem="Erro ao validar documento."
-        )
-
-# ==========================
-# VALIDAÇÃO PÚBLICA DE DOCUMENTOS
-# ==========================
 
 @app.route("/validar-documento", methods=["GET", "POST"])
 def validar_documento_publico():
-    """Página pública para validação de documentos - SIMPLIFICADA"""
-
-    # Se for POST, processar a validação via AJAX
     if request.method == "POST":
-        data = request.get_json()
-        codigo = data.get('codigo', '').strip().upper()
-
-        if not codigo:
-            return jsonify({"success": False, "message": "Código não fornecido"})
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Verificar se o código existe na tabela documentos_autenticados
-        cursor.execute("SELECT id FROM documentos_autenticados WHERE codigo = %s", (codigo,))
-        documento = cursor.fetchone()
-        conn.close()
-
-        if documento:
-            # Código válido - retornar URL de redirecionamento
-            return jsonify({
-                "success": True,
-                "url": f"/ver-documento/{codigo}"
-            })
-        else:
-            # Código inválido
-            return jsonify({
-                "success": False,
-                "message": "Código não encontrado. Verifique se digitou corretamente."
-            })
-
-    # Se for GET, mostrar a página de validação
+        return api_validar_codigo()
     return render_template("validar_documento.html")
 
 
-@app.route("/api/validar-qrcode", methods=['POST'])
+@app.route("/api/validar-qrcode", methods=["POST"])
 def api_validar_qrcode():
-    """
-    API para validar documento via QR Code (usado pelo app)
-    """
+    import hmac
     try:
-        data = request.get_json()
-        qr_data = data.get('qr_data')
+        data = request.get_json(silent=True) or {}
+        qr = data.get("qr_data") if isinstance(data, dict) else None
+        info = qr
+        if isinstance(qr, str):
+            try:
+                info = json.loads(qr)
+            except (ValueError, TypeError):
+                pass
+        hash_recebido = None
+        if isinstance(info, dict):
+            codigo = info.get("codigo")
+            hash_recebido = info.get("hash")
+        else:
+            codigo = info
+        doc = _buscar_identificador_validacao(codigo)
+        if not doc:
+            return jsonify({"success": False, "valido": False, "message": "Documento não encontrado"})
+        if hash_recebido is not None:
+            registrado = str(doc.get("hash_documento") or "").lower()
+            hash_valido = (isinstance(hash_recebido, str) and
+                           bool(re.fullmatch(r"[0-9a-fA-F]{64}", hash_recebido)) and
+                           bool(re.fullmatch(r"[0-9a-f]{64}", registrado)) and
+                           hmac.compare_digest(hash_recebido.lower(), registrado))
+            if not hash_valido:
+                return jsonify({"success": False, "valido": False, "hash_valido": False,
+                                "message": "Hash não corresponde ao documento registrado."})
+        validade = _validade_documento_registrado(doc)
+        valido = validade is True
+        campos = ("codigo", "aluno_nome", "aluno_ra", "tipo", "data_emissao", "data_validade")
+        return jsonify({"success": True, "valido": valido,
+                        "hash_valido": True if hash_recebido is not None else None,
+                        "documento": {k: doc.get(k) for k in campos},
+                        "mensagem": "Documento válido" if valido else
+                                    ("Documento expirado" if validade is False else "Validade não confirmada")})
+    except Exception:
+        app.logger.exception("Falha na consulta de QR Code")
+        return jsonify({"success": False, "valido": False, "message": "Erro ao validar QR Code."})
 
-        if not qr_data:
-            return jsonify({"success": False, "message": "Dados do QR Code não fornecidos"})
-
-        # Extrair informações do QR Code
-        try:
-            info = json.loads(qr_data)
-            codigo = info.get('codigo')
-            hash_recebido = info.get('hash')
-        except:
-            # Se não for JSON, tentar como código direto
-            codigo = qr_data
-            hash_recebido = None
-
-        if not codigo:
-            return jsonify({"success": False, "message": "Código não encontrado no QR Code"})
-
-        # Buscar documento
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT codigo, aluno_nome, aluno_ra, tipo, data_emissao, data_validade, hash_documento
-            FROM documentos_autenticados
-            WHERE codigo = %s
-        """, (codigo.upper(),))
-
-        documento = cursor.fetchone()
-        conn.close()
-
-        if not documento:
-            return jsonify({
-                "success": False,
-                "message": "Documento não encontrado",
-                "codigo": codigo
-            })
-
-        # Verificar hash se fornecido
-        hash_valido = True
-        if hash_recebido and documento['hash_documento']:
-            hash_valido = (hash_recebido == documento['hash_documento'])
-
-        # Verificar validade
-        from datetime import datetime
-        hoje = datetime.now()
-        data_validade = datetime.strptime(documento['data_validade'], "%d/%m/%Y")
-        valido = hoje <= data_validade
-
-        return jsonify({
-            "success": True,
-            "valido": valido,
-            "hash_valido": hash_valido,
-            "documento": {
-                "codigo": documento['codigo'],
-                "aluno_nome": documento['aluno_nome'],
-                "aluno_ra": documento['aluno_ra'],
-                "tipo": documento['tipo'],
-                "data_emissao": documento['data_emissao'],
-                "data_validade": documento['data_validade']
-            },
-            "mensagem": "Documento válido" if valido else "Documento expirado"
-        })
-
-    except Exception as e:
-        return jsonify({"success": False, "message": f"Erro: {str(e)}"})
 
 def buscar_documento_db(codigo):
     """Busca um documento autenticado sem depender de índices de tupla."""
@@ -6981,47 +6949,20 @@ def pagina_whatsapp():
 
 @app.route("/api/validar-codigo", methods=["POST"])
 def api_validar_codigo():
-    """API simples para validar código - chamada pelo formulário"""
+    """Localiza somente registros existentes por código, hash ou URL do QR."""
     try:
-        data = request.get_json()
-        codigo = data.get('codigo', '').strip().upper()
+        data = request.get_json(silent=True) or {}
+        valor = data.get("codigo") if isinstance(data, dict) else None
+        if not _normalizar_identificador_validacao(valor):
+            return jsonify({"success": False, "message": "Informe um código, hash ou URL de validação do SIGEU."})
+        doc = _buscar_identificador_validacao(valor)
+        if not doc:
+            return jsonify({"success": False, "message": "Código ou hash não encontrado. Verifique e tente novamente."})
+        return jsonify({"success": True, "url": url_for("ver_resultado_validacao", codigo=doc["codigo"])})
+    except Exception:
+        app.logger.exception("Falha na API de validação")
+        return jsonify({"success": False, "message": "Erro ao validar. Tente novamente."})
 
-        if not codigo:
-            return jsonify({"success": False, "message": "Código não fornecido"})
-
-        # Conectar ao banco
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Buscar o código na tabela documentos_autenticados
-        cursor.execute("""
-            SELECT id, codigo
-            FROM documentos_autenticados
-            WHERE codigo = %s
-        """, (codigo,))
-
-        documento = cursor.fetchone()
-        conn.close()
-
-        if documento:
-            # Código encontrado!
-            return jsonify({
-                "success": True,
-                "url": f"/validar-documento/{codigo}"  # Redireciona para a página do documento
-            })
-        else:
-            # Código não encontrado
-            return jsonify({
-                "success": False,
-                "message": "❌ Código não encontrado. Verifique e tente novamente."
-            })
-
-    except Exception as e:
-        print(f"Erro na API de validação: {e}")
-        return jsonify({
-            "success": False,
-            "message": "Erro ao validar. Tente novamente."
-        })
 
 @app.route('/mew/gerar-declaracao-conclusao', methods=['POST'])
 def gerar_declaracao_conclusao_route():
