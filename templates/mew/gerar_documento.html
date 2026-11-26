@@ -502,6 +502,11 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
     async function carregarAluno() {
         const alunoId = document.getElementById('alunoSelect').value;
         alunoIdAtual = alunoId;
+        disciplinasData = [];
+        disciplinaIdSelecionada = null;
+        document.getElementById('areaDisciplinas').style.display = 'none';
+        document.getElementById('infoDisciplinaSelecionada').style.display = 'none';
+        document.getElementById('btnGerar').disabled = true;
 
         if (!alunoId) {
             document.getElementById('infoAluno').style.display = 'none';
@@ -514,6 +519,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             const response = await fetch(`/mew/buscar-dados-aluno/${alunoId}`);
             const data = await response.json();
 
+            if (String(alunoIdAtual) !== String(alunoId)) return;
             if (data.success) {
                 document.getElementById('detalhesAluno').innerHTML = `
                     <div class="aluno-grid">
@@ -552,8 +558,9 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             const response = await fetch(`/mew/buscar-disciplinas-aluno/${alunoId}`);
             const data = await response.json();
 
+            if (String(alunoIdAtual) !== String(alunoId) || tipoAtual !== 'declaracao') return;
             if (data.success) {
-                disciplinasData = data.disciplinas;
+                disciplinasData = Array.isArray(data.disciplinas) ? data.disciplinas : [];
                 console.log('✅ Disciplinas carregadas:', disciplinasData.length);
                 
                 // Filtrar apenas disciplinas concluídas (com nota final)
@@ -690,12 +697,8 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             return;
         }
 
-        if (tipo === 'historico') {
-            if (!disciplinasData || disciplinasData.length === 0) {
-                alert('⚠️ Este aluno não possui disciplinas cadastradas para gerar o histórico.');
-                return;
-            }
-        }
+        // O histórico consulta as disciplinas no servidor durante a emissão.
+        // disciplinasData é apenas a lista de seleção das declarações, não a fonte do histórico.
 
         if (tipo === 'declaracao' && !disciplinaIdSelecionada) {
             alert('⚠️ Selecione uma disciplina para gerar a declaração!');
@@ -777,7 +780,7 @@ body.portal07.admin-page .menu-card p{color:#586169!important}
             alert('❌ Erro ao gerar documento: ' + error.message);
         } finally {
             btn.innerHTML = originalText;
-            btn.disabled = false;
+            verificarHabilitarBotao();
         }
     }
 
